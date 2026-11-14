@@ -4,13 +4,29 @@ import {BookOpenCheck,Clock3,ClipboardList,Languages,Lock,Mic,Trash2,Play,Search
 import {supabase} from '../lib/supabase';
 import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUrl,type BoardData,type ClassroomState,type LessonEntry,type Recording} from '../lib/data';
 import Homework from '../app/huiswerk-client';
+import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
+import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
 
 type Bundle=Awaited<ReturnType<typeof loadStudentBundle>>;
 type Progress=Bundle['progress'];
 
 export function ProgressCards({p}:{p:Progress}){
- const items=[{icon:BookOpenCheck,v:p.lessons,l:'Lessen',s:p.lessonsThisMonth+' deze maand',c:'teal'},{icon:Languages,v:p.words,l:'Woorden',s:'in de woordenlijst',c:'mint'},{icon:ClipboardList,v:`${p.homeworkDone}/${p.homeworkPublished}`,l:'Huiswerk ingeleverd',s:'van gepubliceerde opdrachten',c:'sky'},{icon:Clock3,v:p.lastLesson?new Date(p.lastLesson+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'—',l:'Laatste les',s:p.lastLesson?'opgeslagen':'nog geen les',c:'sand'}];
- return <div className="statgrid">{items.map(({icon:Icon,v,l,s,c})=><div className="statcard" key={l}><div className={'stat-icon '+c}><Icon size={20}/></div><strong>{v}</strong><span>{l}</span><small>{s}</small></div>)}</div>
+ return <div className="statgrid">
+  <StatTile icon={BookOpenCheck} value={p.lessons} label="Lessen" hint={p.lessonsThisMonth+' deze maand'}/>
+  <StatTile icon={Languages} tone="mint" value={p.words} label="Woorden" hint="in de woordenlijst"/>
+  <StatTile icon={ClipboardList} tone="sky" value={`${p.homeworkDone}/${p.homeworkPublished}`} label="Huiswerk ingeleverd" hint="van gepubliceerde opdrachten"/>
+  <StatTile icon={Clock3} tone="coral" value={p.lastLesson?new Date(p.lastLesson+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'—'} label="Laatste les" hint={p.lastLesson?'opgeslagen':'nog geen les'}/>
+ </div>
+}
+
+/** Per-student charts inside the workspace overview (teacher and student view). */
+function StudentCharts({lessons}:{lessons:LessonEntry[]}){
+ const L=lessons.map(l=>({student_id:l.student_id,lesson_date:l.lesson_date,words:l.words}));
+ const perMonth=lessonsPerMonth(L,6),growth=cumulativeWords(L,6);
+ return <div className="chart-grid two">
+  <ChartCard title="Lessen per maand" subtitle="Afgelopen 6 maanden" empty={isEmptySeries(perMonth)} emptyText="Nog geen lessen opgeslagen." table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
+  <ChartCard title="Woordenschat" subtitle="Totaal aantal woorden" empty={growth[growth.length-1].value===0} emptyText="Nog geen woorden." table={growth}><LineChart data={growth} color={CHART.blue}/></ChartCard>
+ </div>
 }
 
 export function LessonHistory({lessons}:{lessons:LessonEntry[]}){
@@ -79,7 +95,7 @@ export function StudentWorkspace({studentId,viewer,intro}:{studentId:string;view
   <div className="tabs" role="tablist">{tabs.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/>{l}</button>)}</div>
   {!b?<div className="card"><div className="loader small"/></div>:<>
   {b.error&&<div className="notice">{b.error}</div>}
-  {tab==='overzicht'&&<><ProgressCards p={b.progress}/>{intro}<div className="grid2"><section className="card"><h3><History size={17}/> Laatste les</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={17}/> Recente woorden</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">Nog geen woorden.</p>}</section></div></>}
+  {tab==='overzicht'&&<><ProgressCards p={b.progress}/><StudentCharts lessons={b.lessons}/>{intro}<div className="grid2"><section className="card"><h3><History size={17}/> Laatste les</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={17}/> Recente woorden</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">Nog geen woorden.</p>}</section></div></>}
   {tab==='lessen'&&<section className="card"><h3>Lesgeschiedenis</h3><LessonHistory lessons={b.lessons}/></section>}
   {tab==='woorden'&&<section className="card"><h3>Woordenschat</h3><VocabList lessons={b.lessons}/></section>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}

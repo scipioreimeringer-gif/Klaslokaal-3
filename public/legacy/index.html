@@ -254,10 +254,10 @@ body.klas-video-on .vhead #vSize{display:none}
 :root{
   /* TeachyRooms v27 palette: petrol, turquoise, soft mint */
   --ground:#e4f1ef; --surface:#f8fcfb; --ink:#0d3440; --muted:#557079;
-  --teal:#0b7f86; --teal-soft:#d7f0ea;
+  --teal:#168F91; --teal-soft:#d7f0ea;
   --coral:#d4604c; --coral-soft:#fde9e4;
   --line:#d3e6e3; --line-strong:#b5d3cf;
-  --dock:#0a4352; --dock-ink:#effaf8;
+  --dock:#123F49; --dock-ink:#effaf8;
   --display:"Inter",system-ui,sans-serif;
   --body:"Inter",system-ui,sans-serif;
   --radius-sm:10px; --radius-md:12px; --radius-lg:14px;
@@ -385,6 +385,18 @@ button{touch-action:manipulation}
 .db.rec.on{background:#d4364b;border-color:#d4364b;color:#fff}
 body.recording .top{box-shadow:inset 0 -3px 0 #d4364b}
 .sbnote{font-size:.76rem;color:var(--muted);margin:0}
+/* v28: collapsible top bar and tool dock for more board space */
+.barbtn{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;flex:none}
+.barbtn:hover{color:var(--ink);border-color:var(--teal)}
+.dock .barbtn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:var(--dock-ink)}
+.barshow{position:fixed;z-index:40;display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:var(--dock);color:var(--dock-ink);font-weight:700;font-size:.76rem;padding:7px 12px;box-shadow:0 8px 20px rgba(18,63,73,.25);cursor:pointer}
+.barshow svg{width:15px;height:15px}
+#topShow{top:8px;right:10px}
+#dockShow{bottom:10px;left:50%;transform:translateX(-50%)}
+body.top-min .top{display:none}
+body.dock-min .dock{display:none}
+body.top-min .mswitch{margin-top:6px}
+body.top-min.recording .top{display:flex}  /* recording indicator must always stay visible */
 </style>
 </head>
 <body>
@@ -399,7 +411,10 @@ body.recording .top{box-shadow:inset 0 -3px 0 #d4364b}
   <span class="timer" id="timer" title="Lestijd">00:00</span>
   <button class="btn sm ghost" id="copyLink" data-teacher type="button">Link voor leerling</button>
   <button class="btn sm primary" id="joinBtn" type="button">Start de les</button>
+  <button class="barbtn" id="topHide" type="button" title="Bovenbalk inklappen" aria-label="Bovenbalk inklappen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg></button>
 </header>
+<button class="barshow" id="topShow" type="button" hidden title="Bovenbalk tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>Balk</button>
+<button class="barshow" id="dockShow" type="button" hidden title="Werkbalk tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg>Werkbalk</button>
 
 <div class="mswitch" id="mswitch" role="group" aria-label="Wat wil je zien?">
   <button type="button" data-mview="wb" aria-pressed="true">Bord</button>
@@ -511,6 +526,7 @@ body.recording .top{box-shadow:inset 0 -3px 0 #d4364b}
     <button class="db" data-panel="pSl" aria-pressed="true" title="Slides tonen of verbergen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8 21h8"/></svg><span class="lbl">Slides</span></button>
     <button class="db" id="notesBtn" data-teacher aria-pressed="false" title="Notities per leerling"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg><span class="lbl">Notities</span></button>
     <button class="db rec" id="recBtn" data-teacher type="button" title="Les opnemen (audio, met toestemming van je leerling)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg><span class="lbl">Opnemen</span></button>
+    <button class="barbtn" id="dockHide" type="button" title="Werkbalk inklappen" aria-label="Werkbalk inklappen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
     <button class="db leave" id="leaveBtn" type="button" title="Les verlaten" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0V16l-3 1.5z"/></svg></button>
   </div>
 </nav>
@@ -2116,6 +2132,22 @@ if(isT){
     else ask("Log in om je notities online te bewaren.");
   });
 }
+
+/* =================================================================== INKLAPBARE BALKEN (v28) */
+(function(){
+  var st = store("klas-bars") || {top:false, dock:false};
+  function apply(){
+    document.body.classList.toggle("top-min", !!st.top); document.body.classList.toggle("dock-min", !!st.dock);
+    $("topShow").hidden = !st.top; $("dockShow").hidden = !st.dock;
+    store("klas-bars", st);
+    setTimeout(function(){ window.dispatchEvent(new Event("resize")); }, 30);
+  }
+  $("topHide").addEventListener("click", function(){ st.top = true; apply(); });
+  $("topShow").addEventListener("click", function(){ st.top = false; apply(); });
+  $("dockHide").addEventListener("click", function(){ st.dock = true; apply(); });
+  $("dockShow").addEventListener("click", function(){ st.dock = false; apply(); });
+  apply();
+})();
 
 /* =================================================================== START */
 setPerm(true, true);
