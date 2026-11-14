@@ -56,10 +56,29 @@ Schrijf in eenvoudig Nederlands dat past bij het niveau van de leerling (bij A0/
 Opbouw: begroeting met de naam, wat we vandaag deden (2 tot 4 korte punten), de nieuwe woorden (maximaal 10, met betekenis), het huiswerk, een korte positieve afsluiting. Onderteken met "Scip".
 Gebruik geen gedachtestreepjes (geen — of –). Gebruik geen markdown-koppen, alleen eenvoudige opsommingstekens zoals "-" aan het begin van een regel. Verzin niets wat niet in de notities staat.`;
 
+// v27: besides the old classroom password, accept a logged-in TeachyRooms
+// teacher (Supabase session token). The role is read from the database with
+// the user's own token, so RLS applies.
+async function isSupabaseTeacher(req) {
+  const auth = String(req.headers.authorization || "");
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!token || !url || !key) return false;
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const db = createClient(url, key, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: { user } } = await db.auth.getUser(token);
+    if (!user) return false;
+    const { data } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    return !!data && (data.role === "teacher" || data.role === "admin");
+  } catch (e) { return false; }
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const p = process.env.KLAS_PASSWORD;
-  if (!p || req.headers["x-klas-pass"] !== p) return res.status(401).json({ error: "wachtwoord" });
+  const passOk = !!p && req.headers["x-klas-pass"] === p;
+  if (!passOk && !(await isSupabaseTeacher(req))) return res.status(401).json({ error: "wachtwoord" });
   if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return res.status(500).json({ error: "AI staat nog niet aan: zet OPENAI_API_KEY of ANTHROPIC_API_KEY in Vercel" });
   if (req.method !== "POST") return res.status(405).json({ error: "methode niet toegestaan" });
   try {
