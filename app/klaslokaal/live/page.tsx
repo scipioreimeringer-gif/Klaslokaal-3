@@ -6,7 +6,7 @@ import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 
 function LivePreview(){
- const q=useSearchParams();const student=q.get('student');
+ const q=useSearchParams();const student=q?.get('student') ?? null;
  const {user,role,loading}=useAuth();
  if(loading) return <Nav><p>Lesruimte laden…</p></Nav>;
  if(!user || (role!=='admin' && role!=='teacher')) return <Nav><p>Deze testpagina is alleen voor docenten en beheerders.</p></Nav>;
