@@ -252,12 +252,13 @@ body.klas-video-on .vhead #vSize{display:none}
    Customize brand colors here.
    ============================================================ */
 :root{
-  --ground:#f5f7f8; --surface:#ffffff; --ink:#172b35; --muted:#657782;
-  --teal:#166a73; --teal-soft:#e6f3f2;
-  --coral:#c76553; --coral-soft:#fff0eb;
-  --line:#e5ebed; --line-strong:#cdd9dc;
-  --dock:#15323a; --dock-ink:#f2faf9;
-  --display:"Plus Jakarta Sans",system-ui,sans-serif;
+  /* TeachyRooms v27 palette: petrol, turquoise, soft mint */
+  --ground:#e4f1ef; --surface:#f8fcfb; --ink:#0d3440; --muted:#557079;
+  --teal:#0b7f86; --teal-soft:#d7f0ea;
+  --coral:#d4604c; --coral-soft:#fde9e4;
+  --line:#d3e6e3; --line-strong:#b5d3cf;
+  --dock:#0a4352; --dock-ink:#effaf8;
+  --display:"Inter",system-ui,sans-serif;
   --body:"Inter",system-ui,sans-serif;
   --radius-sm:10px; --radius-md:12px; --radius-lg:14px;
   --shadow-card:0 2px 6px rgba(20,49,56,.025),0 12px 32px rgba(20,49,56,.045);
@@ -377,12 +378,20 @@ button{touch-action:manipulation}
 }
 @media(prefers-reduced-motion:reduce){.btn,.ib,.db,.tab,.seg button,.mswitch button,.drawer{transition:none!important}}
 
+/* v27: lesson recording indicator and consent */
+.recbadge{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:100px;background:#d4364b;color:#fff;font-weight:700;font-size:.78rem;padding:6px 12px;cursor:pointer;white-space:nowrap;animation:recpulse 1.6s ease-in-out infinite}
+.recbadge:before{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
+@keyframes recpulse{50%{box-shadow:0 0 0 6px rgba(212,54,75,.18)}}
+.db.rec.on{background:#d4364b;border-color:#d4364b;color:#fff}
+body.recording .top{box-shadow:inset 0 -3px 0 #d4364b}
+.sbnote{font-size:.76rem;color:var(--muted);margin:0}
 </style>
 </head>
 <body>
 
 <header class="top">
-  <div class="brand"><span class="dot"></span>Klas <small id="roleLabel">docent</small> <small class="version-tag">v16</small></div>
+  <div class="brand"><span class="dot"></span>Klas <small id="roleLabel">docent</small> <small class="version-tag">v27</small></div>
+  <button class="recbadge" id="recBadge" type="button" hidden title="Deze les wordt opgenomen. Klik om te stoppen.">Opname loopt</button>
   <label class="language-pick"><span data-i18n="Interface">Interface</span> <select id="uiLanguage" class="pgsel" aria-label="Interface language"><option value="nl">🇳🇱 Nederlands</option><option value="pt">🇧🇷 Português</option><option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option><option value="de">🇩🇪 Deutsch</option></select></label>
   <label class="language-pick" data-teacher><span data-i18n="Lestaal">Lestaal</span> <select id="lessonLanguage" class="pgsel" aria-label="Lesson language"><option value="nl">🇳🇱 Nederlands</option><option value="pt">🇧🇷 Português</option><option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option><option value="de">🇩🇪 Deutsch</option></select></label>
   <select class="pgsel" id="topStudent" data-teacher title="Met welke leerling heb je nu les?" aria-label="Leerling"></select>
@@ -501,6 +510,7 @@ button{touch-action:manipulation}
     <button class="db" data-panel="pWb" aria-pressed="true" title="Whiteboard tonen of verbergen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4M7 12l3-3 3 2 4-4"/></svg><span class="lbl">Whiteboard</span></button>
     <button class="db" data-panel="pSl" aria-pressed="true" title="Slides tonen of verbergen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8 21h8"/></svg><span class="lbl">Slides</span></button>
     <button class="db" id="notesBtn" data-teacher aria-pressed="false" title="Notities per leerling"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg><span class="lbl">Notities</span></button>
+    <button class="db rec" id="recBtn" data-teacher type="button" title="Les opnemen (audio, met toestemming van je leerling)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg><span class="lbl">Opnemen</span></button>
     <button class="db leave" id="leaveBtn" type="button" title="Les verlaten" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0V16l-3 1.5z"/></svg></button>
   </div>
 </nav>
@@ -603,6 +613,22 @@ button{touch-action:manipulation}
     <div class="row"><button class="btn primary" id="repCopy" type="button">Kopiëren</button><button class="btn ghost" id="repClose" type="button">Sluiten</button></div>
   </div>
 </div>
+<div class="ov" id="recStartOv" hidden data-teacher>
+  <div class="dlg">
+    <h2>Les opnemen?</h2>
+    <p class="muted">Er wordt alleen <b>audio</b> opgenomen: jouw microfoon en die van je leerling. Je leerling krijgt eerst een verzoek en moet zelf toestemming geven. Tijdens de opname zien jullie allebei een rode indicator en kan ieder van jullie de opname stoppen.</p>
+    <p class="muted">De opname wordt privé opgeslagen bij deze leerling. Alleen jij en je leerling kunnen hem beluisteren en verwijderen.</p>
+    <div class="row"><button class="btn primary" id="recStartYes" type="button">Ik stem in, vraag mijn leerling</button><button class="btn ghost" id="recStartNo" type="button">Annuleren</button></div>
+  </div>
+</div>
+<div class="ov" id="recOv" hidden>
+  <div class="dlg">
+    <h2>Mag deze les worden opgenomen?</h2>
+    <p class="muted">Je docent wil een <b>audio-opname</b> maken van deze les: jouw stem en die van je docent. De opname wordt privé opgeslagen in jouw leerlingprofiel. Alleen jij en je docent kunnen hem beluisteren, en jullie kunnen hem allebei verwijderen.</p>
+    <p class="muted">Je kunt de opname op elk moment stoppen met de rode knop bovenaan.</p>
+    <div class="row"><button class="btn primary" id="recYes" type="button">Ja, ik geef toestemming</button><button class="btn ghost" id="recNo" type="button">Nee, niet opnemen</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -659,7 +685,14 @@ applyUiLanguage();
 document.getElementById('uiLanguage').addEventListener('change',function(){uiLang=this.value;localStorage.setItem('klas-ui-lang',uiLang);applyUiLanguage();});
 
 var params = new URLSearchParams(location.search);
+/* v27: Supabase mode. Only active when this page is embedded by TeachyRooms
+   (/klaslokaal/live?student=...) which provides window.parent.teachyBridge.
+   All storage then goes through the logged-in user's Supabase session (RLS). */
+function bridge(){ try{ return (window.parent !== window && window.parent.teachyBridge) || null; }catch(e){ return null; } }
+var SB = params.get("sb") === "1" && !!bridge();
+if(SB){ document.documentElement.setAttribute("data-theme", "light"); }
 var isT = params.get("rol") !== "leerling";
+if(SB && bridge().role === "student") isT = false;
 document.body.classList.add(isT ? "teacher" : "student");
 $("roleLabel").textContent = isT ? "docent" : "leerling";
 document.querySelectorAll("[data-teacher]").forEach(function(el){ if(!isT) el.hidden = true; });
@@ -672,9 +705,10 @@ function store(k, v){ try{ if(v === undefined) return JSON.parse(localStorage.ge
 function copy(text, msg){ (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function(){ toast(msg); }).catch(function(){ window.prompt("Kopieer dit:", text); }); }
 
 /* =================================================================== VERBINDING */
-var peer = null, local = null, conns = {}, calls = {}, tConn = null, tCall = null;
+var peer = null, local = null, conns = {}, calls = {}, tConn = null, tCall = null, remoteStreams = {};
 var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = false, retryT = null, myName = "";
-var ROOM = isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
+var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40) : "";
+var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
 var TEACHER_ID = "learnwithscip-klas-" + ROOM;
 var ICE = {iceServers:[{urls:"stun:stun.l.google.com:19302"}, {urls:"stun:stun1.l.google.com:19302"}].concat(TURN_SERVERS)};
 
@@ -709,8 +743,100 @@ function onMessage(m){
     case "cvo": cvApplyOrder(m.ids); break;
     case "scr": if(!m.on) hideScreen(); break;
     case "cvpage": var pl = $("cvPageLbl"); if(pl){ pl.textContent = String(m.title || "").slice(0, 40) + " (" + m.i + "/" + m.n + ")"; } break;
+    case "recask": if(!isT){ $("recOv").hidden = false; } break;
+    case "recok": if(isT) recConsentReply(true); break;
+    case "recno": if(isT) recConsentReply(false); break;
+    case "recon": if(!isT){ recBadge(true); $("recOv").hidden = true; } break;
+    case "recoff": if(!isT){ recBadge(false); $("recOv").hidden = true; } break;
+    case "recstop": if(isT && REC.on){ recStop(); toast("Je leerling heeft de opname gestopt"); } break;
   }
 }
+
+/* =================================================================== OPNAME (v27)
+   Audio of teacher + student, mixed in the teacher's browser, ONLY after explicit
+   consent of both. Stored privately per student via the TeachyRooms bridge. */
+var REC = {on:false, asked:false, rec:null, ctx:null, dest:null, chunks:[], mime:"", startedAt:0, tConsent:null, sConsent:null, askT:null, maxT:null, finished:true};
+function recBadge(on){ $("recBadge").hidden = !on; document.body.classList.toggle("recording", !!on); var b = $("recBtn"); if(b){ b.classList.toggle("on", !!on); var l = b.querySelector(".lbl"); if(l) l.textContent = on ? "Stop opname" : "Opnemen"; } }
+function recSupported(){ return !!(window.MediaRecorder && (window.AudioContext || window.webkitAudioContext)); }
+function recMime(){ var c = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]; for(var i = 0; i < c.length; i++){ try{ if(MediaRecorder.isTypeSupported(c[i])) return c[i]; }catch(e){} } return ""; }
+function recAsk(){
+  if(!SB){ toast("Opnemen kan alleen in het klaslokaal binnen TeachyRooms"); return; }
+  if(REC.on){ if(confirm("Opname stoppen en opslaan?")) recStop(); return; }
+  if(!recSupported()){ toast("Deze browser kan niet opnemen. Gebruik Chrome, Edge, Firefox of Safari."); return; }
+  if(!peer || !online()){ toast("Start eerst de les; je leerling moet verbonden zijn"); return; }
+  $("recStartOv").hidden = false;
+}
+function recConsentReply(yes){
+  if(!REC.asked) return;
+  REC.asked = false; clearTimeout(REC.askT);
+  if(!yes){ toast("Je leerling gaf geen toestemming. Er wordt niets opgenomen."); return; }
+  REC.sConsent = new Date().toISOString();
+  recStart();
+}
+function recAddStream(s){
+  if(!REC.on || !REC.ctx || !s || !s.getAudioTracks().length) return false;
+  try{ REC.ctx.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(REC.dest); return true; }catch(e){ return false; }
+}
+function recStart(){
+  try{
+    var AC = window.AudioContext || window.webkitAudioContext, ctx = new AC(), dest = ctx.createMediaStreamDestination();
+    REC.ctx = ctx; REC.dest = dest; REC.on = true;
+    var mine = recAddStream(local), theirs = 0;
+    Object.keys(remoteStreams).forEach(function(k){ if(recAddStream(remoteStreams[k])) theirs++; });
+    if(!mine && !theirs){ REC.on = false; ctx.close(); toast("Geen microfoon gevonden: er is niets om op te nemen"); send({t:"recoff"}); return; }
+    var mime = recMime(), o = {audioBitsPerSecond:32000}; if(mime) o.mimeType = mime;
+    var rec = new MediaRecorder(dest.stream, o);
+    REC.chunks = []; REC.finished = false;
+    rec.ondataavailable = function(e){ if(e.data && e.data.size) REC.chunks.push(e.data); };
+    rec.onstop = recFinish;
+    rec.start(1000);
+    if(ctx.state === "suspended" && ctx.resume) ctx.resume();
+    REC.rec = rec; REC.mime = rec.mimeType || mime || "audio/webm"; REC.startedAt = Date.now();
+    recBadge(true); send({t:"recon"});
+    toast(theirs ? "Opname gestart" : "Opname gestart, maar zonder geluid van je leerling (geen microfoon ontvangen)");
+    clearTimeout(REC.maxT); REC.maxT = setTimeout(function(){ if(REC.on){ toast("Maximale opnameduur bereikt (2,5 uur)"); recStop(); } }, 150 * 60 * 1000);
+  }catch(e){ REC.on = false; recBadge(false); send({t:"recoff"}); toast("Opname kon niet starten: " + ((e && e.message) || e)); }
+}
+function recStop(){
+  if(!REC.on) return;
+  REC.on = false; clearTimeout(REC.maxT); recBadge(false); send({t:"recoff"});
+  try{ if(REC.rec && REC.rec.state !== "inactive") REC.rec.stop(); else recFinish(); }catch(e){ recFinish(); }
+}
+function recDownload(blob){
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "lesopname-" + new Date().toISOString().slice(0, 10) + (/mp4/.test(blob.type) ? ".m4a" : ".webm");
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 20000);
+}
+function recFinish(){
+  if(REC.finished) return; REC.finished = true;
+  var blob = new Blob(REC.chunks, {type:(REC.mime || "audio/webm").split(";")[0]}); REC.chunks = [];
+  try{ if(REC.ctx) REC.ctx.close(); }catch(e){}
+  REC.ctx = null; REC.dest = null; REC.rec = null;
+  var dur = (Date.now() - REC.startedAt) / 1000;
+  if(!blob.size){ toast("De opname was leeg"); return; }
+  var b = bridge();
+  if(!b){ recDownload(blob); alert("Online opslaan niet beschikbaar. De opname is als bestand gedownload."); return; }
+  toast("Opname veilig opslaan...");
+  b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:REC.tConsent, studentConsentAt:REC.sConsent}).then(function(r){
+    if(r && r.ok) toast("Opname opgeslagen bij deze leerling");
+    else { recDownload(blob); alert("Online opslaan mislukt (" + ((r && r.error) || "onbekende fout") + "). De opname is als bestand gedownload, zodat er niets verloren gaat."); }
+  }).catch(function(e){ recDownload(blob); alert("Online opslaan mislukt (" + ((e && e.message) || e) + "). De opname is als bestand gedownload."); });
+}
+$("recStartYes").addEventListener("click", function(){
+  $("recStartOv").hidden = true;
+  if(!online()){ toast("Je leerling is niet meer verbonden"); return; }
+  REC.tConsent = new Date().toISOString(); REC.asked = true; send({t:"recask"});
+  toast("Toestemming gevraagd aan je leerling...");
+  clearTimeout(REC.askT); REC.askT = setTimeout(function(){ if(REC.asked){ REC.asked = false; toast("Geen antwoord van je leerling; er wordt niet opgenomen"); } }, 60000);
+});
+$("recStartNo").addEventListener("click", function(){ $("recStartOv").hidden = true; });
+$("recYes").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recok"}); toast("Toestemming gegeven"); });
+$("recNo").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recno"}); });
+$("recBtn").addEventListener("click", recAsk);
+$("recBadge").addEventListener("click", function(){
+  if(isT){ if(confirm("Opname stoppen en opslaan?")) recStop(); }
+  else if(confirm("Wil je de opname stoppen?")){ send({t:"recstop"}); }
+});
+if(SB && isT && bridge().role === "teacher") $("recBtn").hidden = false;
 function status(head, msg){
   var show = !!(head || msg);
   $("vph").hidden = !show || $("remotes").children.length > 0 && !head;
@@ -779,17 +905,17 @@ function startTeacher2(){
     });
     peer.on("disconnected", function(){ try{ if(peer && !peer.destroyed) peer.reconnect(); }catch(e){} });
     peer.on("connection", function(conn){
-      conn.on("open", function(){ conns[conn.peer] = conn; if(!joinedAt) joinedAt = Date.now(); if(screenStream) shareTo(conn.peer); });
-      conn.on("data", function(d){ onMessage(d); if(d && d.t && d.t !== "hello") deliver(d, conn.peer); });
-      conn.on("close", function(){ delete conns[conn.peer]; });
-      conn.on("error", function(){ delete conns[conn.peer]; });
+      conn.on("open", function(){ conns[conn.peer] = conn; if(!joinedAt) joinedAt = Date.now(); if(screenStream) shareTo(conn.peer); if(REC.on){ try{ conn.send({t:"recon"}); }catch(e){} } });
+      conn.on("data", function(d){ onMessage(d); if(d && d.t && d.t !== "hello" && d.t.indexOf("rec") !== 0) deliver(d, conn.peer); });
+      conn.on("close", function(){ delete conns[conn.peer]; if(REC.on && !online()){ recStop(); toast("Je leerling is weg: opname gestopt en opgeslagen"); } });
+      conn.on("error", function(){ delete conns[conn.peer]; if(REC.on && !online()) recStop(); });
     });
     peer.on("call", function(c){
       calls[c.peer] = c;
       if(local) c.answer(local); else c.answer();
       var name = c.metadata && c.metadata.naam ? String(c.metadata.naam).slice(0, 40) : "Leerling";
-      c.on("stream", function(s){ addRemote(c.peer, s, name); if(!joinedAt) joinedAt = Date.now(); });
-      c.on("close", function(){ delete calls[c.peer]; removeRemote(c.peer); });
+      c.on("stream", function(s){ addRemote(c.peer, s, name); remoteStreams[c.peer] = s; recAddStream(s); if(!joinedAt) joinedAt = Date.now(); });
+      c.on("close", function(){ delete calls[c.peer]; delete remoteStreams[c.peer]; removeRemote(c.peer); });
       watchIce(c, c.peer);
     });
   });
@@ -840,6 +966,8 @@ function connectTeacher(){
   }
 }
 function leave(){
+  if(REC.on) recStop();
+  if(!isT){ recBadge(false); $("recOv").hidden = true; }
   if(screenStream) stopShare();
   clearTimeout(retryT);
   Object.keys(conns).forEach(function(id){ try{ conns[id].close(); }catch(e){} });
@@ -847,7 +975,7 @@ function leave(){
   try{ if(tConn) tConn.close(); if(tCall) tCall.close(); }catch(e){}
   try{ if(peer) peer.destroy(); }catch(e){}
   if(local) local.getTracks().forEach(function(t){ t.stop(); });
-  peer = null; local = null; conns = {}; calls = {}; tConn = null; tCall = null; queue = []; joinedAt = 0;
+  peer = null; local = null; conns = {}; calls = {}; remoteStreams = {}; tConn = null; tCall = null; queue = []; joinedAt = 0;
   $("remotes").innerHTML = ""; $("selfV").srcObject = null; $("vTitle").textContent = "Video";
   status("Je bent uit de les", isT ? 'Klik op "Start de les" om opnieuw te beginnen.' : 'Klik op "Naar de les" om terug te gaan.');
   $("joinBtn").hidden = false; $("leaveBtn").hidden = true;
@@ -858,7 +986,10 @@ $("joinBtn").addEventListener("click", function(){
 });
 $("joinForm").addEventListener("submit", function(e){ e.preventDefault(); $("joinOv").hidden = true; startStudent($("joinName").value.trim() || "Leerling"); });
 $("leaveBtn").addEventListener("click", function(){ if(peer && confirm("Les verlaten?")) leave(); });
-$("copyLink").addEventListener("click", function(){ copy(location.origin + location.pathname + "?rol=leerling&kamer=" + ROOM, "Link gekopieerd, stuur hem naar je leerling"); });
+$("copyLink").addEventListener("click", function(){
+  if(SB){ copy(bridge().liveUrl, "Link gekopieerd. Je leerling logt in en komt direct in deze les."); return; }
+  copy(location.origin + location.pathname + "?rol=leerling&kamer=" + ROOM, "Link gekopieerd, stuur hem naar je leerling");
+});
 $("micBtn").addEventListener("click", function(){ if(!local) return; mic = !mic; local.getAudioTracks().forEach(function(t){ t.enabled = mic; }); this.classList.toggle("off", !mic); });
 $("camBtn").addEventListener("click", function(){ if(!local) return; cam = !cam; local.getVideoTracks().forEach(function(t){ t.enabled = cam; }); this.classList.toggle("off", !cam); });
 $("selfBtn").addEventListener("click", function(){
@@ -1559,20 +1690,26 @@ cvNormalize();
 /* =================================================================== NOTITIES, CANVAS-PAGINA'S, OPSLAG EN AI (alleen docent) */
 if(isT){
   var KEY = "klas-notities-v1";
-  var db = store(KEY) || {students:[], lessons:{}, sel:null};
+  /* v27: in Supabase mode nothing is read from or written to this device's localStorage. */
+  var db = (SB ? null : store(KEY)) || {students:[], lessons:{}, sel:null};
   if(!db.students) db.students = []; if(!db.lessons) db.lessons = {};
+  var cvReady = !SB, bdReady = !SB;   /* SB: block saving until the stored state has loaded */
 
-  /* ---------- online opslag (api/data op Vercel) ---------- */
+  /* ---------- online opslag: Supabase (v27) of api/data op Vercel (v15/v16) ---------- */
   var CLOUD = {on:false, ai:false, pass:null, dirty:{}, timer:null};
   function api(path, opts){
-    opts = opts || {}; opts.headers = Object.assign({"x-klas-pass": CLOUD.pass || ""}, opts.headers || {});
-    return fetch(path, opts).then(function(r){
-      if(r.status === 401) throw new Error("wachtwoord");
+    opts = opts || {};
+    var tok = SB ? bridge().token() : Promise.resolve("");
+    return tok.then(function(t){
+      opts.headers = Object.assign({"x-klas-pass": CLOUD.pass || ""}, t ? {"Authorization": "Bearer " + t} : {}, opts.headers || {});
+      return fetch(path, opts);
+    }).then(function(r){
+      if(r.status === 401) throw new Error(SB ? "Geen toegang tot AI (alleen voor docenten)" : "wachtwoord");
       return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ("fout " + r.status)); return j; });
     });
   }
-  function cloudGet(key){ return api("api/data?key=" + encodeURIComponent(key)).then(function(j){ return j.value; }); }
-  function cloudPut(key, value){ return api("api/data", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({key:key, value:value})}); }
+  function cloudGet(key){ if(SB) return bridge().get(key); return api("api/data?key=" + encodeURIComponent(key)).then(function(j){ return j.value; }); }
+  function cloudPut(key, value){ if(SB) return bridge().put(key, value); return api("api/data", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({key:key, value:value})}); }
   function setSaved(t){ $("saved").textContent = t; $("cloudState").textContent = t; }
   function queueCloud(key, getter){
     if(!CLOUD.on) return;
@@ -1583,7 +1720,7 @@ if(isT){
   function flushCloud(){
     var keys = Object.keys(CLOUD.dirty); if(!keys.length) return;
     var jobs = keys.map(function(k){ var g = CLOUD.dirty[k]; delete CLOUD.dirty[k]; return cloudPut(k, g()).catch(function(e){ CLOUD.dirty[k] = g; throw e; }); });
-    Promise.all(jobs).then(function(){ setSaved("online opgeslagen"); })
+    return Promise.all(jobs).then(function(){ setSaved(SB ? "opgeslagen bij deze leerling ✓" : "online opgeslagen"); })
       .catch(function(){ setSaved("offline, wordt later opgeslagen"); clearTimeout(CLOUD.timer); CLOUD.timer = setTimeout(flushCloud, 8000); });
   }
   window.addEventListener("beforeunload", function(){ if(Object.keys(CLOUD.dirty).length) flushCloud(); });
@@ -1592,9 +1729,16 @@ if(isT){
   function save(){
     clearTimeout(saveT);
     saveT = setTimeout(function(){
-      try{ localStorage.setItem(KEY, JSON.stringify(db)); setSaved(CLOUD.on ? "opslaan..." : "opgeslagen op deze laptop"); }catch(e){ setSaved("niet opgeslagen!"); }
+      if(SB){ setSaved(CLOUD.on ? "opslaan..." : "niet opgeslagen: geen verbinding met de database"); }
+      else try{ localStorage.setItem(KEY, JSON.stringify(db)); setSaved(CLOUD.on ? "opslaan..." : "opgeslagen op deze laptop"); }catch(e){ setSaved("niet opgeslagen!"); }
       queueCloud("notes", function(){ return db; });
     }, 300);
+  }
+  /* write everything that is pending right now (used before switching student) */
+  function flushAllNow(){
+    clearTimeout(saveT); queueCloud("notes", function(){ return db; });
+    clearTimeout(cvSaveT); persistCv(); clearTimeout(bdT); persistBoard();
+    clearTimeout(CLOUD.timer); return flushCloud();
   }
 
   function today(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -1671,14 +1815,14 @@ if(isT){
   /* ---------- canvas: pagina's per leerling ---------- */
   var cvOwner = null, cvDoc = null, cvSaveT = null;
   function cvKey(id){ return "canvas:" + (id || "algemeen"); }
-  function localCv(id){ try{ var j = localStorage.getItem("klas-canvas2-" + (id || "algemeen")); if(j) return JSON.parse(j); var old = localStorage.getItem("klas-canvas-" + (id || "algemeen")); if(old) return {pages:[{id:uid(), title:"Pagina 1", html:old}], cur:0}; }catch(e){} return null; }
+  function localCv(id){ if(SB) return null; try{ var j = localStorage.getItem("klas-canvas2-" + (id || "algemeen")); if(j) return JSON.parse(j); var old = localStorage.getItem("klas-canvas-" + (id || "algemeen")); if(old) return {pages:[{id:uid(), title:"Pagina 1", html:old}], cur:0}; }catch(e){} return null; }
   function newDoc(){ return {pages:[{id:uid(), title:"Pagina 1", html:""}], cur:0}; }
   function curPage(){ return cvDoc.pages[Math.min(cvDoc.cur, cvDoc.pages.length - 1)]; }
   function persistCv(){
-    if(!cvDoc) return;
+    if(!cvDoc || !cvReady) return;
     curPage().html = CV.innerHTML;
     var owner = cvOwner, doc = cvDoc;
-    try{ localStorage.setItem("klas-canvas2-" + (owner || "algemeen"), JSON.stringify(doc)); }catch(e){}
+    if(!SB) try{ localStorage.setItem("klas-canvas2-" + (owner || "algemeen"), JSON.stringify(doc)); }catch(e){}
     queueCloud(cvKey(owner), function(){ return doc; });
   }
   window.cvSave = function(){ clearTimeout(cvSaveT); cvSaveT = setTimeout(persistCv, 500); };
@@ -1700,6 +1844,13 @@ if(isT){
     cvOwner = id || null;
     var local = localCv(cvOwner);
     setDoc(local);
+    if(SB){
+      cvReady = false;
+      if(!CLOUD.on || !cvOwner) return;
+      cloudGet(cvKey(cvOwner)).then(function(v){ if(cvOwner !== (id || null)) return; if(v && v.pages) setDoc(v); cvReady = true; })
+        .catch(function(e){ toast("Canvas kon niet laden; wijzigingen worden niet opgeslagen (" + ((e && e.message) || e) + ")"); });
+      return;
+    }
     if(CLOUD.on) cloudGet(cvKey(cvOwner)).then(function(v){ if(v && v.pages && cvOwner === (id || null)){ setDoc(v); } else if(local && !v){ persistCv(); } }).catch(function(){});
   }
   function addPage(title, html){
@@ -1727,9 +1878,9 @@ if(isT){
     return d;
   }
   function persistBoard(){
-    if(bdOwner === undefined) return;
+    if(bdOwner === undefined || !bdReady) return;
     var owner = bdOwner, d = boardData();
-    try{ localStorage.setItem("klas-board-" + (owner || "algemeen"), JSON.stringify(d)); }catch(e){}
+    if(!SB) try{ localStorage.setItem("klas-board-" + (owner || "algemeen"), JSON.stringify(d)); }catch(e){}
     queueCloud(bdKey(owner), function(){ return d; });
   }
   window.wbDirty = function(){ clearTimeout(bdT); bdT = setTimeout(persistBoard, 1500); };
@@ -1744,16 +1895,31 @@ if(isT){
     WB.key = null; WB.show(cur, true); send({t:"wb", k:cur, list:WB.list});
     WB.list.forEach(function(k){ (objs[k] || []).forEach(function(o){ sendObjWhole(k, o); }); });
   }
-  function localBoard(id){ try{ var j = localStorage.getItem("klas-board-" + (id || "algemeen")); return j ? JSON.parse(j) : null; }catch(e){ return null; } }
+  function localBoard(id){ if(SB) return null; try{ var j = localStorage.getItem("klas-board-" + (id || "algemeen")); return j ? JSON.parse(j) : null; }catch(e){ return null; } }
   function boardSwitch(id){
     if(bdOwner !== undefined){ clearTimeout(bdT); persistBoard(); }
     bdOwner = id || null;
     var local = localBoard(bdOwner);
     applyBoard(local);
+    if(SB){
+      bdReady = false;
+      if(!CLOUD.on || !bdOwner) return;
+      cloudGet(bdKey(bdOwner)).then(function(v){ if(bdOwner !== (id || null)) return; if(v && v.list) applyBoard(v); bdReady = true; })
+        .catch(function(e){ toast("Whiteboard kon niet laden; wijzigingen worden niet opgeslagen (" + ((e && e.message) || e) + ")"); });
+      return;
+    }
     if(CLOUD.on) cloudGet(bdKey(bdOwner)).then(function(v){ if(bdOwner !== (id || null)) return; if(v && v.list) applyBoard(v); else if(local) persistBoard(); }).catch(function(){});
   }
   /* alles van een leerling openen: notities, canvas en whiteboards */
   function openStudent(id){
+    if(SB){
+      /* one student = one classroom: switching reloads the room of the other student */
+      if(!id || id === bridge().studentId){ renderStudents(); return; }
+      if(online() && !confirm("Wisselen van leerling? De video-verbinding van deze les wordt verbroken.")){ renderStudents(); return; }
+      if(REC.on) recStop();
+      Promise.resolve(flushAllNow()).catch(function(){}).then(function(){ bridge().switchStudent(id); });
+      return;
+    }
     db.sel = id || null; save(); renderStudents();
     cvSwitch(db.sel); boardSwitch(db.sel);
     var s = stu(); if(s){$("lessonLanguage").value=s.lessonLanguage||"nl";$("pLessonLanguage").value=s.lessonLanguage||"nl";} if(s) toast("Les met " + s.name + ": notities, canvas en borden geladen");
@@ -1851,7 +2017,8 @@ if(isT){
     persistCv();
     persistBoard();
     var all = {notes:db, canvas:{}, boards:{}};
-    db.students.concat([{id:null}]).forEach(function(s){ var c = localCv(s.id); if(c) all.canvas[s.id || "algemeen"] = c; var bd = localBoard(s.id); if(bd) all.boards[s.id || "algemeen"] = bd; });
+    if(SB){ if(cvOwner && cvDoc) all.canvas[cvOwner] = cvDoc; if(bdOwner) all.boards[bdOwner] = boardData(); }
+    else db.students.concat([{id:null}]).forEach(function(s){ var c = localCv(s.id); if(c) all.canvas[s.id || "algemeen"] = c; var bd = localBoard(s.id); if(bd) all.boards[s.id || "algemeen"] = bd; });
     var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(all, null, 1)], {type:"application/json"}));
     a.download = "klas-backup-" + today() + ".json"; document.body.appendChild(a); a.click(); a.remove();
   });
@@ -1860,6 +2027,17 @@ if(isT){
     r.onload = function(){
       try{
         var d = JSON.parse(r.result), notes = d.notes || d; if(!notes.students) throw 0;
+        if(SB){
+          /* v27: import an old (v15/v16) backup into the Supabase students, matched by name.
+             Existing lessons/boards in Supabase are never overwritten. */
+          bridge().previewImport(d).then(function(m){
+            var lines = m.map(function(x){ return "• " + x.oldName + " → " + (x.newName || "niet gevonden, wordt overgeslagen"); }).join("\n");
+            if(!confirm("Oude back-up importeren naar TeachyRooms?\n\n" + lines + "\n\nBestaande lessen, borden en canvassen worden niet overschreven.")) return;
+            setSaved("importeren...");
+            return bridge().importBackup(d).then(function(msg){ alert(msg); return connectCloudSB(); });
+          }).catch(function(err){ alert("Importeren mislukt: " + ((err && err.message) || err)); });
+          return;
+        }
         if(!confirm("Je huidige notities vervangen door deze back-up?")) return;
         db = notes; save();
         if(d.canvas) Object.keys(d.canvas).forEach(function(k){ try{ localStorage.setItem("klas-canvas2-" + k, JSON.stringify(d.canvas[k])); }catch(err){} queueCloud("canvas:" + k, function(){ return d.canvas[k]; }); });
@@ -1883,7 +2061,31 @@ if(isT){
   /* ---------- opstarten: lokaal, daarna online ophalen ---------- */
   renderStudents();
   cvSwitch(db.sel); boardSwitch(db.sel);
-  setSaved("opgeslagen op deze laptop");
+  setSaved(SB ? "laden..." : "opgeslagen op deze laptop");
+  /* v27: Supabase mode — load this teacher's students and this student's room */
+  function connectCloudSB(){
+    setSaved("laden...");
+    return cloudGet("notes").then(function(v){
+      CLOUD.on = true;
+      db = (v && v.students) ? v : {students:[], lessons:{}, sel:null};
+      renderStudents();
+      cvDoc = null; cvSwitch(db.sel); bdOwner = undefined; boardSwitch(db.sel);
+      setSaved("opgeslagen bij deze leerling ✓");
+      $("cloudState").textContent = "Alles wordt automatisch opgeslagen in het profiel van " + (bridge().studentName || "deze leerling") + ". Leerlingen beheer je in TeachyRooms → Leerlingen.";
+      var s = stu(); if(s) toast("Les met " + s.name + ": notities, canvas en borden geladen");
+    }).catch(function(e){
+      CLOUD.on = false;
+      setSaved("niet opgeslagen!");
+      $("cloudState").textContent = "Geen verbinding met de database: " + ((e && e.message) || e) + ". Wijzigingen worden NIET opgeslagen.";
+      toast("Opslag niet beschikbaar: " + ((e && e.message) || e));
+    });
+  }
+  if(SB){
+    $("addStudent").hidden = true; $("delStudent").hidden = true; $("passOv").remove();
+    $("exportBtn").title = "Back-up van deze les als bestand";
+    connectCloudSB();
+    fetch("api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){ CLOUD.ai = !!(p && p.ai); });
+  }
   function connectCloud(pass){
     CLOUD.pass = pass;
     return cloudGet("notes").then(function(v){
@@ -1894,7 +2096,7 @@ if(isT){
       setSaved("online opgeslagen");
     });
   }
-  fetch("api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){
+  if(!SB) fetch("api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){
     if(!p || !p.ok){ $("cloudState").textContent = "alleen op deze laptop (geen server gevonden)"; return; }
     CLOUD.ai = !!p.ai;
     if(!p.storage || !p.password){ $("cloudState").textContent = "server gevonden, maar " + (!p.storage ? "opslag" : "wachtwoord") + " is nog niet ingesteld"; return; }
