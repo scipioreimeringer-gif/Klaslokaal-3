@@ -1708,7 +1708,9 @@ if(isT){
       return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ("fout " + r.status)); return j; });
     });
   }
-  function cloudGet(key){ if(SB) return bridge().get(key); return api("api/data?key=" + encodeURIComponent(key)).then(function(j){ return j.value; }); }
+  /* SB: data arrives from the parent window (another JS realm). Re-create it in this
+     realm, otherwise PeerJS does not recognise its arrays and silently drops them. */
+  function cloudGet(key){ if(SB) return bridge().get(key).then(function(v){ return v == null ? null : JSON.parse(JSON.stringify(v)); }); return api("api/data?key=" + encodeURIComponent(key)).then(function(j){ return j.value; }); }
   function cloudPut(key, value){ if(SB) return bridge().put(key, value); return api("api/data", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({key:key, value:value})}); }
   function setSaved(t){ $("saved").textContent = t; $("cloudState").textContent = t; }
   function queueCloud(key, getter){
