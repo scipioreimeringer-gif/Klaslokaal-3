@@ -1,0 +1,11 @@
+# TeachyRooms v26 — installatie en beperkingen
+
+1. Upload de **inhoud** van deze projectmap (behoud `app/`, `components/`, `supabase/`, enz.) naar een nieuwe GitHub-repository of branch. Gebruik geen losse bestanden die in de hoofdmap terechtkomen.
+2. In **de bestaande Supabase-database** open SQL Editor en voer alleen `supabase/v26.sql` uit. Maak geen nieuwe database. Dit script voegt drie tabellen met RLS toe; het wijzigt de bestaande tabellen niet.
+3. Gebruik in Vercel de bestaande `NEXT_PUBLIC_SUPABASE_URL` en `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` en deploy opnieuw.
+4. In Supabase Authentication > URL Configuration voeg je de nieuwe Vercel-URL toe aan Redirect URLs. Laat de oude URL staan.
+5. Als docent voeg je jezelf als leerling toe via `/leerlingen`, met exact hetzelfde e-mailadres als je account, en maak je de uitnodigingslink aan. Open deze link ingelogd met datzelfde account om je leerlingprofiel te koppelen. Een docent blijft docent en krijgt daarnaast via `/mijn-profiel` een leerlingweergave. Een andere docent kan je op dezelfde manier als leerling uitnodigen.
+6. Open `/portugees` voor de checklist en lokale microfoonopname. Browseropnames worden lokaal gedownload als WebM; geen automatische cloudopslag, transcriptie of opname van de stem van de andere deelnemer.
+7. Open `/lesruimte?student=UUID` vanuit een leerlingprofiel. Deze **nieuwe tekstlesruimte** heeft een per-leerling gedeeld bord en een afzonderlijke docentnotitie. De docentnotities staan in een aparte RLS-beveiligde tabel. Het oudere video/tekenklaslokaal is bewust ongemoeid gelaten en is **nog niet** gekoppeld aan deze opslag. Gebruik het niet voor gevoelige leerlinggegevens totdat die koppeling en beveiliging zijn afgerond.
+
+**Belangrijk:** v26 biedt geen automatische synchronisatie van het oude tekenwhiteboard, geen cloudopname en geen automatisch voortgangsdashboard. Het tekstbord wordt opgeslagen na circa 0,85 seconden; gelijktijdig typen op meerdere apparaten heeft nog geen conflictresolutie. Test eerst met fictieve leerlinggegevens. Docenttoegang blijft onderworpen aan de bestaande goedkeuring. De leerling kan de gedeelde tekst lezen/schrijven; alleen de docent kan privénotities zien en wijzigen.
