@@ -29,7 +29,7 @@ create policy "private teacher insert" on public.teacher_private_notes for inser
 drop policy if exists "private teacher update" on public.teacher_private_notes;
 create policy "private teacher update" on public.teacher_private_notes for update to authenticated
  using (exists(select 1 from public.students s where s.id=student_id and s.teacher_id=auth.uid()))
- with check (exists(select 1 from public.students s where s.id=student_id and s.teacher_id=auth.uid())));
+ with check (exists(select 1 from public.students s where s.id=student_id and s.teacher_id=auth.uid()));
 create table if not exists public.portuguese_checklists (
  user_id uuid primary key references auth.users(id) on delete cascade,
  completed jsonb not null default '[]'::jsonb,
