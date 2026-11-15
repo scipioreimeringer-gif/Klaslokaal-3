@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     const {db, user} = await authUser(req);
     const body = await req.json().catch(() => ({}));
     const ui = await uiLanguage(db, user.id, (body as {uiLang?: unknown}).uiLang);
+    if (body.test === true || typeof body.transcript === 'string') return await importTestTranscript(db, user.id, body, ui);
     const recordingId = String(body.recordingId || '');
     if (!/^[0-9a-f-]{36}$/i.test(recordingId)) throw new HttpError(400, 'Ongeldige opname');
     const r = await db.from('lesson_recordings').select('*').eq('id', recordingId).maybeSingle();
@@ -75,6 +76,28 @@ export async function POST(req: Request) {
   } catch (e) { return jsonError(e); }
 }
 
+
+/** ADMIN-ONLY TEST: an uploaded/pasted transcript goes through the SAME runAnalysis as a recording;
+ *  only step 1 (audio → text) is replaced by the given text. Stored as is_test (v33): never shareable. */
+async function importTestTranscript(db: SupabaseClient, userId: string, body: Record<string, unknown>, ui: string) {
+  const {data: me} = await db.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if ((me as {role?: string} | null)?.role !== 'admin') throw new HttpError(403, 'Alleen beheerders mogen testtranscripten importeren.');
+  const studentId = String(body.studentId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(studentId)) throw new HttpError(400, 'Kies een testleerling.');
+  const text = String(body.transcript || '').replace(/\r\n?/g, '\n').trim();
+  if (text.length < 40) throw new HttpError(400, 'Het transcript is te kort (minimaal een paar zinnen).');
+  if (text.length > 60000) throw new HttpError(400, 'Het transcript is te lang (maximaal 60.000 tekens).');
+  const {student, role} = await studentAccess(db, userId, studentId);
+  if (role !== 'teacher') throw new HttpError(403, 'Kies een leerling aan wie jij lesgeeft.');
+  await enforceLimit(db, userId, 'analysis');
+  const lessonDate = new Date().toISOString().slice(0, 10);
+  const ins = await db.from('lesson_analyses').insert({student_id: student.id, lesson_date: lessonDate, status: 'processing', created_by: userId, is_test: true, transcript: text}).select('id').single();
+  if (ins.error) throw new HttpError(400, /is_test/.test(ins.error.message) ? 'Voer eerst supabase/v33.sql uit.' : /TEST_ADMIN_ONLY/.test(ins.error.message) ? 'Alleen beheerders mogen testtranscripten importeren.' : ins.error.message);
+  const log: UsageCtx = {db, userId, kind: 'analysis', studentId: student.id};
+  after(() => runAnalysis(db, ins.data.id, student, null, lessonDate, log, ui, text));
+  return Response.json({id: ins.data.id, status: 'processing', test: true}, {status: 202});
+}
+
 async function download(db: SupabaseClient, path: string, mime: string) {
   const s = await db.storage.from('recordings').createSignedUrl(path, 600);
   if (s.error || !s.data) return null;
@@ -83,14 +106,18 @@ async function download(db: SupabaseClient, path: string, mime: string) {
 }
 const ext = (mime: string) => (/mp4/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : 'webm');
 
-async function runAnalysis(db: SupabaseClient, id: string, student: StudentCtx, rec: {storage_path: string; mime_type: string; teacher_track_path?: string | null; student_track_path?: string | null}, lessonDate: string, log: UsageCtx, ui = 'nl') {
+async function runAnalysis(db: SupabaseClient, id: string, student: StudentCtx, rec: {storage_path: string; mime_type: string; teacher_track_path?: string | null; student_track_path?: string | null} | null, lessonDate: string, log: UsageCtx, ui = 'nl', given?: string) {
   const fail = (msg: string) => db.from('lesson_analyses').update({status: 'failed', error: msg.slice(0, 500), updated_at: new Date().toISOString()}).eq('id', id);
   try {
     const subject = subjectCode(student);
     const hint = subject.length === 2 ? subject : undefined;
     // 1. Audio → transcript. Preferred: separate teacher/student tracks → reliable speaker labels.
     let transcript: string | null = null, note = '', separated = false, studentSeconds: number | null = null;
-    if (rec.teacher_track_path && rec.student_track_path) {
+    if (given) {
+      // TEST import: the text IS the transcript; speaker labels as written (e.g. "Docent:" / "Leerling:")
+      transcript = given;
+      separated = /^\s*(docent|teacher|professor|professora|lehrer|lehrerin|profesor|profesora|professeur|enseignant|enseignante)\s*:/im.test(given) && /^\s*(leerling|student|aluno|aluna|schüler|alumno|élève)\s*:/im.test(given);
+    } else if (rec && rec.teacher_track_path && rec.student_track_path) {
       const [tb, sb] = await Promise.all([download(db, rec.teacher_track_path, rec.mime_type), download(db, rec.student_track_path, rec.mime_type)]);
       if (tb && sb) {
         const [tt, st] = await Promise.all([transcribe(tb, 'docent.' + ext(rec.mime_type), hint, log), transcribe(sb, 'leerling.' + ext(rec.mime_type), hint, log)]);
@@ -99,15 +126,16 @@ async function runAnalysis(db: SupabaseClient, id: string, student: StudentCtx, 
         } else note = tt.reason || st.reason || '';
       }
     }
-    if (!separated) {
+    if (!given && rec && !separated) {
       const mix = await download(db, rec.storage_path, rec.mime_type);
       if (!mix) note = note || 'Opname kon niet worden gedownload.';
       else { const t = await transcribe(mix, 'les.' + ext(rec.mime_type), hint, log); transcript = t.text; note = t.reason || note; }
     }
     // 2. Lesson data
+    // (a TEST transcript is judged on its own: no canvas or lesson notes of the student are mixed in)
     const [canvas, lesson, goals] = await Promise.all([
-      canvasText(db, student.id),
-      db.from('lesson_entries').select('notes,homework,words').eq('student_id', student.id).eq('lesson_date', lessonDate).maybeSingle().then(r => r.data),
+      given ? Promise.resolve('') : canvasText(db, student.id),
+      given ? Promise.resolve(null) : db.from('lesson_entries').select('notes,homework,words').eq('student_id', student.id).eq('lesson_date', lessonDate).maybeSingle().then(r => r.data),
       goalsFor(db, subject),
     ]);
     if (!transcript && !canvas && !lesson?.notes) { await fail(note || 'Geen bruikbare lesgegevens gevonden.'); return; }
@@ -117,7 +145,9 @@ async function runAnalysis(db: SupabaseClient, id: string, student: StudentCtx, 
     const words = Array.isArray(lesson?.words) ? (lesson!.words as {nl: string; uit?: string}[]).map(w => `${w.nl}${w.uit ? ' = ' + w.uit : ''}`).join('; ') : '';
     const input = [
       `Student: ${student.name}. Language: ${langName(subject)}. Level: ${student.level || 'unknown'}. Lesson date: ${lessonDate}.`,
-      separated
+      given
+        ? `TRANSCRIPT imported as text for a TEST (no audio). Speaker labels are as written in the text${separated ? '' : ' (no clear teacher/student labels: only attribute an error to the student when it is unmistakably the student speaking; otherwise mark certainty "uncertain")'}:\n${transcript!.slice(0, 60000)}`
+        : separated
         ? `TRANSCRIPT with reliable speaker labels from separate microphone tracks (DOCENT = teacher, LEERLING = student). Speech-to-text may contain errors:\n${transcript}`
         : `TRANSCRIPT WITHOUT speaker separation (teacher and student mixed). ${transcript ? 'Only attribute an error to the student when it is unmistakably the student speaking; otherwise mark certainty "uncertain" or leave it out.' : ''}\n${transcript ? transcript.slice(0, 60000) : '(none: ' + (note || 'not available') + ')'}`,
       `CANVAS NOTES (typed during the lesson):\n${canvas || '(empty)'}`,
