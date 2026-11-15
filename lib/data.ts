@@ -79,10 +79,12 @@ export async function recordingUrl(db: SupabaseClient, path: string) {
 }
 
 export async function deleteRecording(db: SupabaseClient, r: Recording) {
+  const tr = await db.from('lesson_recordings').select('teacher_track_path,student_track_path').eq('id', r.id).maybeSingle(); // v28 columns; ignored before v28
+  const paths = [r.storage_path, ...(tr.error ? [] : [tr.data?.teacher_track_path, tr.data?.student_track_path])].filter((p): p is string => !!p);
   const del = await db.from('lesson_recordings').delete().eq('id', r.id).select('id');
   if (del.error) return del.error.message;
   if (!del.data?.length) return 'Geen toestemming om deze opname te verwijderen.';
-  const file = await db.storage.from('recordings').remove([r.storage_path]);
+  const file = await db.storage.from('recordings').remove(paths);
   return file.error ? 'Opname-gegevens verwijderd, maar het bestand kon niet worden gewist: ' + file.error.message : null;
 }
 

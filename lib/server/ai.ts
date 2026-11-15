@@ -44,7 +44,7 @@ function claude() {
 }
 
 /** Haiku 5.5: schema-validated JSON. */
-export async function askFast<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'} = {}): Promise<z.infer<S>> {
+export async function askFast<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'; log?: UsageCtx} = {}): Promise<z.infer<S>> {
   const res = await claude().messages.parse({
     model: MODEL_FAST,
     max_tokens: opts.maxTokens ?? 4000,
@@ -52,6 +52,7 @@ export async function askFast<S extends z.ZodType>(schema: S, system: string, us
     output_config: {effort: opts.effort ?? 'low', format: zodOutputFormat(schema)},
     messages: [{role: 'user', content: user}],
   });
+  if (opts.log) await logUsage(opts.log, MODEL_FAST, res.usage.input_tokens, res.usage.output_tokens);
   if (res.stop_reason === 'refusal') throw new HttpError(422, 'De AI weigerde dit verzoek');
   if (res.stop_reason === 'max_tokens') throw new HttpError(502, 'AI-antwoord was te lang en is afgebroken');
   if (!res.parsed_output) throw new HttpError(502, 'AI gaf geen geldig antwoord');
@@ -59,7 +60,7 @@ export async function askFast<S extends z.ZodType>(schema: S, system: string, us
 }
 
 /** Opus 5.5 with server-side refusal fallback (routes to a suitable model if Opus declines). */
-export async function askStrong<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'} = {}): Promise<z.infer<S>> {
+export async function askStrong<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'; log?: UsageCtx} = {}): Promise<z.infer<S>> {
   const stream = claude().beta.messages.stream({
     model: MODEL_STRONG,
     max_tokens: opts.maxTokens ?? 32000,
@@ -70,6 +71,7 @@ export async function askStrong<S extends z.ZodType>(schema: S, system: string, 
     messages: [{role: 'user', content: user}],
   });
   const res = await stream.finalMessage();
+  if (opts.log) await logUsage(opts.log, res.model || MODEL_STRONG, res.usage.input_tokens, res.usage.output_tokens);
   if (res.stop_reason === 'refusal') throw new HttpError(422, 'De AI weigerde dit verzoek');
   if (res.stop_reason === 'max_tokens') throw new HttpError(502, 'AI-antwoord was te lang en is afgebroken');
   const text = res.content.filter(b => b.type === 'text').map(b => (b as {text: string}).text).join('');
@@ -79,19 +81,47 @@ export async function askStrong<S extends z.ZodType>(schema: S, system: string, 
 }
 function safeJson(t: string) { try { return JSON.parse(t); } catch { return null; } }
 
-/** Speech-to-text via OpenAI. Returns null text with a reason when unavailable. */
-export async function transcribe(audio: Blob, filename: string, languageHint?: string): Promise<{text: string | null; reason?: string}> {
-  if (!process.env.OPENAI_API_KEY) return {text: null, reason: 'Transcriptie niet beschikbaar: OPENAI_API_KEY ontbreekt in Vercel'};
-  if (audio.size > 25 * 1024 * 1024) return {text: null, reason: 'Opname is groter dan 25 MB; transcriptie overgeslagen'};
+/** Speech-to-text via OpenAI, with timestamped segments (used to merge per-speaker tracks). */
+export async function transcribe(audio: Blob, filename: string, languageHint?: string, log?: UsageCtx): Promise<{text: string | null; segments: {start: number; end: number; text: string}[]; duration: number; reason?: string}> {
+  const none = (reason: string) => ({text: null, segments: [], duration: 0, reason});
+  if (!process.env.OPENAI_API_KEY) return none('Transcriptie niet beschikbaar: OPENAI_API_KEY ontbreekt in Vercel');
+  if (audio.size > 25 * 1024 * 1024) return none('Opname is groter dan 25 MB; transcriptie overgeslagen');
   const form = new FormData();
   form.append('file', audio, filename);
   form.append('model', process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1');
+  form.append('response_format', 'verbose_json');
   if (languageHint && /^[a-z]{2}$/.test(languageHint)) form.append('language', languageHint);
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`}, body: form});
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) return {text: null, reason: 'Transcriptie mislukt: ' + ((j as {error?: {message?: string}}).error?.message || r.status)};
-  return {text: String((j as {text?: string}).text || '').trim()};
+  const j = await r.json().catch(() => ({})) as {text?: string; duration?: number; segments?: {start: number; end: number; text: string}[]; error?: {message?: string}};
+  if (!r.ok) return none('Transcriptie mislukt: ' + (j.error?.message || r.status));
+  const duration = Math.round(Number(j.duration) || 0);
+  if (log) await logUsage(log, process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1', 0, 0, duration);
+  return {text: String(j.text || '').trim(), segments: (j.segments || []).map(s => ({start: Number(s.start) || 0, end: Number(s.end) || 0, text: String(s.text || '')})), duration};
 }
 
+/* ---------------- usage log, cost estimate and fair-use limits ---------------- */
+export type UsageKind = 'translate' | 'tidy' | 'analysis' | 'transcription' | 'exercises' | 'prepare' | 'assistant';
+export type UsageCtx = {db: SupabaseClient; userId: string; kind: UsageKind; studentId?: string | null; cached?: boolean};
+/** USD per million tokens (Anthropic list prices, Nov 2026) and per audio minute (OpenAI; override via env). */
+const PRICE: Record<string, [number, number]> = {'claude-haiku-5-5': [0.10, 0.50], 'claude-opus-5-5': [4, 20]};
+const AUDIO_USD_PER_MIN = () => Number(process.env.OPENAI_TRANSCRIBE_USD_PER_MIN || '0.006');
+export function estimateCost(model: string, input: number, output: number, audioSeconds = 0) {
+  const p = PRICE[model] || PRICE[MODEL_STRONG];
+  return (input * p[0] + output * p[1]) / 1e6 + (audioSeconds / 60) * (audioSeconds ? AUDIO_USD_PER_MIN() : 0);
+}
+async function logUsage(ctx: UsageCtx, model: string, input: number, output: number, audioSeconds = 0) {
+  const kind: UsageKind = audioSeconds ? 'transcription' : ctx.kind;
+  await ctx.db.from('ai_usage').insert({user_id: ctx.userId, student_id: ctx.studentId || null, kind, model, input_tokens: input, output_tokens: output, audio_seconds: audioSeconds, cost_usd: Number(estimateCost(model, input, output, audioSeconds).toFixed(5)), cached: !!ctx.cached});
+}
+/** Daily limits per user (non-cached calls). Configurable via env AI_DAILY_LIMITS='{"translate":400}'. */
+const DEFAULT_LIMITS: Record<UsageKind, number> = {translate: 400, tidy: 30, analysis: 15, transcription: 40, exercises: 40, prepare: 30, assistant: 60};
+export async function enforceLimit(db: SupabaseClient, userId: string, kind: UsageKind) {
+  let limits = DEFAULT_LIMITS;
+  try { limits = {...DEFAULT_LIMITS, ...JSON.parse(process.env.AI_DAILY_LIMITS || '{}')}; } catch { /* keep defaults */ }
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const {count, error} = await db.from('ai_usage').select('id', {count: 'exact', head: true}).eq('user_id', userId).eq('kind', kind).eq('cached', false).gte('created_at', since);
+  if (error) return; // v28 not installed yet: no limit bookkeeping possible
+  if ((count || 0) >= limits[kind]) throw new HttpError(429, `Daglimiet bereikt voor deze AI-functie (${limits[kind]} per 24 uur). Probeer het later opnieuw.`);
+}
 export const LANG_NAMES: Record<string, string> = {nl: 'Dutch', pt: 'Brazilian Portuguese', en: 'English', es: 'Spanish', fr: 'French', de: 'German'};
 export const langName = (code: string | null | undefined) => LANG_NAMES[code || ''] || 'Dutch';

@@ -69,9 +69,9 @@ export async function approveAnalysis(db: SupabaseClient, a: AnalysisRow, final:
 /** Retention: remove this teacher's recordings and analyses past their expiry date (default 12 months). */
 export async function purgeExpired(db: SupabaseClient) {
   const now = new Date().toISOString();
-  const recs = await db.from('lesson_recordings').select('id,storage_path').lt('expires_at', now).limit(50);
+  const recs = await db.from('lesson_recordings').select('id,storage_path,teacher_track_path,student_track_path').lt('expires_at', now).limit(50);
   if (recs.error || !recs.data?.length) { await db.from('lesson_analyses').delete().lt('expires_at', now); return 0; }
-  await db.storage.from('recordings').remove(recs.data.map(r => r.storage_path));
+  await db.storage.from('recordings').remove(recs.data.flatMap(r => [r.storage_path, r.teacher_track_path, r.student_track_path]).filter(Boolean) as string[]);
   await db.from('lesson_recordings').delete().in('id', recs.data.map(r => r.id));
   await db.from('lesson_analyses').delete().lt('expires_at', now);
   return recs.data.length;

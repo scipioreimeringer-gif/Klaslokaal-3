@@ -3,7 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {Sparkles,CheckCircle2,AlertTriangle,Loader2,RotateCcw,Trash2,FileText,Bot} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {approveAnalysis,authedPost,type AnalysisRow} from '../lib/learning';
-import {STATUS_LABEL,type AnalysisDoc,type AnalysisStatus} from '../lib/analysisTypes';
+import {CATEGORY_LABEL,STATUS_LABEL,type AnalysisDoc,type AnalysisStatus,type Correction,type CorrectionCategory} from '../lib/analysisTypes';
 import {niceDate} from '../lib/data';
 
 const lines=(a:string[]|undefined)=>(a||[]).join('\n');
@@ -26,7 +26,11 @@ export function AnalysisView({doc}:{doc:AnalysisDoc}){
   </div>
   {!!doc.vocabulary?.length&&<><h4>Woordenschat</h4><table className="vocab"><tbody>{doc.vocabulary.map((v,i)=><tr key={i}><td><b>{v.term}</b></td><td>{v.translation}</td><td className="muted">{v.example}</td></tr>)}</tbody></table></>}
   {!!doc.grammar?.length&&<><h4>Grammatica</h4><ul>{doc.grammar.map((g,i)=><li key={i}><b>{g.topic}</b>: {g.explanation}</li>)}</ul></>}
-  {!!doc.corrections?.length&&<><h4>Correcties</h4><ul className="corrections">{doc.corrections.map((c,i)=><li key={i}><s>{c.original}</s> → <b>{c.corrected}</b>{c.explanation&&<small> {c.explanation}</small>}</li>)}</ul></>}
+  {!!doc.corrections?.length&&<><h4>Taalcorrecties</h4><ul className="corrections">{doc.corrections.map((c,i)=><li key={i}>{c.category&&<span className="tag">{CATEGORY_LABEL[c.category]}</span>}{c.certainty==='uncertain'&&<span className="tag uncertain">onzeker</span>} <s>{c.original}</s> → <b>{c.corrected}</b>{c.explanation&&<small className="block">{c.explanation}</small>}</li>)}</ul></>}
+  {!!doc.recurring_errors?.length&&<><h4>Terugkerende fouten</h4><ul>{doc.recurring_errors.map((r,i)=><li key={i}>{r.pattern} <small className="muted">({r.occurrences}×)</small></li>)}</ul></>}
+  {!!doc.informal_notes?.length&&<><h4>Informele spreektaal (geen fout)</h4><ul>{doc.informal_notes.map((x,i)=><li key={i}>{x}</li>)}</ul></>}
+  {!!doc.pronunciation?.length&&<><h4>Uitspraak <small className="muted">(voorzichtig: spraakherkenning meet uitspraak niet betrouwbaar)</small></h4><ul>{doc.pronunciation.map((p,i)=><li key={i}><b>{p.word}</b>: {p.note}</li>)}</ul></>}
+  {doc.homework_suggestion&&<><h4>Voorgesteld huiswerk</h4><p>{doc.homework_suggestion}</p></>}
   {!!doc.exercises?.length&&<><h4>Voorgestelde oefeningen</h4><ul>{doc.exercises.map((e,i)=><li key={i}><span className="tag">{e.type}</span> {e.prompt}</li>)}</ul></>}
  </div>
 }
@@ -59,6 +63,14 @@ function Editor({a,onDone}:{a:AnalysisRow;onDone:()=>void}){
    <label className="stack"><span className="label">Grammatica (onderwerp: uitleg)</span><textarea className="field" rows={4} value={doc.grammar.map(g=>`${g.topic}: ${g.explanation}`).join('\n')} onChange={e=>set('grammar',unlines(e.target.value).map(l=>{const [t,...r]=l.split(':');return {topic:t.trim(),explanation:r.join(':').trim()}}))}/></label>
    <label className="stack"><span className="label">Correcties (fout → goed — uitleg)</span><textarea className="field" rows={4} value={doc.corrections.map(c=>`${c.original} → ${c.corrected}${c.explanation?' — '+c.explanation:''}`).join('\n')} onChange={e=>set('corrections',unlines(e.target.value).map(l=>{const [o,rest='']=l.split('→');const [c,...ex]=rest.split('—');return {original:o.trim(),corrected:c.trim(),explanation:ex.join('—').trim()}}))}/></label>
   </div>
+  <h4>Taalcorrecties <small className="muted">(alleen zinnen die de leerling zelf zei · {doc.speakers_separated?'sprekers gescheiden via aparte sporen':'sprekers niet gescheiden: controleer extra goed'})</small></h4>
+  {doc.corrections.length?<table className="vocab edit corr"><thead><tr><th>Zin van leerling</th><th>Correctie</th><th>Uitleg</th><th>Soort</th><th>Zeker?</th><th/></tr></thead><tbody>{doc.corrections.map((c,i)=>{const up=(p:Partial<Correction>)=>set('corrections',doc.corrections.map((x,j)=>j===i?{...x,...p}:x));return <tr key={i} className={c.certainty==='uncertain'?'uncertain-row':''}>
+   <td><input className="field" value={c.original} onChange={e=>up({original:e.target.value})}/></td><td><input className="field" value={c.corrected} onChange={e=>up({corrected:e.target.value})}/></td><td><input className="field" value={c.explanation} onChange={e=>up({explanation:e.target.value})}/></td>
+   <td><select className="cell" value={c.category||'other'} onChange={e=>up({category:e.target.value as CorrectionCategory})}>{(Object.keys(CATEGORY_LABEL) as CorrectionCategory[]).map(k=><option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}</select></td>
+   <td><select className="cell" value={c.certainty||'certain'} onChange={e=>up({certainty:e.target.value as 'certain'|'uncertain'})}><option value="certain">zeker</option><option value="uncertain">onzeker</option></select></td>
+   <td><button className="iconbtn danger" title="Verwijderen" onClick={()=>set('corrections',doc.corrections.filter((_,j)=>j!==i))}><Trash2 size={14}/></button></td></tr>})}</tbody></table>:<p className="muted">Geen correcties gevonden.</p>}
+  <button className="button small secondary" onClick={()=>set('corrections',[...doc.corrections,{original:'',corrected:'',explanation:'',category:'grammar',certainty:'certain'}])}>+ Correctie toevoegen</button>
+  {doc.student_speaking_seconds!=null&&<p className="muted small-print">Gemeten spreektijd leerling: {Math.round(doc.student_speaking_seconds/60)} min (uit het aparte leerlingspoor).</p>}
   <label className="stack"><span className="label">Voorgestelde oefeningen (één per regel)</span><textarea className="field" rows={3} value={doc.exercises.map(x=>x.prompt).join('\n')} onChange={e=>set('exercises',unlines(e.target.value).map(p=>({type:'oefening',prompt:p})))}/></label>
   {!!d.goal_suggestions.length&&<><h4>Leerdoelen <small className="muted">(AI-voorstel — jij bepaalt; “beheerst” kan alleen jij later instellen)</small></h4>
    <ul className="goal-suggest">{d.goal_suggestions.map(g=><li key={g.goal_code}><select className="field" value={goalPick[g.goal_code]} onChange={e=>setGoalPick(p=>({...p,[g.goal_code]:e.target.value as 'skip'|'in_progress'|'covered'}))}><option value="covered">Behandeld</option><option value="in_progress">Mee bezig</option><option value="skip">Niet overnemen</option></select><span><b>{g.goal_code}</b> <small className="muted">{g.evidence}</small></span></li>)}</ul></>}
