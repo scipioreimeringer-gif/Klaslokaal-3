@@ -652,3 +652,6 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
 .side-invite{font-size:13px;font-weight:650}
 .side-dot{width:8px;height:8px;border-radius:50%;background:#F5C85B;box-shadow:0 0 0 3px rgba(245,200,91,.25);flex:none}
 .navlinks a.active .side-count{background:rgba(12,72,83,.15)}
+
+.self-extra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+

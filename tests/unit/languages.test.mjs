@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildLanguageCards, cardStats, pickRelation, languageName} from '../../lib/languages.ts';
+import {buildLanguageCards, cardStats, pickRelation, languageName, ownLearningCards} from '../../lib/languages.ts';
 
 const rel = (id, teacher_id, extra = {}) => ({id, teacher_id, subject: '', curriculum_subject: null, lesson_language: null, level: null, ...extra});
 
@@ -51,4 +51,16 @@ test('pickRelation keeps the requested teacher only when it belongs to the langu
 test('language names', () => {
   assert.equal(languageName('pt'), 'Portugees (Brazilië)');
   assert.equal(languageName('xx'), 'XX');
+});
+
+test('own learning languages: never what I teach; same list for dashboard and sidebar', () => {
+  const me = 'me';
+  const rels = [
+    rel('a', 'ana', {curriculum_subject: 'pt', user_id: me}),         // I learn Portuguese with Ana
+    rel('b', me, {curriculum_subject: 'nl', user_id: me}),            // my own test student (I teach myself)
+    rel('c', me, {curriculum_subject: 'nl', user_id: 'madison'}),     // I teach Dutch to Madison
+  ];
+  assert.deepEqual(ownLearningCards(rels, [], me).map(c => c.code), ['pt']);
+  assert.deepEqual(ownLearningCards(rels, [{id: 's', language: 'nl', level: null}], me).map(c => c.code), ['pt', 'nl'], 'only a self-added language can add Dutch');
+  assert.deepEqual(ownLearningCards(rels, [], 'madison').map(c => c.code), ['nl'], 'Madison sees the Dutch I teach her');
 });
