@@ -28,7 +28,7 @@ function StudentCharts({lessons}:{lessons:LessonEntry[]}){
  const perMonth=lessonsPerMonth(L,6),growth=cumulativeWords(L,6);
  return <div className="chart-grid two">
   <ChartCard title="Lessen per maand" subtitle="Afgelopen 6 maanden" empty={isEmptySeries(perMonth)} emptyText="Nog geen lessen opgeslagen." table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
-  <ChartCard title="Woordenschat" subtitle="Totaal aantal woorden" empty={growth[growth.length-1].value===0} emptyText="Nog geen woorden." table={growth}><LineChart data={growth} color={CHART.blue}/></ChartCard>
+  <ChartCard title="Woordenschat" subtitle="Totaal aantal woorden" empty={growth[growth.length-1].value===0} emptyText="Nog geen woorden." table={growth}><LineChart data={growth} color={CHART.violet}/></ChartCard>
  </div>
 }
 

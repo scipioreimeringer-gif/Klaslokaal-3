@@ -63,10 +63,10 @@ function TeacherHome(){
   <div className="chart-grid">
    <ChartCard className="span2" title="Lesactiviteit" subtitle="Gegeven lessen per maand, afgelopen 6 maanden" empty={d.loaded&&isEmptySeries(perMonth)} emptyText="Nog geen lessen opgeslagen. Lessen verschijnen hier zodra je in het live klaslokaal notities, woorden of huiswerk vastlegt." table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
    <ChartCard title="Huiswerkvoortgang" subtitle="Ingeleverd van gepubliceerd" empty={d.loaded&&hw.pct===null} emptyText="Nog geen gepubliceerd huiswerk.">{hw.pct!==null&&<ProgressRing pct={hw.pct} label="ingeleverd" detail={`${hw.submitted} van ${hw.published} opdrachten ingeleverd`}/>}</ChartCard>
-   <ChartCard className="span2" title="Nieuwe woorden" subtitle="Woorden toegevoegd per maand, alle leerlingen" empty={d.loaded&&isEmptySeries(words)} emptyText="Nog geen woorden vastgelegd." table={words}><LineChart data={words} color={CHART.blue}/></ChartCard>
+   <ChartCard className="span2" title="Nieuwe woorden" subtitle="Woorden toegevoegd per maand, alle leerlingen" empty={d.loaded&&isEmptySeries(words)} emptyText="Nog geen woorden vastgelegd." table={words}><LineChart data={words} color={CHART.violet}/></ChartCard>
    <ChartCard title="Lessen per vak" subtitle="Totaal" empty={d.loaded&&!bySubject.length} emptyText="Nog geen lessen." table={bySubject}><HBars data={bySubject} color={CHART.teal}/></ChartCard>
-   <ChartCard title="Leerdoelen per leerling" subtitle="Behandeld of beheerst · docentbeoordeling" empty={d.loaded&&!goalsPerStudent.length} emptyText="Nog geen leerdoelen bijgehouden. Zet ze in het leerlingprofiel, tab Leerdoelen." table={goalsPerStudent}><HBars data={goalsPerStudent} color={CHART.violet}/></ChartCard>
-   <ChartCard title="Oefenresultaten" subtitle="Gemiddelde score in % · gemeten" empty={d.loaded&&!practiceScore.length} emptyText="Nog geen oefenresultaten van leerlingen." table={practiceScore}><HBars data={practiceScore} color={CHART.blue} unit="%"/></ChartCard>
+   <ChartCard title="Leerdoelen per leerling" subtitle="Behandeld of beheerst · docentbeoordeling" empty={d.loaded&&!goalsPerStudent.length} emptyText="Nog geen leerdoelen bijgehouden. Zet ze in het leerlingprofiel, tab Leerdoelen." table={goalsPerStudent}><HBars data={goalsPerStudent} color={CHART.ochre}/></ChartCard>
+   <ChartCard title="Oefenresultaten" subtitle="Gemiddelde score in % · gemeten" empty={d.loaded&&!practiceScore.length} emptyText="Nog geen oefenresultaten van leerlingen." table={practiceScore}><HBars data={practiceScore} color={CHART.violet} unit="%"/></ChartCard>
    <ChartCard title="Meest actieve leerlingen" subtitle="Aantal lessen" empty={d.loaded&&!byStudent.length} emptyText="Nog geen lessen." table={byStudent}><HBars data={byStudent} color={CHART.coral}/></ChartCard>
    <SpeakingCard/>
   </div>
@@ -95,13 +95,13 @@ function StudentHome(){
    <StatTile icon={CalendarCheck} tone="coral" value={last?new Date(last+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'—'} label="Laatste les"/>
   </div>
   <div className="chart-grid">
-   <ChartCard className="span2" title="Mijn woordenschat groeit" subtitle="Totaal aantal woorden, afgelopen 6 maanden" empty={d.loaded&&growth[growth.length-1].value===0} emptyText="Nog geen woorden. Woorden die je docent tijdens de les toevoegt, verschijnen hier." table={growth}><LineChart data={growth} color={CHART.blue}/></ChartCard>
+   <ChartCard className="span2" title="Mijn woordenschat groeit" subtitle="Totaal aantal woorden, afgelopen 6 maanden" empty={d.loaded&&growth[growth.length-1].value===0} emptyText="Nog geen woorden. Woorden die je docent tijdens de les toevoegt, verschijnen hier." table={growth}><LineChart data={growth} color={CHART.violet}/></ChartCard>
    <ChartCard title="Huiswerk" subtitle="Ingeleverd van gepubliceerd" empty={d.loaded&&hw.pct===null} emptyText="Nog geen huiswerk ontvangen.">{hw.pct!==null&&<ProgressRing pct={hw.pct} label="ingeleverd" detail={`${hw.open} opdracht(en) open`}/>}</ChartCard>
    <ChartCard className="span2" title="Lesactiviteit" subtitle="Gevolgde lessen per maand" empty={d.loaded&&isEmptySeries(perMonth)} emptyText="Nog geen lessen opgeslagen." table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
    <ChartCard className="span2" title="Oefenactiviteit" subtitle="Oefensessies per week · gemeten" empty={d.loaded&&isEmptySeries(perWeek)} emptyText="Nog niet geoefend. Probeer de spelletjes bij Oefenen!" table={perWeek}><BarChart data={perWeek} color={CHART.coral}/></ChartCard>
    <ChartCard title="Mijn woorden" subtitle={avg!==null?`Gemiddelde oefenscore % · gemeten`:'Status · gemeten'} empty={d.loaded&&!d.vocab.length} emptyText="Nog geen woorden in je lijst." table={vstat}><HBars data={vstat} color={CHART.teal}/></ChartCard>
-   <ChartCard title="Leerdoelen per niveau" subtitle="Behandeld of beheerst · docentbeoordeling" empty={d.loaded&&!perLevel.length} emptyText="Je docent heeft nog geen leerdoelen bijgehouden." table={perLevel}><HBars data={perLevel} color={CHART.violet}/></ChartCard>
-   <ChartCard title="Voortgang per taal of vak" subtitle="Aantal lessen" empty={d.loaded&&!bySubject.length} emptyText="Nog geen lessen." table={bySubject}><HBars data={bySubject} color={CHART.violet}/></ChartCard>
+   <ChartCard title="Leerdoelen per niveau" subtitle="Behandeld of beheerst · docentbeoordeling" empty={d.loaded&&!perLevel.length} emptyText="Je docent heeft nog geen leerdoelen bijgehouden." table={perLevel}><HBars data={perLevel} color={CHART.ochre}/></ChartCard>
+   <ChartCard title="Voortgang per taal of vak" subtitle="Aantal lessen" empty={d.loaded&&!bySubject.length} emptyText="Nog geen lessen." table={bySubject}><HBars data={bySubject} color={CHART.ochre}/></ChartCard>
    <SpeakingCard/>
   </div>
   <section className="panel"><div className="panelheader"><div><h2>Mijn docenten</h2><p>Alleen jij en je docent zien deze gegevens</p></div></div>

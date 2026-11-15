@@ -5,7 +5,7 @@ import type {Point} from '../lib/stats';
 
 /* Validated categorical chart palette (validate_palette.js, light mode: all checks pass).
    Brand teal #168F91 is too grey for data marks, so charts use its more saturated sibling. */
-export const CHART={teal:'#009A9C',blue:'#3E6FD8',coral:'#E0745A',violet:'#7A5BC4'};
+export const CHART={teal:'#0F9A90',coral:'#E0674A',violet:'#7B72D6',ochre:'#B8891F'};
 
 export function ChartCard({title,subtitle,children,empty,emptyText,table,className}:{title:string;subtitle?:string;children:React.ReactNode;empty?:boolean;emptyText?:string;table?:Point[];className?:string}){
  const [showTable,setShowTable]=useState(false);
@@ -37,7 +37,7 @@ export function BarChart({data,color=CHART.teal,unit=''}:{data:Point[];color?:st
  </svg>{hover!==null&&<div className="chart-tip" style={{left:`${((PAD.l+slot*hover+slot/2)/W)*100}%`}}><b>{data[hover].label}</b>{data[hover].value}{unit}</div>}</div>
 }
 
-export function LineChart({data,color=CHART.blue,unit=''}:{data:Point[];color?:string;unit?:string}){
+export function LineChart({data,color=CHART.violet,unit=''}:{data:Point[];color?:string;unit?:string}){
  const gid=useId().replace(/:/g,'');const [hover,setHover]=useState<number|null>(null);const max=niceMax(Math.max(1,...data.map(d=>d.value)));
  const iw=W-PAD.l-PAD.r,ih=H-PAD.t-PAD.b;const step=data.length>1?iw/(data.length-1):0;
  const pts=data.map((d,i)=>[PAD.l+step*i,PAD.t+ih-(d.value/max)*ih] as const);
@@ -68,6 +68,6 @@ export function HBars({data,color=CHART.teal,unit=''}:{data:Point[];color?:strin
  return <ul className="hbars">{data.map((d,i)=><li key={d.key}><span className="hbar-label">{d.label}</span><span className="hbar-track"><span className="hbar-fill" style={{width:`${(d.value/max)*100}%`,background:color,animationDelay:i*70+'ms'}}/></span><span className="hbar-value">{d.value}{unit}</span></li>)}</ul>
 }
 
-export function StatTile({icon:Icon,value,label,hint,tone='teal'}:{icon:React.ComponentType<{size?:number}>;value:React.ReactNode;label:string;hint?:string;tone?:'teal'|'mint'|'sky'|'coral'}){
+export function StatTile({icon:Icon,value,label,hint,tone='teal'}:{icon:React.ComponentType<{size?:number}>;value:React.ReactNode;label:string;hint?:string;tone?:'teal'|'mint'|'sky'|'coral'|'yellow'}){
  return <div className={'statcard tone-'+tone}><div className="stat-icon"><Icon size={19}/></div><strong>{value}</strong><span>{label}</span>{hint&&<small>{hint}</small>}</div>
 }
