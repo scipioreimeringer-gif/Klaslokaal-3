@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const conf = redisConf();
   if (req.method === "GET" && req.query && req.query.ping !== undefined) {
-    return res.status(200).json({ ok: true, storage: !!conf, password: !!process.env.KLAS_PASSWORD, ai: !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY) });
+    return res.status(200).json({ ok: true, storage: !!conf, password: !!process.env.KLAS_PASSWORD, ai: !!process.env.OPENAI_API_KEY });
   }
   if (!authed(req)) return res.status(401).json({ error: "wachtwoord" });
   if (!conf) return res.status(500).json({ error: "Opslag is nog niet gekoppeld in Vercel" });

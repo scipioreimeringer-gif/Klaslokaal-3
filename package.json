@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:db": "node tests/db/rls.test.mjs && node tests/db/bridge.test.mjs",
+    "test:db": "node tests/db/rls.test.mjs && node tests/db/bridge.test.mjs && node tests/db/bridge.test.mjs --v28 && node tests/db/v28.test.mjs && node tests/db/v29.test.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",
     "test": "npm run test:db && npm run test:unit"
   },
@@ -16,7 +16,9 @@
     "lucide-react": "^0.468.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",

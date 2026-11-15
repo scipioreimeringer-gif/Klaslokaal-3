@@ -1,21 +1,24 @@
 'use client';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {progressOf, type LegacyWord} from './classroomMapping';
+import {t, locale} from './i18n';
 
 export type StudentRecord = {
   id: string; teacher_id: string; user_id: string | null; name: string; email: string; subject: string;
   notes: string; goals: string; homework: string; history: string;
   level: string | null; lesson_language: string | null; about: string | null; room_code?: string | null;
+  archived_at?: string | null; curriculum_subject?: string | null;
 };
 export type LessonEntry = {id: string; student_id: string; lesson_date: string; notes: string; homework: string; words: LegacyWord[] | null; updated_at: string};
 export type Recording = {id: string; student_id: string; storage_path: string; mime_type: string; size_bytes: number; duration_seconds: number; teacher_consent_at: string; student_consent_at: string; created_at: string};
 export type ClassroomState = {board: BoardData | null; canvas: CanvasDoc | null; updated_at: string};
-export type BoardObj = {id: string; c: string; p?: number[]; ty?: 'tx'; x?: number; y?: number; txt?: string; w?: number};
+export type BoardObj = {id: string; c: string; p?: number[]; ty?: 'tx'; x?: number; y?: number; txt?: string; w?: number; sz?: number};
 export type BoardData = {list: string[]; cur: string; objs: Record<string, BoardObj[]>};
 export type CanvasDoc = {pages: {id: string; title: string; html: string}[]; cur: number};
 
 export const STUDENT_COLUMNS_BASE = 'id,teacher_id,user_id,name,email,subject,notes,goals,homework,history';
 export const STUDENT_COLUMNS_V27 = STUDENT_COLUMNS_BASE + ',level,lesson_language,about,room_code';
+export const STUDENT_COLUMNS_V28 = STUDENT_COLUMNS_V27 + ',archived_at,curriculum_subject';
 
 /** True when an error means "the v27 migration has not been run yet". */
 export function isMissingMigration(e: {message?: string; code?: string} | null | undefined) {
@@ -32,11 +35,13 @@ export async function loadStudents(db: SupabaseClient, filter: {teacherId?: stri
     if (filter.userId) q = q.eq('user_id', filter.userId);
     return q;
   };
+  const r28 = await build(STUDENT_COLUMNS_V28);
+  if (!r28.error) return {data: (r28.data || []) as unknown as StudentRecord[], error: null, v27: true, v28: true};
   const r = await build(STUDENT_COLUMNS_V27);
-  if (!r.error) return {data: (r.data || []) as unknown as StudentRecord[], error: null, v27: true};
-  if (!isMissingMigration(r.error)) return {data: [] as StudentRecord[], error: r.error.message, v27: true};
+  if (!r.error) return {data: (r.data || []) as unknown as StudentRecord[], error: null, v27: true, v28: false};
+  if (!isMissingMigration(r.error)) return {data: [] as StudentRecord[], error: r.error.message, v27: true, v28: false};
   const old = await build(STUDENT_COLUMNS_BASE);
-  return {data: (old.data || []) as unknown as StudentRecord[], error: old.error?.message || null, v27: false};
+  return {data: (old.data || []) as unknown as StudentRecord[], error: old.error?.message || null, v27: false, v28: false};
 }
 
 export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
@@ -52,7 +57,7 @@ export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
   const L = (lessons.data || []) as LessonEntry[];
   return {
     missing,
-    error: missing ? MIGRATION_HINT : (lessons.error?.message || recordings.error?.message || state.error?.message || null),
+    error: missing ? t(MIGRATION_HINT) : (lessons.error?.message || recordings.error?.message || state.error?.message || null),
     lessons: L,
     recordings: (recordings.data || []) as Recording[],
     state: (state.data || null) as ClassroomState | null,
@@ -75,12 +80,14 @@ export async function recordingUrl(db: SupabaseClient, path: string) {
 }
 
 export async function deleteRecording(db: SupabaseClient, r: Recording) {
+  const tr = await db.from('lesson_recordings').select('teacher_track_path,student_track_path').eq('id', r.id).maybeSingle(); // v28 columns; ignored before v28
+  const paths = [r.storage_path, ...(tr.error ? [] : [tr.data?.teacher_track_path, tr.data?.student_track_path])].filter((p): p is string => !!p);
   const del = await db.from('lesson_recordings').delete().eq('id', r.id).select('id');
   if (del.error) return del.error.message;
-  if (!del.data?.length) return 'Geen toestemming om deze opname te verwijderen.';
-  const file = await db.storage.from('recordings').remove([r.storage_path]);
-  return file.error ? 'Opname-gegevens verwijderd, maar het bestand kon niet worden gewist: ' + file.error.message : null;
+  if (!del.data?.length) return t('Geen toestemming om deze opname te verwijderen.');
+  const file = await db.storage.from('recordings').remove(paths);
+  return file.error ? t('Opname-gegevens verwijderd, maar het bestand kon niet worden gewist: {0}', file.error.message) : null;
 }
 
-export const niceDate = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString('nl-NL', {weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'});
+export const niceDate = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString(locale(), {weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'});
 export const duration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;

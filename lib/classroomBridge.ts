@@ -1,5 +1,7 @@
 'use client';
 import type {SupabaseClient} from '@supabase/supabase-js';
+import {isMissingMigration} from './data';
+import {t, getLang} from './i18n';
 import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegacyDb,snapshot,type LegacyDb,type LegacyLesson,type LessonRow,type StudentRow} from './classroomMapping';
 
 /**
@@ -18,10 +20,42 @@ export type TeachyBridge = {
   put(key: string, value: unknown): Promise<void>;
   token(): Promise<string>;
   switchStudent(id: string): void;
-  uploadRecording(blob: Blob, meta: {durationSeconds: number; teacherConsentAt: string; studentConsentAt: string}): Promise<{ok: boolean; error?: string}>;
+  uploadRecording(blob: Blob, meta: {durationSeconds: number; teacherConsentAt: string; studentConsentAt: string; aiTeacherAt?: string | null; aiStudentAt?: string | null}, tracks?: RecordingTracks): Promise<{ok: boolean; error?: string; analysis?: string}>;
   previewImport(backup: unknown): Promise<{oldName: string; newName: string | null}[]>;
   importBackup(backup: unknown): Promise<string>;
+  /** Personal hover translation (never written to the shared canvas). */
+  translate(term: string, context: string): Promise<TranslateResult>;
+  /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
+  tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
+  /** Page-level actions shown in the classroom's own menu (one combined top bar). */
+  ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void; setLang?(lang: string): void};
+  /** Interface language of the app (the classroom follows it; not the language being taught). */
+  uiLang?: string;
+  /** Photo of the other participant (signed URL or Google photo), shown in the classroom top bar. */
+  peerAvatar?: string;
 };
+export type RecordingTracks = {teacher?: Blob | null; student?: Blob | null};
+export type TranslateResult = {translation: string; expression: string | null; expression_translation: string | null; note: string; target: string};
+
+async function postJson<T>(db: SupabaseClient, path: string, body: unknown): Promise<T> {
+  const {data} = await db.auth.getSession();
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + (data.session?.access_token || '')}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body as object} : body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(t((j as {error?: string}).error || '') || t('Fout {0}', r.status));
+  return j as T;
+}
+const translateCache = new Map<string, Promise<TranslateResult>>();
+function translator(db: SupabaseClient) {
+  return (term: string, context: string) => {
+    const k = term.toLowerCase() + '\u0000' + context.toLowerCase();
+    if (!translateCache.has(k)) {
+      const p = postJson<TranslateResult>(db, '/api/ai/translate', {term, context});
+      p.catch(() => translateCache.delete(k));
+      translateCache.set(k, p);
+    }
+    return translateCache.get(k)!;
+  };
+}
 
 declare global { interface Window { teachyBridge?: TeachyBridge } }
 
@@ -92,20 +126,44 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
     },
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
     switchStudent(id) { if (allowed.has(id) && id !== opts.studentId) opts.onSwitch(id); },
-    async uploadRecording(blob, meta) {
+    async uploadRecording(blob, meta, tracks) {
       const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
-      const path = `${opts.studentId}/${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID()}.${ext}`;
+      const stem = `${opts.studentId}/${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID()}`;
+      const path = `${stem}.${ext}`;
       const type = (blob.type || 'audio/webm').split(';')[0];
       const up = await db.storage.from('recordings').upload(path, blob, {contentType: type, upsert: false});
       if (up.error) return {ok: false, error: up.error.message};
-      const row = await db.from('lesson_recordings').insert({
+      const ai = !!(meta.aiTeacherAt && meta.aiStudentAt);
+      // Separate speaker tracks (only useful for the AI analysis; uploaded only with AI consent).
+      const trackPaths: {teacher_track_path?: string; student_track_path?: string} = {};
+      if (ai && tracks) for (const who of ['teacher', 'student'] as const) {
+        const t = tracks[who]; if (!t || !t.size) continue;
+        const p = `${stem}-${who}.${ext}`;
+        const u = await db.storage.from('recordings').upload(p, t, {contentType: (t.type || type).split(';')[0], upsert: false});
+        if (!u.error) trackPaths[`${who}_track_path`] = p;
+      }
+      const base = {
         student_id: opts.studentId, storage_path: path, mime_type: type, size_bytes: blob.size,
         duration_seconds: Math.round(meta.durationSeconds), teacher_consent_at: meta.teacherConsentAt,
         student_consent_at: meta.studentConsentAt, created_by: opts.userId,
-      });
-      if (row.error) { await db.storage.from('recordings').remove([path]); return {ok: false, error: row.error.message}; }
-      return {ok: true};
+      };
+      let row = await db.from('lesson_recordings').insert({
+        ...base, lesson_date: new Date().toISOString().slice(0, 10),
+        ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {}),
+      }).select('id').single();
+      let v28 = true;
+      if (row.error && isMissingMigration(row.error)) { v28 = false; row = await db.from('lesson_recordings').insert(base).select('id').single(); } // v28.sql not run yet
+      const extra = Object.values(trackPaths);
+      if (!v28 && extra.length) await db.storage.from('recordings').remove(extra);
+      if (row.error) { await db.storage.from('recordings').remove([path, ...extra]); return {ok: false, error: row.error.message}; }
+      if (!ai) return {ok: true};
+      if (!v28) return {ok: true, analysis: t('AI-analyse niet gestart: database-update v28 ontbreekt')};
+      // Both consented to AI processing: start the server-side analysis (transcription + draft).
+      try { await postJson(db, '/api/ai/analyze', {recordingId: row.data.id}); return {ok: true, analysis: 'started'}; }
+      catch (e) { return {ok: true, analysis: t('Analyse niet gestart: {0}', e instanceof Error ? e.message : e)}; }
     },
+    translate: translator(db),
+    tidy: blocks => postJson(db, '/api/ai/tidy', {studentId: opts.studentId, blocks}),
     async previewImport(backup) {
       if (!students.length) await loadNotes();
       return matchBackupStudents(backup as Parameters<typeof matchBackupStudents>[0], students).map(m => ({oldName: m.oldName, newName: m.newName}));
@@ -138,13 +196,15 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
 }
 
 export function createStudentBridge(db: SupabaseClient, opts: {studentId: string; studentName: string}): TeachyBridge {
-  const refuse = async () => { throw new Error('Alleen de docent slaat het klaslokaal op'); };
+  const refuse = async () => { throw new Error(t('Alleen de docent slaat het klaslokaal op')); };
   return {
     version: 1, role: 'student', studentId: opts.studentId, studentName: opts.studentName,
     liveUrl: window.location.origin + '/klaslokaal/live?student=' + encodeURIComponent(opts.studentId),
     get: async () => null, put: refuse,
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
-    switchStudent() {}, uploadRecording: async () => ({ok: false, error: 'Alleen de docent kan opnames opslaan'}),
+    switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),
     previewImport: async () => [], importBackup: refuse,
+    translate: translator(db),
+    tidy: async () => { throw new Error(t('Alleen de docent kan het canvas ordenen')); },
   };
 }
