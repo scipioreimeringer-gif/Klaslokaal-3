@@ -641,3 +641,14 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
 .lang-settings .row{flex-wrap:wrap}
 .lang-settings select.field{min-width:220px;flex:1}
 
+
+/* v31 — learning languages in the sidebar */
+.side-langs{margin-top:10px}
+.side-langs .navlinks a{display:flex;align-items:center;gap:10px}
+.side-langs .flag{box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.side-langs .grow{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-count{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;font-weight:750;display:inline-grid;place-items:center}
+.side-self{font-size:10.5px;opacity:.7;white-space:nowrap}
+.side-invite{font-size:13px;font-weight:650}
+.side-dot{width:8px;height:8px;border-radius:50%;background:#F5C85B;box-shadow:0 0 0 3px rgba(245,200,91,.25);flex:none}
+.navlinks a.active .side-count{background:rgba(12,72,83,.15)}

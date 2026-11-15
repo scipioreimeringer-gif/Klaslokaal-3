@@ -8,6 +8,8 @@ import {useAuth} from './Auth';
 import {supabase} from '../lib/supabase';
 import {AssistantLauncher} from './Assistant';
 import {Avatar} from './Avatar';
+import {SideLanguages} from './Languages';
+import {Suspense} from 'react';
 import {t as tt} from '../lib/i18n';
 
 function Frame({children}:{children:React.ReactNode}){
@@ -20,7 +22,7 @@ function Frame({children}:{children:React.ReactNode}){
  function toggleSide(){if(isMobile())setOpen(o=>!o);else persist(!collapsed)}
  useEffect(()=>{if(!open)return;const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[open]);
  const teacherLinks=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}];
- const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/portugees',icon:Languages,label:tt('Portugees')}];
+ const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')}];
  const links=mode==='teacher'?teacherLinks:studentNav;
  const both=canTeach&&studentLinks.length>0;
  const meta=(user?.user_metadata||{}) as {avatar_url?:string;picture?:string};const avatar=meta.avatar_url||meta.picture||'';
@@ -32,6 +34,7 @@ function Frame({children}:{children:React.ReactNode}){
    <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Leerling')}</div>
    <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}</Link>)}
     {mode==='teacher'&&role==='admin'&&<Link href="/beheer" className={active('/beheer')?'active':''} onClick={()=>setOpen(false)}><ShieldCheck size={18}/>{tt('Docenten beheren')}</Link>}</nav>
+   {mode!=='teacher'&&<Suspense fallback={null}><SideLanguages onNavigate={()=>setOpen(false)}/></Suspense>}
    <div className="buildinfo" title={tt("Welke versie draait hier (branch · commit)")}>{process.env.NEXT_PUBLIC_BUILD_ENV==='production'?tt("Productie"):tt("Preview")} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</div>
    <div className="sidebottom"><Link className="sideaccount" href="/account" title={tt("Mijn profiel en profielfoto")} onClick={()=>setOpen(false)}><Avatar className="teacheravatar" userId={user?.id} name={user?.email||'?'} size={34} google={avatar}/><div className="sideuser"><strong>{mode==='teacher'?(role==='admin'?tt("Beheerder"):tt('Docent')):tt('Leerling')}</strong><small>{user?.email||''}</small></div></Link><button className="iconbtn" title={tt('Uitloggen')} aria-label={tt('Uitloggen')} onClick={()=>void supabase()?.auth.signOut()}><LogOut size={17}/></button></div>
   </aside>

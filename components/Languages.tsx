@@ -1,5 +1,8 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
+import {usePathname} from 'next/navigation';
+import {useQueryParam} from '../lib/useQuery';
+import {loadStudents} from '../lib/data';
 import Link from 'next/link';
 import {Plus,ChevronRight,Video,X,BookOpen,Trash2} from 'lucide-react';
 import {supabase} from '../lib/supabase';
@@ -30,7 +33,7 @@ export function MyLanguages({students,lessons,vocab,loaded,teacherName}:{student
   {!loaded||!self.loaded?<div className="loader small"/>:!cards.length?<div className="emptystate"><BookOpen size={30}/><strong>{t("Nog geen talen")}</strong><p>{t("Voeg een taal toe die je leert, of accepteer de uitnodiging van je docent.")}</p></div>:
   <LanguageCards cards={cards} lessons={lessons} vocab={vocab} teacherName={teacherName}/>}
   {!self.ready&&<p className="small-print muted">{t("Zelf talen toevoegen kan zodra de database-update v29 is uitgevoerd.")}</p>}
-  {adding&&<AddLanguage existing={cards} onClose={()=>setAdding(false)} onAdded={()=>{setAdding(false);void self.reload()}} ready={self.ready}/>}
+  {adding&&<AddLanguage existing={cards} onClose={()=>setAdding(false)} onAdded={()=>{setAdding(false);void self.reload();languagesChanged()}} ready={self.ready}/>}
  </section>
 }
 
@@ -79,7 +82,7 @@ export function LanguageHeader({card,current,teacherName,onPick}:{card:LanguageC
 export function SelfStudy({card,onChanged}:{card:LanguageCard<StudentRecord>;onChanged:()=>void}){
  const [level,setLevel]=useState(card.self?.level||'');const [msg,setMsg]=useState('');
  async function save(v:string){setLevel(v);const {error}=await supabase()!.from('student_languages').update({level:v||null}).eq('id',card.self!.id);setMsg(error?error.message:t("Niveau opgeslagen."));onChanged()}
- async function remove(){if(!card.self||!confirm(t("{0} uit je talen halen? Lessen bij docenten blijven bestaan.", languageName(card.code))))return;const {error}=await supabase()!.from('student_languages').delete().eq('id',card.self.id);if(error)setMsg(error.message);else onChanged()}
+ async function remove(){if(!card.self||!confirm(t("{0} uit je talen halen? Lessen bij docenten blijven bestaan.", languageName(card.code))))return;const {error}=await supabase()!.from('student_languages').delete().eq('id',card.self.id);if(error)setMsg(error.message);else{onChanged();languagesChanged()}}
  return <div className="grid2">
   <section className="card"><h3>{t("Zelfstudie")}</h3><p className="muted">{t("Je leert {0} nu zonder docent. Zodra een docent je uitnodigt voor deze taal (met het e-mailadres van dit account), verschijnen hier je lessen, woorden, huiswerk en opnames.", languageName(card.code))}</p>
    <label className="stack"><span className="label">{t("Mijn niveau")}</span><select className="field" value={level} onChange={e=>void save(e.target.value)}><option value="">{t("Weet ik nog niet")}</option>{LEVELS.map(l=><option key={l} value={l}>{l}</option>)}</select></label>
@@ -87,5 +90,37 @@ export function SelfStudy({card,onChanged}:{card:LanguageCard<StudentRecord>;onC
   <section className="card"><h3>{t("Oefenen")}</h3><p className="muted">{card.code==='pt'?t("Bereid je voor met de Portugese basis en de werkwoordoefeningen."):t("Oefenmateriaal komt beschikbaar zodra je een docent hebt of woorden toevoegt in een les.")}</p>
    <div className="row">{card.code==='pt'&&<Link className="button small" href="/portugees">{t("Portugees voorbereiden")}</Link>}<Link className="button secondary small" href="/oefenen">{t("Naar Oefenen")}</Link></div>
    {card.self&&<button className="button secondary small danger-text" onClick={()=>void remove()}><Trash2 size={14}/> {t("Taal verwijderen")}</button>}</section>
+ </div>
+}
+
+/* ---------------- sidebar: the logged-in student's own learning languages ---------------- */
+// Same source as "Mijn talen" on the dashboard: the student's linked teacher relations (students.user_id = me,
+// RLS-protected) plus self-study languages. Nothing hard-coded: a new language appears automatically.
+const LANG_EVENT='teachy-languages-changed';
+/** Call after a language was added/removed so the sidebar refreshes at once. */
+export const languagesChanged=()=>{if(typeof window!=='undefined')window.dispatchEvent(new Event(LANG_EVENT))};
+let sideCache:{uid:string;cards:LanguageCard<StudentRecord>[]}|null=null;
+export function useMyLanguageCards(){
+ const {user,studentLinks}=useAuth();
+ const [cards,setCards]=useState<LanguageCard<StudentRecord>[]>(()=>user&&sideCache?.uid===user.id?sideCache.cards:[]);
+ const [tick,setTick]=useState(0);
+ useEffect(()=>{const f=()=>setTick(x=>x+1);window.addEventListener(LANG_EVENT,f);return()=>window.removeEventListener(LANG_EVENT,f)},[]);
+ useEffect(()=>{const db=supabase();if(!user||!db)return;let off=false;void(async()=>{
+  const [r,s]=await Promise.all([loadStudents(db,{userId:user.id}),db.from('student_languages').select('id,language,level').order('created_at')]);
+  if(off)return;const c=buildLanguageCards(r.data,(s.error?[]:(s.data||[])) as SelfLanguage[]);sideCache={uid:user.id,cards:c};setCards(c)})();return()=>{off=true}},[user?.id,studentLinks.length,tick]);
+ return cards;
+}
+export function SideLanguages({onNavigate}:{onNavigate:()=>void}){
+ const {pendingLinks}=useAuth();const cards=useMyLanguageCards();const path=usePathname()||'';const taal=useQueryParam('taal');const sid=useQueryParam('student');
+ const onLang=path.startsWith('/mijn-profiel');
+ const current=!onLang?'':(taal||cards.find(c=>c.relations.some(r=>r.id===sid))?.code||cards[0]?.code||'');
+ if(!cards.length&&!pendingLinks.length)return null;
+ return <div className="side-langs">
+  <div className="navlabel">{t('Mijn talen')}</div>
+  <nav className="navlinks" aria-label={t('Mijn talen')}>
+   {cards.map(c=><Link key={c.code} href={'/mijn-profiel?taal='+c.code} className={current===c.code?'active':''} aria-current={current===c.code?'page':undefined} onClick={onNavigate}>
+    <Flag code={c.code} size={20}/><span className="grow">{languageName(c.code)}</span>{c.relations.length>1&&<small className="side-count" title={t('{0} docenten',c.relations.length)}>{c.relations.length}</small>}{!c.relations.length&&<small className="side-self">{t('zelfstudie')}</small>}</Link>)}
+   {pendingLinks.length>0&&<Link href="/" className="side-invite" onClick={onNavigate}><span className="side-dot" aria-hidden/>{t('{0} uitnodiging(en) om te accepteren',pendingLinks.length)}</Link>}
+  </nav>
  </div>
 }
