@@ -655,3 +655,10 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
 
 .self-extra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
 
+
+/* v33 — TEST analyses */
+.test-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:#6b3fa0;color:#fff;font-size:11px;font-weight:800;letter-spacing:.08em;margin-right:6px;vertical-align:middle}
+.test-bar{gap:10px;flex-wrap:wrap;padding:8px 10px;border:1px dashed #b9a3d6;border-radius:12px;background:#f7f2fc;margin-bottom:10px}
+.test-note{display:flex;gap:8px;align-items:flex-start;background:#f7f2fc;border-color:#d7c6ec}
+.test-import textarea{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+

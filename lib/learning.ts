@@ -8,7 +8,7 @@ export type VocabItem = {id: string; student_id: string; term: string; translati
 export type Goal = {id: string; code: string | null; subject: string; level: string; skill: string; title: string; description: string; sort: number; owner_teacher: string | null};
 export type GoalStatus = 'not_started' | 'in_progress' | 'covered' | 'mastered';
 export type GoalProgress = {student_id: string; goal_id: string; status: GoalStatus; basis: 'teacher' | 'ai_confirmed' | 'practice'; note: string; lesson_date: string | null; updated_at: string};
-export type AnalysisRow = {id: string; student_id: string; recording_id: string | null; lesson_date: string; status: AnalysisStatus; transcript: string | null; source_quality: string; draft: AnalysisDoc | null; final: AnalysisDoc | null; error: string | null; approved_at: string | null; created_at: string};
+export type AnalysisRow = {id: string; student_id: string; recording_id: string | null; lesson_date: string; status: AnalysisStatus; transcript: string | null; source_quality: string; draft: AnalysisDoc | null; final: AnalysisDoc | null; error: string | null; approved_at: string | null; created_at: string; is_test?: boolean};
 export type PracticeSession = {id: string; kind: string; score: number; total: number; duration_seconds: number; assignment_id: string | null; created_at: string};
 
 export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = translated({not_started: 'Nog niet behandeld', in_progress: 'Mee bezig', covered: 'Behandeld', mastered: 'Beheerst'});
@@ -46,6 +46,7 @@ export async function addVocab(db: SupabaseClient, studentId: string, words: {te
 
 /** Approve an AI analysis: final version visible to the student, chosen words → vocabulary, chosen goals → progress. */
 export async function approveAnalysis(db: SupabaseClient, a: AnalysisRow, final: AnalysisDoc, goals: {code: string; status: Exclude<GoalStatus, 'mastered' | 'not_started'>}[], userId: string) {
+  if (a.is_test) throw new Error(t('Een TEST-analyse wordt nooit met een leerling gedeeld.')); // nothing is written for tests
   const vocab = await addVocab(db, a.student_id, final.vocabulary, 'ai', a.lesson_date);
   let goalsSaved = 0;
   if (goals.length) {
