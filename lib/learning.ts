@@ -1,6 +1,7 @@
 'use client';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {AnalysisDoc, AnalysisStatus} from './analysisTypes';
+import {relationLanguage} from './languages';
 
 export type VocabItem = {id: string; student_id: string; term: string; translation: string; example: string; kind: 'word' | 'expression'; status: 'new' | 'practicing' | 'mastered'; source: 'teacher' | 'lesson' | 'ai' | 'student'; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
 export type Goal = {id: string; code: string | null; subject: string; level: string; skill: string; title: string; description: string; sort: number; owner_teacher: string | null};
@@ -16,12 +17,7 @@ export const SUBJECTS: Record<string, string> = {nl: 'Nederlands', pt: 'Portugee
 export const VOCAB_STATUS_LABEL = {new: 'Nieuw', practicing: 'Aan het oefenen', mastered: 'Beheerst'} as const;
 
 /** Same rule as the server (lib/server/context.ts). */
-export function subjectOf(s: {curriculum_subject?: string | null; subject?: string | null; lesson_language?: string | null}) {
-  if (s.curriculum_subject) return s.curriculum_subject;
-  if (/portug/i.test(s.subject || '')) return 'pt';
-  if (/nederl|dutch|nt2/i.test(s.subject || '')) return 'nl';
-  return s.lesson_language || 'nl';
-}
+export const subjectOf = relationLanguage;
 
 export async function authedPost<T>(db: SupabaseClient, path: string, body: unknown): Promise<T> {
   const {data} = await db.auth.getSession();

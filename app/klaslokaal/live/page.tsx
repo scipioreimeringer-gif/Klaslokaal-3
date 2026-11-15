@@ -7,6 +7,7 @@ import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 import {PrivateNotes} from '../../../components/StudentData';
 import {AssistantPanel} from '../../../components/Assistant';
+import {usePhoto} from '../../../components/Avatar';
 import {supabase} from '../../../lib/supabase';
 import {useQueryParam} from '../../../lib/useQuery';
 import {createStudentBridge,createTeacherBridge} from '../../../lib/classroomBridge';
@@ -43,6 +44,9 @@ function LiveRoom({studentId}:{studentId:string}){
   setRoom({student:s,as});setReady(true);
  })();return()=>{cancelled=true}},[studentId,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
+ // photo of the other participant in the classroom top bar
+ const peerId=room?(room.as==='teacher'?room.student.user_id:room.student.teacher_id):null;const peerPhoto=usePhoto(peerId);
+ useEffect(()=>{if(!ready||!window.teachyBridge)return;window.teachyBridge.peerAvatar=peerPhoto;const f=document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;try{(f?.contentWindow as unknown as {__klasAvatar?:(u:string)=>void}|null)?.__klasAvatar?.(peerPhoto)}catch{/* frame not ready: it reads bridge.peerAvatar at start */}},[peerPhoto,ready]);
  if(error)return <Nav><div className="notice">{error}</div><Link className="button secondary" href="/klaslokaal/live"><ArrowLeft size={15}/> Terug</Link></Nav>;
  if(!room||!ready)return <div className="live-page"><div className="loader"/></div>;
  const s=room.student;const myName=(user?.user_metadata?.full_name as string|undefined)||s.name;

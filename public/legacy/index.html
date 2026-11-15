@@ -441,6 +441,8 @@ body.v28 .top{height:46px;min-height:46px!important;padding:0 8px!important;gap:
 body.v28 .top .brand{display:none}
 .tb-left,.tb-right{display:flex;align-items:center;gap:6px;min-width:0}
 .tb-left{flex:1 1 auto}.tb-right{flex:none}
+.tb-face{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none;border:1.5px solid rgba(255,255,255,.35)}
+.tb-face[hidden]{display:none}
 .tb-title{font-weight:750;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tbbtn{width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--dock-ink);display:inline-grid;place-items:center;cursor:pointer;flex:none}
 .tbbtn:hover,.popmenu[open]>summary.tbbtn{background:rgba(255,255,255,.12)}
@@ -2508,7 +2510,10 @@ if(isT){
   var back = el("button", "tbbtn", ICON.back, "Terug naar profiel");
   if(SB && b && b.ui) back.addEventListener("click", function(){ b.ui.back(); }); else back.hidden = true;
   var title = el("span", "tb-title"); title.textContent = SB && b ? (isT ? (b.studentName || "Les") : "Mijn les") : (isT ? "Klas · docent" : "Klas");
-  left.appendChild(back); left.appendChild(title);
+  var face = el("img", "tb-face"); face.alt = ""; face.referrerPolicy = "no-referrer"; face.hidden = true; face.onerror = function(){ face.hidden = true; };
+  window.__klasAvatar = function(u){ if(u && /^(https:|blob:|data:image\/)/.test(u)){ face.src = u; face.hidden = false; } else face.hidden = true; };
+  if(b && b.peerAvatar) window.__klasAvatar(b.peerAvatar);
+  left.appendChild(back); left.appendChild(face); left.appendChild(title);
   top.insertBefore(left, top.firstChild);
   var right = el("div", "tb-right");
   [$("recBadge"), $("conn"), $("timer"), $("joinBtn")].forEach(function(x){ if(x) right.appendChild(x); });

@@ -28,6 +28,8 @@ export type TeachyBridge = {
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
   ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void};
+  /** Photo of the other participant (signed URL or Google photo), shown in the classroom top bar. */
+  peerAvatar?: string;
 };
 export type RecordingTracks = {teacher?: Blob | null; student?: Blob | null};
 export type TranslateResult = {translation: string; expression: string | null; expression_translation: string | null; note: string; target: string};

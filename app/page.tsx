@@ -10,6 +10,11 @@ import {activeStudents,cumulativeWords,groupCount,homeworkProgress,isEmptySeries
 import {sessionsPerWeek} from '../lib/answers';
 import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
+import {MyLanguages} from '../components/Languages';
+import {Avatar} from '../components/Avatar';
+import {Flag} from '../components/Flag';
+import {subjectOf as langOf} from '../lib/learning';
+import {languageName} from '../lib/languages';
 import {CATEGORY_LABEL,type AnalysisDoc,type AnalysisStatus,type CorrectionCategory} from '../lib/analysisTypes';
 import {UsersRound,BookOpenCheck,Languages,ClipboardList,Video,Plus,ChevronRight,BookOpen,Presentation,Activity,Mic,CalendarCheck,Sparkles} from 'lucide-react';
 
@@ -91,6 +96,7 @@ function StudentHome(){
  return <><PendingLinks/>
   <div className="hero mint"><div><div className="eyebrow">LEERLINGDASHBOARD</div><h1>Mijn lessen</h1><p>Je voortgang, woorden en huiswerk bij al je docenten op één plek.</p><div className="heroactions"><Link className="button light" href="/mijn-profiel"><BookOpen size={17}/> Mijn lessen</Link><Link className="button ghost-light" href="/portugees"><Languages size={17}/> Portugees voorbereiden</Link></div></div><div className="hero-art" aria-hidden><BookOpen size={76}/></div></div>
   {d.error&&<div className="notice">{d.error}</div>}
+  <MyLanguages students={d.students} lessons={d.lessons as {student_id:string}[]} vocab={d.vocab} loaded={d.loaded} teacherName={id=>studentLinks.find(l=>l.id===id)?.teacher_name||''}/>
   <div className="statgrid">
    <StatTile icon={BookOpenCheck} value={d.loaded?d.lessons.length:'…'} label="Gevolgde lessen" hint={`${perMonth[perMonth.length-1].value} deze maand`}/>
    <StatTile icon={Languages} tone="mint" value={d.loaded?words:'…'} label="Woorden geleerd"/>
@@ -110,7 +116,7 @@ function StudentHome(){
   </div>
   <section className="panel"><div className="panelheader"><div><h2>Mijn docenten</h2><p>Alleen jij en je docent zien deze gegevens</p></div></div>
    {studentLinks.length===0?<div className="emptystate"><BookOpen size={30}/><strong>Nog geen leerlingprofiel gekoppeld</strong><p>Vraag je docent om je toe te voegen met het e-mailadres van dit account. De uitnodiging verschijnt dan hierboven.</p></div>:
-   <div className="studentrows">{studentLinks.map(s=><div className="studentrow" key={s.id}><div className="avatar mint">{(s.subject||s.name)[0]?.toUpperCase()}</div><Link className="studentrow-main" href={'/mijn-profiel?student='+s.id}><strong>{s.subject||'Les'}</strong><small>Docent: {s.teacher_name||'onbekend'}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> Naar de les</Link></div>)}</div>}
+   <div className="studentrows">{studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);const lang=rec?langOf(rec):'';return <div className="studentrow" key={s.id}><Avatar userId={rec?.teacher_id} name={s.teacher_name||'D'} size={40}/><Link className="studentrow-main" href={'/mijn-profiel?'+(lang?'taal='+lang+'&':'')+'student='+s.id}><strong>{s.teacher_name||'Docent'}</strong><small>{lang&&<Flag code={lang} size={16}/>} {lang?languageName(lang):(s.subject||'Les')}{rec?.level?' · '+rec.level:''}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> Naar de les</Link></div>})}</div>}
   </section>
   {(role==='student'||role==='rejected_teacher'||role==='pending_teacher')&&<section className="panel soft"><h2>Zelf lesgeven?</h2><p className="muted">{role==='pending_teacher'?'Je aanvraag voor een docentprofiel wacht op goedkeuring door de beheerder.':role==='rejected_teacher'?'Je vorige aanvraag is niet goedgekeurd. Je kunt opnieuw een aanvraag indienen.':'Vraag een docentprofiel aan. Na goedkeuring gebruik je hetzelfde account als docent én als leerling.'}</p>{role!=='pending_teacher'&&<button className="button" onClick={async()=>{const {error}=await supabase()!.rpc('request_teacher_access');if(error)alert(error.message);else await refresh()}}>Docentprofiel aanvragen</button>}</section>}
   <p className="small-print muted"><Mic size={12}/> Opnames van je lessen vind je bij Mijn lessen → Opnames.</p></>
