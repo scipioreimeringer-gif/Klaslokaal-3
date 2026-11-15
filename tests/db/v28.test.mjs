@@ -116,5 +116,13 @@ ok(!(await tryq(S1, `select public.set_my_language('x; drop')`)).ok, 'invalid la
 ok((await q(S1, `select role from public.profiles where id=$1`, [S1])).rows[0].role === 'student', 'role unchanged (no self-promotion)');
 ok((await tryq(S1, `insert into public.translation_cache(key,term,target_lang,result) values (repeat('a',64),'ainda','nl','{"t":"nog"}')`)).ok, 'translation cached');
 
+console.log('\n=== AI usage log & speaker tracks ===');
+ok((await tryq(S1, `insert into public.ai_usage(user_id,kind,model,input_tokens,output_tokens,cost_usd) values ($1,'translate','claude-haiku-5-5',100,20,0.00002)`, [S1])).ok, 'user logs own AI usage');
+ok(!(await tryq(S1, `insert into public.ai_usage(user_id,kind) values ($1,'translate')`, [T])).ok, 'cannot log usage as someone else');
+ok((await q(T, `select * from public.ai_usage`)).rows.length === 0, 'usage of others is not visible');
+ok((await q(S1, `select count(*)::int n from public.ai_usage where user_id=$1 and kind='translate' and created_at > now() - interval '1 day'`, [S1])).rows[0].n === 1, 'daily count for limits works');
+const tr = await tryq(T, `insert into public.lesson_recordings(student_id,storage_path,teacher_track_path,student_track_path,teacher_consent_at,student_consent_at,created_by) values ($1,$2,$3,$4,now(),now(),$5) returning id`, [A, `${A}/r2.webm`, `${A}/r2-teacher.webm`, `${A}/r2-student.webm`, T]);
+ok(tr.ok, 'recording with separate teacher/student tracks stored');
+
 console.log(`\n${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

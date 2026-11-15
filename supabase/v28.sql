@@ -352,3 +352,34 @@ insert into public.curriculum_goals(code, subject, level, skill, title, descript
  ('pt-C1-sc-1','pt','C1','schrijven','Betogende teksten','coerência e coesão',1),
  ('pt-C2-sp-1','pt','C2','spreken','Precies en genuanceerd formuleren','humor, ironie, impliciete betekenis',1)
 on conflict (code) do nothing;
+
+-- ---------------------------------------------------------------------
+-- 8. Separate audio tracks per speaker (reliable attribution of errors)
+--    The teacher's browser records the teacher mic and the student's incoming
+--    audio as two extra files next to the mixed recording used for playback.
+-- ---------------------------------------------------------------------
+alter table public.lesson_recordings add column if not exists teacher_track_path text;
+alter table public.lesson_recordings add column if not exists student_track_path text;
+
+-- ---------------------------------------------------------------------
+-- 9. AI usage log (cost tracking + fair-use limits). Users see their own usage; admins see all.
+-- ---------------------------------------------------------------------
+create table if not exists public.ai_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  student_id uuid references public.students(id) on delete set null,
+  kind text not null check (kind in ('translate','tidy','analysis','transcription','exercises','prepare','assistant')),
+  model text not null default '',
+  input_tokens integer not null default 0,
+  output_tokens integer not null default 0,
+  audio_seconds integer not null default 0,
+  cost_usd numeric(10,5) not null default 0,
+  cached boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_usage_user_day_idx on public.ai_usage(user_id, kind, created_at desc);
+alter table public.ai_usage enable row level security;
+drop policy if exists "ai usage own read" on public.ai_usage;
+create policy "ai usage own read" on public.ai_usage for select to authenticated using (user_id = (select auth.uid()) or public.is_admin());
+drop policy if exists "ai usage own insert" on public.ai_usage;
+create policy "ai usage own insert" on public.ai_usage for insert to authenticated with check (user_id = (select auth.uid()));
