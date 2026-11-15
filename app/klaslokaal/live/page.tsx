@@ -16,6 +16,12 @@ import {t, getLang, isLang} from '../../../lib/i18n';
 import {useLanguage} from '../../../components/I18n';
 
 type Room={student:StudentRecord;as:'teacher'|'student'};
+/** The planned lesson this classroom belongs to: the one in the link, else one happening now (15 min margin). Without one the classroom still works. */
+async function findLesson(db:ReturnType<typeof supabase>&{},sid:string,param:string|null){
+ if(param&&/^[0-9a-f-]{36}$/i.test(param)){const r=await db.from('lessons').select('id').eq('id',param).eq('student_id',sid).maybeSingle();if(r.data)return (r.data as {id:string}).id}
+ const now=Date.now();const r=await db.from('lessons').select('id').eq('student_id',sid).neq('status','cancelled').lte('starts_at',new Date(now+15*60e3).toISOString()).gte('ends_at',new Date(now-15*60e3).toISOString()).order('starts_at').limit(1);
+ return r.error?null:((r.data||[])[0] as {id:string}|undefined)?.id||null;
+}
 
 function Picker(){
  const {user,mode,studentLinks}=useAuth();const [items,setItems]=useState<StudentRecord[]>([]);
@@ -27,7 +33,7 @@ function Picker(){
   <p className="muted small-print">{t("Het oude klaslokaal zonder leerlingkoppeling staat nog op")} <a href="/legacy/index.html">{'/legacy/index.html'}</a> {t("(lokale opslag op dit apparaat).")}</p></Nav>
 }
 
-function LiveRoom({studentId}:{studentId:string}){
+function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|null}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
  const [assistOpen,setAssistOpen]=useState(false);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
@@ -40,12 +46,13 @@ function LiveRoom({studentId}:{studentId:string}){
   const as:Room['as']|null=isTeacher&&isStudent?(mode==='student'?'student':'teacher'):isTeacher?'teacher':isStudent?'student':null;
   if(!as){setError(t("Geen toegang tot dit klaslokaal."));return}
   if(!s.room_code){setError(t(MIGRATION_HINT));return}
-  window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
+  const lessonId=as==='teacher'?await findLesson(db,s.id,lessonParam):null;if(cancelled)return;
+  window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
   window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true)};
   setRoom({student:s,as});setReady(true);
- })();return()=>{cancelled=true}},[studentId,user?.id,canTeach,mode,router]);
+ })();return()=>{cancelled=true}},[studentId,lessonParam,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
  // interface language: app → classroom (the classroom page is not reloaded, so a running lesson continues)
  const {lang,setLang}=useLanguage();const setLangRef=useRef(setLang);setLangRef.current=setLang;
@@ -70,5 +77,5 @@ function LiveRoom({studentId}:{studentId:string}){
  </main>;
 }
 
-function Live(){const studentId=useQueryParam('student');return studentId?<LiveRoom studentId={studentId}/>:<Picker/>}
+function Live(){const studentId=useQueryParam('student');const lesson=useQueryParam('lesson');return studentId?<LiveRoom studentId={studentId} lessonParam={lesson}/>:<Picker/>}
 export default function LivePage(){return <Suspense fallback={<div className="live-page"><div className="loader"/></div>}><Live/></Suspense>}

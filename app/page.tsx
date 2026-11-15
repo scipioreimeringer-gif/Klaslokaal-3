@@ -11,6 +11,7 @@ import {sessionsPerWeek} from '../lib/answers';
 import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
 import {MyLanguages} from '../components/Languages';
+import {NextLessonPanel} from '../components/Agenda';
 import {Avatar} from '../components/Avatar';
 import {Flag} from '../components/Flag';
 import {subjectOf as langOf} from '../lib/learning';
@@ -55,7 +56,7 @@ function TeacherHome(){
  const practiceScore=d.students.map(s=>{const ps=d.practice.filter(p=>p.student_id===s.id&&p.total>0);const sc=ps.reduce((n,p)=>n+p.score,0),tot=ps.reduce((n,p)=>n+p.total,0);return {key:s.id,label:s.name,value:tot?Math.round(sc/tot*100):-1}}).filter(p=>p.value>=0).slice(0,6);
  const review=d.analyses;
  useEffect(()=>{try{if(sessionStorage.getItem('teachy-purged'))return;sessionStorage.setItem('teachy-purged','1')}catch{}void purgeExpired(supabase()!).catch(()=>{})},[]);
- return <>{role==='admin'&&<div className="hint">{t("Je bent beheerder. Docentaanvragen beoordeel je via")} <Link href="/beheer">{t("Docenten beheren")}</Link>.</div>}
+ return <><NextLessonPanel mode="teacher"/>{role==='admin'&&<div className="hint">{t("Je bent beheerder. Docentaanvragen beoordeel je via")} <Link href="/beheer">{t("Docenten beheren")}</Link>.</div>}
   <PendingLinks/>
   <div className="hero"><div><div className="eyebrow">{t("DOCENTDASHBOARD")}</div><h1>{t("Welkom terug 👋")}</h1><p>{t("Elke leerling heeft een eigen klaslokaal: bord, notities, woorden en huiswerk worden per leerling bewaard.")}</p><div className="heroactions"><Link className="button light" href="/klaslokaal/live"><Video size={17}/> {t("Les starten")}</Link><Link className="button ghost-light" href="/leerlingen?nieuw=1"><Plus size={17}/> {t("Leerling toevoegen")}</Link></div></div><div className="hero-art" aria-hidden><Presentation size={76}/></div></div>
   {d.error&&<div className="notice">{d.error}</div>}
@@ -94,7 +95,7 @@ function StudentHome(){
  const errorsByCat=Array.from(catCount.entries()).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({key:k,label:k,value:v}));
  const speaking=d.summaries.filter(s=>s.final?.student_speaking_seconds!=null).sort((a,b)=>a.lesson_date<b.lesson_date?-1:1).slice(-8).map(s=>({key:s.lesson_date,label:new Date(s.lesson_date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'}),value:Math.round((s.final.student_speaking_seconds||0)/60)}));
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
- return <><PendingLinks/>
+ return <><PendingLinks/><NextLessonPanel mode="student"/>
   <div className="hero mint"><div><div className="eyebrow">{t("LEERLINGDASHBOARD")}</div><h1>{t("Mijn lessen")}</h1><p>{t("Je voortgang, woorden en huiswerk bij al je docenten op één plek.")}</p><div className="heroactions"><Link className="button light" href="/mijn-profiel"><BookOpen size={17}/> {t("Mijn lessen")}</Link><Link className="button ghost-light" href="/portugees"><Languages size={17}/> {t("Portugees voorbereiden")}</Link></div></div><div className="hero-art" aria-hidden><BookOpen size={76}/></div></div>
   {d.error&&<div className="notice">{d.error}</div>}
   <MyLanguages students={d.students} lessons={d.lessons as {student_id:string}[]} vocab={d.vocab} loaded={d.loaded} teacherName={id=>studentLinks.find(l=>l.id===id)?.teacher_name||''}/>

@@ -7,7 +7,7 @@ import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
 import {GoalsPanel,SelfPractice,VocabGames,VocabManager} from './Learning';
-import {subjectOf} from '../lib/learning';
+import {subjectOf,authedPost} from '../lib/learning';
 import {Sparkles,Target,Gamepad2} from 'lucide-react';
 import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
 import {t, locale} from '../lib/i18n';
@@ -50,10 +50,37 @@ export function VocabList({lessons}:{lessons:LessonEntry[]}){
   <table className="vocab"><thead><tr><th>{t("Woord")}</th><th>{t("Betekenis")}</th><th>{t("Les")}</th></tr></thead><tbody>{shown.map(w=><tr key={w.nl+w.date}><td><b>{w.nl}</b></td><td>{w.uit||<span className="muted">—</span>}</td><td className="muted">{new Date(w.date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'})}</td></tr>)}</tbody></table></div>
 }
 
-export function RecordingList({items,onChange}:{items:Recording[];onChange:()=>void}){
+/** Per recording: transcription + AI analysis with visible progress and errors (OpenAI via /api/ai/analyze).
+ *  Needs the AI consent of BOTH participants; each can give their own consent afterwards. */
+function RecordingAI({rec,viewer,onChange,onOpenAnalyses}:{rec:Recording;viewer:'teacher'|'student';onChange:()=>void;onOpenAnalyses?:()=>void}){
+ const [a,setA]=useState<{id:string;status:string;error:string|null}|null|undefined>(undefined);const [busy,setBusy]=useState(false);const [err,setErr]=useState('');
+ const consentT=!!rec.ai_consent_teacher_at,consentS=!!rec.ai_consent_student_at;
+ const loadA=useCallback(async()=>{if(viewer!=='teacher'){setA(null);return}const {data,error}=await supabase()!.from('lesson_analyses').select('id,status,error').eq('recording_id',rec.id).maybeSingle();setA(error?null:(data as {id:string;status:string;error:string|null}|null))},[rec.id,viewer]);
+ useEffect(()=>{void loadA()},[loadA]);
+ // poll while processing
+ useEffect(()=>{if(!a||(a.status!=='processing'&&a.status!=='queued'))return;const i=setInterval(()=>void loadA(),4000);return()=>clearInterval(i)},[a,loadA]);
+ async function consent(){setBusy(true);setErr('');const {error}=await supabase()!.rpc('grant_ai_consent',{p_recording:rec.id});setBusy(false);if(error)setErr(/function/i.test(error.message)?t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.'):error.message);else onChange()}
+ async function start(){setBusy(true);setErr('');try{await authedPost(supabase()!,'/api/ai/analyze',{recordingId:rec.id});await loadA()}catch(e){setErr(e instanceof Error?e.message:String(e))}setBusy(false)}
+ if(viewer==='student')return consentS?(consentT?<small className="rec-ai muted">{t('Toestemming voor AI-analyse: jij en je docent ✓')}</small>:<small className="rec-ai muted">{t('Jouw toestemming voor AI-analyse is gegeven; je docent moet nog toestemming geven.')}</small>):
+  <div className="rec-ai"><small className="muted">{t('Je docent kan deze opname laten transcriberen en analyseren als jij daar toestemming voor geeft.')}</small><button className="button small secondary" disabled={busy} onClick={()=>void consent()}>{t('Toestemming geven voor AI-analyse')}</button>{err&&<small className="danger-text">{err}</small>}</div>;
+ if(a===undefined)return null;
+ const st=a?.status;
+ return <div className="rec-ai">
+  {st==='processing'||st==='queued'?<span className="rec-progress"><span className="spinner" aria-hidden/> {t('Bezig met transcriberen en analyseren… dit kan een paar minuten duren.')}</span>:
+   st==='ready'?<span>{t('Transcriptie en conceptverslag klaar.')} <button className="linklike" onClick={onOpenAnalyses}>{t('Bekijken en goedkeuren')}</button></span>:
+   st==='approved'?<span>{t('Analyse goedgekeurd en gedeeld.')} <button className="linklike" onClick={onOpenAnalyses}>{t('Bekijken')}</button></span>:
+   <>{st==='failed'&&<small className="danger-text">{t('Analyse mislukt: {0}',a?.error||t('Onbekende fout'))}</small>}
+    {!consentT&&<button className="button small secondary" disabled={busy} onClick={()=>void consent()}>{t('Mijn toestemming voor AI-analyse geven')}</button>}
+    {consentT&&!consentS&&<small className="muted">{t('Wacht op toestemming van de leerling (de leerling kan die geven bij Opnames in het eigen profiel).')}</small>}
+    <button className="button small" disabled={busy||!consentT||!consentS} onClick={()=>void start()}><Sparkles size={14}/> {busy?t('Starten…'):st==='failed'?t('Opnieuw transcriberen en analyseren'):t('Transcriberen en analyseren')}</button></>}
+  {err&&<small className="danger-text" role="alert">{err}</small>}
+ </div>
+}
+
+export function RecordingList({items,onChange,viewer='teacher',onOpenAnalyses}:{items:Recording[];onChange:()=>void;viewer?:'teacher'|'student';onOpenAnalyses?:()=>void}){
  const [urls,setUrls]=useState<Record<string,string>>({});const [msg,setMsg]=useState('');
  if(!items.length)return <p className="muted">{t("Nog geen opnames. Een opname start je in het live klaslokaal; de leerling moet daar eerst toestemming geven.")}</p>;
- return <div className="rec-list">{msg&&<p className="muted" role="status">{msg}</p>}{items.map(r=><div className="rec-item" key={r.id}><div className="rec-icon"><Mic size={18}/></div><div className="rec-info"><strong>{niceDate(r.created_at)}</strong><small>{duration(r.duration_seconds)} · {(r.size_bytes/1048576).toFixed(1)} {t("MB · toestemming leerling")} {new Date(r.student_consent_at).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'})}</small>{urls[r.id]&&<audio controls src={urls[r.id]} preload="metadata"/>}</div>
+ return <div className="rec-list">{msg&&<p className="muted" role="status">{msg}</p>}{items.map(r=><div className="rec-item" key={r.id}><div className="rec-icon"><Mic size={18}/></div><div className="rec-info"><strong>{niceDate(r.created_at)}</strong><small>{duration(r.duration_seconds)} · {(r.size_bytes/1048576).toFixed(1)} {t("MB · toestemming leerling")} {new Date(r.student_consent_at).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'})}</small>{urls[r.id]&&<audio controls src={urls[r.id]} preload="metadata"/>}<RecordingAI rec={r} viewer={viewer} onChange={onChange} onOpenAnalyses={onOpenAnalyses}/></div>
   {!urls[r.id]&&<button className="button small secondary" onClick={async()=>{const u=await recordingUrl(supabase()!,r.storage_path);if(u.url)setUrls(x=>({...x,[r.id]:u.url!}));else setMsg(u.error||t("Niet beschikbaar"))}}><Play size={15}/> {t("Afspelen")}</button>}
   <button className="iconbtn danger" title={t("Opname verwijderen")} aria-label={t("Opname verwijderen")} onClick={async()=>{if(!confirm(t("Deze opname definitief verwijderen? Dit kan niet ongedaan worden gemaakt.")))return;const e=await deleteRecording(supabase()!,r);setMsg(e||t("Opname verwijderd"));onChange()}}><Trash2 size={16}/></button></div>)}</div>
 }
@@ -110,7 +137,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}
-  {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} onChange={()=>void load()}/></section>}
+  {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} viewer={viewer} onChange={()=>void load()} onOpenAnalyses={()=>setTab('analyses')}/></section>}
   {tab==='prive'&&viewer==='teacher'&&<section className="card private"><PrivateNotes studentId={studentId}/></section>}
   </>}
  </div>
