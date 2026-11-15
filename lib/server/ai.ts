@@ -1,20 +1,16 @@
 // Server-only AI helpers. Never import from client components.
-// - Claude (Anthropic SDK) for language tasks, with schema-validated JSON output.
-// - OpenAI only for speech-to-text (Anthropic does not offer transcription).
-// - Every route authenticates with the user's own Supabase session, so RLS decides access.
+// All AI runs on OpenAI (one key: OPENAI_API_KEY): text tasks via Chat Completions with
+// strict JSON-schema output, speech-to-text via the transcription endpoint.
+// Every route authenticates with the user's own Supabase session, so RLS decides access.
 import 'server-only';
-import Anthropic from '@anthropic-ai/sdk';
-import {zodOutputFormat} from '@anthropic-ai/sdk/helpers/zod';
-import {betaZodOutputFormat} from '@anthropic-ai/sdk/helpers/beta/zod';
 import {createClient, type SupabaseClient, type User} from '@supabase/supabase-js';
 import type {z} from 'zod';
+import {AiError, chatJson, modelFast, modelStrong, pricePerMTok} from './openai';
 
-/** Fast, inexpensive tasks (translation, exercises). */
-export const MODEL_FAST = 'claude-haiku-5-5';
-/** Quality-critical tasks (lesson analysis, canvas restructuring). */
-export const MODEL_STRONG = 'claude-opus-5-5';
+export const MODEL_FAST = modelFast();
+export const MODEL_STRONG = modelStrong();
 
-export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
+export class HttpError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
 
 export async function authUser(req: Request): Promise<{db: SupabaseClient; user: User; token: string}> {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
@@ -28,59 +24,21 @@ export async function authUser(req: Request): Promise<{db: SupabaseClient; user:
 }
 
 export function jsonError(e: unknown) {
-  const status = e instanceof HttpError ? e.status : e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.APIError ? 502 : 500;
-  const message = e instanceof HttpError ? e.message
-    : e instanceof Anthropic.AuthenticationError ? 'ANTHROPIC_API_KEY is ongeldig'
-    : e instanceof Anthropic.RateLimitError ? 'AI is even druk, probeer het zo opnieuw'
-    : e instanceof Anthropic.APIError ? `AI-fout (${e.status})`
-    : e instanceof Error ? e.message : 'Onbekende fout';
+  const status = e instanceof HttpError || e instanceof AiError ? e.status : 500;
+  const message = e instanceof Error ? e.message : 'Onbekende fout';
   return Response.json({error: message}, {status});
 }
 
-let client: Anthropic | null = null;
-function claude() {
-  if (!process.env.ANTHROPIC_API_KEY) throw new HttpError(503, 'AI staat nog niet aan: zet ANTHROPIC_API_KEY in Vercel');
-  return (client ??= new Anthropic());
+type AskOpts = {maxTokens?: number; effort?: 'low' | 'medium' | 'high'; log?: UsageCtx};
+async function ask<S extends z.ZodType>(model: string, schema: S, system: string, user: string, opts: AskOpts): Promise<z.infer<S>> {
+  const r = await chatJson({schema, name: (opts.log?.kind || 'result') + '_output', system, user, model, fallbackModel: modelFast(), maxTokens: opts.maxTokens, effort: opts.effort});
+  if (opts.log) await logUsage(opts.log, r.model, r.inputTokens, r.outputTokens);
+  return r.data;
 }
-
-/** Haiku 5.5: schema-validated JSON. */
-export async function askFast<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'; log?: UsageCtx} = {}): Promise<z.infer<S>> {
-  const res = await claude().messages.parse({
-    model: MODEL_FAST,
-    max_tokens: opts.maxTokens ?? 4000,
-    system,
-    output_config: {effort: opts.effort ?? 'low', format: zodOutputFormat(schema)},
-    messages: [{role: 'user', content: user}],
-  });
-  if (opts.log) await logUsage(opts.log, MODEL_FAST, res.usage.input_tokens, res.usage.output_tokens);
-  if (res.stop_reason === 'refusal') throw new HttpError(422, 'De AI weigerde dit verzoek');
-  if (res.stop_reason === 'max_tokens') throw new HttpError(502, 'AI-antwoord was te lang en is afgebroken');
-  if (!res.parsed_output) throw new HttpError(502, 'AI gaf geen geldig antwoord');
-  return res.parsed_output as z.infer<S>;
-}
-
-/** Opus 5.5 with server-side refusal fallback (routes to a suitable model if Opus declines). */
-export async function askStrong<S extends z.ZodType>(schema: S, system: string, user: string, opts: {maxTokens?: number; effort?: 'low' | 'medium' | 'high'; log?: UsageCtx} = {}): Promise<z.infer<S>> {
-  const stream = claude().beta.messages.stream({
-    model: MODEL_STRONG,
-    max_tokens: opts.maxTokens ?? 32000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    system,
-    output_config: {effort: opts.effort ?? 'medium', format: betaZodOutputFormat(schema)},
-    messages: [{role: 'user', content: user}],
-  });
-  const res = await stream.finalMessage();
-  if (opts.log) await logUsage(opts.log, res.model || MODEL_STRONG, res.usage.input_tokens, res.usage.output_tokens);
-  if (res.stop_reason === 'refusal') throw new HttpError(422, 'De AI weigerde dit verzoek');
-  if (res.stop_reason === 'max_tokens') throw new HttpError(502, 'AI-antwoord was te lang en is afgebroken');
-  const text = res.content.filter(b => b.type === 'text').map(b => (b as {text: string}).text).join('');
-  const parsed = schema.safeParse(safeJson(text));
-  if (!parsed.success) throw new HttpError(502, 'AI gaf geen geldig antwoord');
-  return parsed.data as z.infer<S>;
-}
-function safeJson(t: string) { try { return JSON.parse(t); } catch { return null; } }
-
+/** Fast tasks: translation, exercises, lesson preparation (OPENAI_MODEL). */
+export const askFast = <S extends z.ZodType>(schema: S, system: string, user: string, opts: AskOpts = {}) => ask(modelFast(), schema, system, user, {effort: 'low', ...opts});
+/** Quality-critical tasks: lesson analysis, canvas restructuring (OPENAI_MODEL_STRONG, falls back to OPENAI_MODEL). */
+export const askStrong = <S extends z.ZodType>(schema: S, system: string, user: string, opts: AskOpts = {}) => ask(modelStrong(), schema, system, user, {effort: 'medium', maxTokens: 16000, ...opts});
 /** Speech-to-text via OpenAI, with timestamped segments (used to merge per-speaker tracks). */
 export async function transcribe(audio: Blob, filename: string, languageHint?: string, log?: UsageCtx): Promise<{text: string | null; segments: {start: number; end: number; text: string}[]; duration: number; reason?: string}> {
   const none = (reason: string) => ({text: null, segments: [], duration: 0, reason});
@@ -91,7 +49,7 @@ export async function transcribe(audio: Blob, filename: string, languageHint?: s
   form.append('model', process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1');
   form.append('response_format', 'verbose_json');
   if (languageHint && /^[a-z]{2}$/.test(languageHint)) form.append('language', languageHint);
-  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`}, body: form});
+  const r = await fetch((process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '') + '/audio/transcriptions', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`}, body: form});
   const j = await r.json().catch(() => ({})) as {text?: string; duration?: number; segments?: {start: number; end: number; text: string}[]; error?: {message?: string}};
   if (!r.ok) return none('Transcriptie mislukt: ' + (j.error?.message || r.status));
   const duration = Math.round(Number(j.duration) || 0);
@@ -102,11 +60,10 @@ export async function transcribe(audio: Blob, filename: string, languageHint?: s
 /* ---------------- usage log, cost estimate and fair-use limits ---------------- */
 export type UsageKind = 'translate' | 'tidy' | 'analysis' | 'transcription' | 'exercises' | 'prepare' | 'assistant';
 export type UsageCtx = {db: SupabaseClient; userId: string; kind: UsageKind; studentId?: string | null; cached?: boolean};
-/** USD per million tokens (Anthropic list prices, Nov 2026) and per audio minute (OpenAI; override via env). */
-const PRICE: Record<string, [number, number]> = {'claude-haiku-5-5': [0.10, 0.50], 'claude-opus-5-5': [4, 20]};
+/** Audio price per minute (OpenAI whisper-1; override via env). Token prices: see pricePerMTok in ./openai. */
 const AUDIO_USD_PER_MIN = () => Number(process.env.OPENAI_TRANSCRIBE_USD_PER_MIN || '0.006');
 export function estimateCost(model: string, input: number, output: number, audioSeconds = 0) {
-  const p = PRICE[model] || PRICE[MODEL_STRONG];
+  const p = pricePerMTok(model);
   return (input * p[0] + output * p[1]) / 1e6 + (audioSeconds / 60) * (audioSeconds ? AUDIO_USD_PER_MIN() : 0);
 }
 async function logUsage(ctx: UsageCtx, model: string, input: number, output: number, audioSeconds = 0) {

@@ -1,7 +1,5 @@
-// AI-hulp in het klaslokaal. Werkt met OpenAI (ChatGPT) of Anthropic (Claude).
-// Instellen in Vercel: Environment Variable OPENAI_API_KEY of ANTHROPIC_API_KEY (een van de twee is genoeg).
-// Optioneel: OPENAI_MODEL (standaard gpt-5.4-mini) of ANTHROPIC_MODEL (standaard claude-haiku-5-5).
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+// AI-hulp in het klaslokaal via OpenAI.
+// Instellen in Vercel: OPENAI_API_KEY. Optioneel: OPENAI_MODEL (standaard gpt-5.4-mini).
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
 async function openai(system, user, maxTokens) {
@@ -19,20 +17,9 @@ async function openai(system, user, maxTokens) {
   return String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
 }
 
+// All classroom AI runs on OpenAI (single key: OPENAI_API_KEY).
 async function claude(system, user, maxTokens) {
-  if (process.env.OPENAI_API_KEY && (!process.env.ANTHROPIC_API_KEY || process.env.AI_PROVIDER === "openai")) return openai(system, user, maxTokens);
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error((j.error && j.error.message) || "AI-fout " + r.status);
-  return (j.content || []).filter((c) => c.type === "text").map((c) => c.text).join("").trim();
+  return openai(system, user, maxTokens);
 }
 
 function parseJSON(t) {
@@ -79,7 +66,7 @@ module.exports = async (req, res) => {
   const p = process.env.KLAS_PASSWORD;
   const passOk = !!p && req.headers["x-klas-pass"] === p;
   if (!passOk && !(await isSupabaseTeacher(req))) return res.status(401).json({ error: "wachtwoord" });
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return res.status(500).json({ error: "AI staat nog niet aan: zet OPENAI_API_KEY of ANTHROPIC_API_KEY in Vercel" });
+  if (!process.env.OPENAI_API_KEY) return res.status(500).json({ error: "AI staat nog niet aan: zet OPENAI_API_KEY in Vercel" });
   if (req.method !== "POST") return res.status(405).json({ error: "methode niet toegestaan" });
   try {
     const b = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};

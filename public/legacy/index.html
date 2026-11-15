@@ -694,7 +694,7 @@ body.focus .mswitch{display:none}
     <h2>Mag deze les worden opgenomen?</h2>
     <p class="muted">Je docent wil een <b>audio-opname</b> maken van deze les: jouw stem en die van je docent. De opname wordt privé opgeslagen in jouw leerlingprofiel. Alleen jij en je docent kunnen hem beluisteren, en jullie kunnen hem allebei verwijderen.</p>
     <p class="muted">Je kunt de opname op elk moment stoppen met de rode knop bovenaan.</p>
-    <label class="consent" id="recAiWrap" hidden><input type="checkbox" id="recAiS"> Ik geef ook toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les automatisch omgezet in tekst en samengevat (via OpenAI en Anthropic). Je docent controleert de samenvatting voordat jij die ziet. Je kunt opname en analyse later verwijderen.</label>
+    <label class="consent" id="recAiWrap" hidden><input type="checkbox" id="recAiS"> Ik geef ook toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les automatisch omgezet in tekst en samengevat (via OpenAI). Je docent controleert de samenvatting voordat jij die ziet. Je kunt opname en analyse later verwijderen.</label>
     <div class="row"><button class="btn primary" id="recYes" type="button">Ja, ik geef toestemming</button><button class="btn ghost" id="recNo" type="button">Nee, niet opnemen</button></div>
   </div>
 </div>
@@ -2071,7 +2071,7 @@ if(isT){
 
   /* ---------- AI ---------- */
   function ai(body){
-    if(!CLOUD.ai) return Promise.reject(new Error("AI staat nog niet aan. Zet OPENAI_API_KEY of ANTHROPIC_API_KEY in Vercel."));
+    if(!CLOUD.ai) return Promise.reject(new Error("AI staat nog niet aan. Zet OPENAI_API_KEY in Vercel."));
     body.lessonLanguage = (stu() && stu().lessonLanguage) || ($("lessonLanguage") && $("lessonLanguage").value) || "nl";
     return api("api/ai", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
   }
