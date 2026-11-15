@@ -20,7 +20,7 @@ function Frame({children}:{children:React.ReactNode}){
  function toggleSide(){if(isMobile())setOpen(o=>!o);else persist(!collapsed)}
  useEffect(()=>{if(!open)return;const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[open]);
  const teacherLinks=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}];
- const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/portugees',icon:Languages,label:tt('Portugees')}];
+ const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/portugees',icon:Languages,label:tt('Portugees')}];
  const links=mode==='teacher'?teacherLinks:studentNav;
  const both=canTeach&&studentLinks.length>0;
  const meta=(user?.user_metadata||{}) as {avatar_url?:string;picture?:string};const avatar=meta.avatar_url||meta.picture||'';

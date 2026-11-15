@@ -2,6 +2,8 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {isMissingMigration} from './data';
 import {t, getLang} from './i18n';
+/** Calendar date on this device (a lesson at 21:00 in Brazil belongs to that day, not to the next UTC day). */
+const localDate = () => new Date().toLocaleDateString('en-CA');
 import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegacyDb,snapshot,type LegacyDb,type LegacyLesson,type LessonRow,type StudentRow} from './classroomMapping';
 
 /**
@@ -61,7 +63,7 @@ declare global { interface Window { teachyBridge?: TeachyBridge } }
 
 const LESSON_COLS = 'student_id,lesson_date,notes,homework,words,sorted';
 
-export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; onSwitch: (id: string) => void}): TeachyBridge {
+export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
   let snap: Record<string, string> = {};
   let allowed = new Set<string>();
   let students: StudentRow[] = [];
@@ -148,10 +150,11 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
         student_consent_at: meta.studentConsentAt, created_by: opts.userId,
       };
       let row = await db.from('lesson_recordings').insert({
-        ...base, lesson_date: new Date().toISOString().slice(0, 10),
+        ...base, lesson_date: localDate(), ...(opts.lessonId ? {lesson_id: opts.lessonId} : {}),
         ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {}),
       }).select('id').single();
       let v28 = true;
+      if (row.error && opts.lessonId && /lesson_id/.test(row.error.message)) row = await db.from('lesson_recordings').insert({...base, lesson_date: localDate(), ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {})}).select('id').single(); // v30 not run yet
       if (row.error && isMissingMigration(row.error)) { v28 = false; row = await db.from('lesson_recordings').insert(base).select('id').single(); } // v28.sql not run yet
       const extra = Object.values(trackPaths);
       if (!v28 && extra.length) await db.storage.from('recordings').remove(extra);

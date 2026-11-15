@@ -10,7 +10,7 @@ export type StudentRecord = {
   archived_at?: string | null; curriculum_subject?: string | null;
 };
 export type LessonEntry = {id: string; student_id: string; lesson_date: string; notes: string; homework: string; words: LegacyWord[] | null; updated_at: string};
-export type Recording = {id: string; student_id: string; storage_path: string; mime_type: string; size_bytes: number; duration_seconds: number; teacher_consent_at: string; student_consent_at: string; created_at: string};
+export type Recording = {id: string; student_id: string; storage_path: string; mime_type: string; size_bytes: number; duration_seconds: number; teacher_consent_at: string; student_consent_at: string; created_at: string; ai_consent_teacher_at?: string | null; ai_consent_student_at?: string | null; lesson_id?: string | null};
 export type ClassroomState = {board: BoardData | null; canvas: CanvasDoc | null; updated_at: string};
 export type BoardObj = {id: string; c: string; p?: number[]; ty?: 'tx'; x?: number; y?: number; txt?: string; w?: number; sz?: number};
 export type BoardData = {list: string[]; cur: string; objs: Record<string, BoardObj[]>};
@@ -47,7 +47,7 @@ export async function loadStudents(db: SupabaseClient, filter: {teacherId?: stri
 export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
   const [lessons, recordings, assignments, state] = await Promise.all([
     db.from('lesson_entries').select('id,student_id,lesson_date,notes,homework,words,updated_at').eq('student_id', studentId).order('lesson_date', {ascending: false}),
-    db.from('lesson_recordings').select('id,student_id,storage_path,mime_type,size_bytes,duration_seconds,teacher_consent_at,student_consent_at,created_at').eq('student_id', studentId).order('created_at', {ascending: false}),
+    db.from('lesson_recordings').select('*').eq('student_id', studentId).order('created_at', {ascending: false}),
     db.from('assignments').select('id,published_at').eq('student_id', studentId),
     db.from('classroom_states').select('board,canvas,updated_at').eq('student_id', studentId).maybeSingle(),
   ]);

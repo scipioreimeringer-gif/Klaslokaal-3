@@ -24,6 +24,7 @@ export const DYNAMIC = [
   'De database-update v27 is nog niet uitgevoerd. Voer supabase/v27.sql uit in de Supabase SQL Editor.',
   // server messages shown through t(error) (app/api/ai/*, lib/server/*)
   'Log eerst in', 'Ongeldige sessie, log opnieuw in', 'Supabase-configuratie ontbreekt', 'Onbekende fout',
+  'De leerling heeft nog geen toestemming gegeven voor AI-analyse van deze opname.', 'Geef eerst zelf toestemming voor AI-analyse van deze opname.',
 ];
 
 function sourceFiles() {
