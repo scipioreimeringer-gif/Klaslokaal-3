@@ -6,6 +6,7 @@ export type StudentRecord = {
   id: string; teacher_id: string; user_id: string | null; name: string; email: string; subject: string;
   notes: string; goals: string; homework: string; history: string;
   level: string | null; lesson_language: string | null; about: string | null; room_code?: string | null;
+  archived_at?: string | null; curriculum_subject?: string | null;
 };
 export type LessonEntry = {id: string; student_id: string; lesson_date: string; notes: string; homework: string; words: LegacyWord[] | null; updated_at: string};
 export type Recording = {id: string; student_id: string; storage_path: string; mime_type: string; size_bytes: number; duration_seconds: number; teacher_consent_at: string; student_consent_at: string; created_at: string};
@@ -16,6 +17,7 @@ export type CanvasDoc = {pages: {id: string; title: string; html: string}[]; cur
 
 export const STUDENT_COLUMNS_BASE = 'id,teacher_id,user_id,name,email,subject,notes,goals,homework,history';
 export const STUDENT_COLUMNS_V27 = STUDENT_COLUMNS_BASE + ',level,lesson_language,about,room_code';
+export const STUDENT_COLUMNS_V28 = STUDENT_COLUMNS_V27 + ',archived_at,curriculum_subject';
 
 /** True when an error means "the v27 migration has not been run yet". */
 export function isMissingMigration(e: {message?: string; code?: string} | null | undefined) {
@@ -32,11 +34,13 @@ export async function loadStudents(db: SupabaseClient, filter: {teacherId?: stri
     if (filter.userId) q = q.eq('user_id', filter.userId);
     return q;
   };
+  const r28 = await build(STUDENT_COLUMNS_V28);
+  if (!r28.error) return {data: (r28.data || []) as unknown as StudentRecord[], error: null, v27: true, v28: true};
   const r = await build(STUDENT_COLUMNS_V27);
-  if (!r.error) return {data: (r.data || []) as unknown as StudentRecord[], error: null, v27: true};
-  if (!isMissingMigration(r.error)) return {data: [] as StudentRecord[], error: r.error.message, v27: true};
+  if (!r.error) return {data: (r.data || []) as unknown as StudentRecord[], error: null, v27: true, v28: false};
+  if (!isMissingMigration(r.error)) return {data: [] as StudentRecord[], error: r.error.message, v27: true, v28: false};
   const old = await build(STUDENT_COLUMNS_BASE);
-  return {data: (old.data || []) as unknown as StudentRecord[], error: old.error?.message || null, v27: false};
+  return {data: (old.data || []) as unknown as StudentRecord[], error: old.error?.message || null, v27: false, v28: false};
 }
 
 export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
