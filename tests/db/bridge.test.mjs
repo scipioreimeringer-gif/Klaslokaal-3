@@ -21,7 +21,7 @@ const {createTeacherBridge, createStudentBridge} = require(path.join(out, 'class
 const {loadStudentBundle} = require(path.join(out, 'data.js'));
 
 let passes = 0, failures = 0;
-const ok = (c, m) => { if (c) { passes++; console.log('  ✓ ' + m); } else { failures++; console.log('  ✗ ' + m); } };
+const ok = (c, m) => { if (c) { passes++; console.log('  âœ“ ' + m); } else { failures++; console.log('  âœ— ' + m); } };
 
 // 2. Database with all migrations; dates returned as strings like PostgREST does.
 const pg = new PGlite({extensions: {pgcrypto}, parsers: {1082: v => v, 1114: v => v, 1184: v => v}});
@@ -29,6 +29,7 @@ await pg.exec(SUPABASE_EMULATION);
 for (const f of MIGRATIONS) await pg.exec(sql(f));
 await pg.exec(sql('v26.sql'));
 await pg.exec(sql('v27.sql'));
+if (process.argv.includes('--v28')) await pg.exec(sql('v28.sql'));
 // The bridge reads window.location.origin (browser code); set it only after PGlite has started.
 globalThis.window = {location: {origin: 'https://teachyrooms.test'}};
 
@@ -136,7 +137,7 @@ const backup = {notes: {students: [{id: 'old1', name: 'student a'}, {id: 'old2',
 const preview = await again.previewImport(backup);
 ok(preview[0].newName === 'Student A' && preview[1].newName === 'Student B' && preview[2].newName === null, 'backup students matched by name, unknown one skipped');
 const msg = await again.importBackup(backup);
-console.log('    → ' + msg);
+console.log('    â†’ ' + msg);
 const after = await again.get('notes');
 ok(after.lessons[A].length === 2 && after.lessons[A].find(l => l.date === today).notes === 'Perfectum geoefend', 'old lessons added, existing day NOT overwritten');
 ok(after.lessons[B].some(l => l.notes === 'Oude les B'), 'old lessons of B imported into B');

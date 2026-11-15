@@ -397,6 +397,15 @@ body.top-min .top{display:none}
 body.dock-min .dock{display:none}
 body.top-min .mswitch{margin-top:6px}
 body.top-min.recording .top{display:flex}  /* recording indicator must always stay visible */
+/* v28: hover translation (personal, never on the shared canvas) and AI tidy */
+.trbtn[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:#fff}
+.trtip{position:fixed;z-index:80;max-width:280px;background:var(--dock);color:var(--dock-ink);border-radius:10px;padding:8px 11px;font-size:.84rem;line-height:1.35;box-shadow:0 10px 24px rgba(18,63,73,.28);pointer-events:none}
+.trtip b{display:block;font-size:.95rem}.trtip small{display:block;opacity:.75;margin-top:3px}.trtip .ex{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.15)}
+.consent{display:flex;gap:9px;align-items:flex-start;font-size:.84rem;color:var(--ink);background:var(--teal-soft);border-radius:10px;padding:9px 11px;cursor:pointer}
+.consent input{margin-top:3px;flex:none}
+.tidyprev{max-height:50vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:#0f2a2e}
+.tidyprev .h{font-weight:800;margin:10px 0 4px}.tidyprev .li:before{content:"• ";color:var(--teal)}
+.tidychanges{margin:0;padding-left:18px;font-size:.82rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -446,6 +455,9 @@ body.top-min.recording .top{display:flex}  /* recording indicator must always st
         <button class="ib" id="cvPageRen" data-teacher type="button" title="Pagina hernoemen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
         <button class="ib" id="cvPageDel" data-teacher type="button" title="Pagina verwijderen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <button class="btn sm" id="aiCanvasWords" data-teacher type="button" title="AI haalt de woorden uit deze pagina en sorteert ze op een nieuwe pagina">✨ Woorden</button>
+        <button class="btn sm sbonly" id="tidyBtn" data-teacher type="button" title="AI stelt een overzichtelijke versie van deze pagina voor (eerst voorbeeld)" hidden>✨ Orden</button>
+        <button class="ib sbonly" id="tidyUndo" data-teacher type="button" title="Terug naar de versie van vóór het ordenen" hidden>↶</button>
+        <button class="btn sm sbonly trbtn" id="trBtn" type="button" aria-pressed="false" title="Vertalen aan/uit: beweeg over een woord (op tablet: tik). Alleen jij ziet de vertaling." hidden>🌐 Vertalen</button>
         <button class="ib" data-cmd="wipe" data-teacher type="button" title="Canvas leegmaken"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
       </div>
       <div class="pnav" id="wbNav">
@@ -634,6 +646,7 @@ body.top-min.recording .top{display:flex}  /* recording indicator must always st
     <h2>Les opnemen?</h2>
     <p class="muted">Er wordt alleen <b>audio</b> opgenomen: jouw microfoon en die van je leerling. Je leerling krijgt eerst een verzoek en moet zelf toestemming geven. Tijdens de opname zien jullie allebei een rode indicator en kan ieder van jullie de opname stoppen.</p>
     <p class="muted">De opname wordt privé opgeslagen bij deze leerling. Alleen jij en je leerling kunnen hem beluisteren en verwijderen.</p>
+    <label class="consent"><input type="checkbox" id="recAiT"> Ook vragen om toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les getranscribeerd en samengevat. Jij controleert de analyse voordat je leerling die ziet.</label>
     <div class="row"><button class="btn primary" id="recStartYes" type="button">Ik stem in, vraag mijn leerling</button><button class="btn ghost" id="recStartNo" type="button">Annuleren</button></div>
   </div>
 </div>
@@ -642,9 +655,20 @@ body.top-min.recording .top{display:flex}  /* recording indicator must always st
     <h2>Mag deze les worden opgenomen?</h2>
     <p class="muted">Je docent wil een <b>audio-opname</b> maken van deze les: jouw stem en die van je docent. De opname wordt privé opgeslagen in jouw leerlingprofiel. Alleen jij en je docent kunnen hem beluisteren, en jullie kunnen hem allebei verwijderen.</p>
     <p class="muted">Je kunt de opname op elk moment stoppen met de rode knop bovenaan.</p>
+    <label class="consent" id="recAiWrap" hidden><input type="checkbox" id="recAiS"> Ik geef ook toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les automatisch omgezet in tekst en samengevat (via OpenAI en Anthropic). Je docent controleert de samenvatting voordat jij die ziet. Je kunt opname en analyse later verwijderen.</label>
     <div class="row"><button class="btn primary" id="recYes" type="button">Ja, ik geef toestemming</button><button class="btn ghost" id="recNo" type="button">Nee, niet opnemen</button></div>
   </div>
 </div>
+<div class="ov" id="tidyOv" hidden data-teacher>
+  <div class="dlg" style="max-width:680px">
+    <h2>Voorstel: geordende pagina</h2>
+    <p class="muted">Dit is een voorstel van AI. Er verandert niets totdat je op Toepassen klikt. De originele versie blijft bewaard (knop ↶).</p>
+    <div class="tidyprev" id="tidyPrev"></div>
+    <ul class="tidychanges" id="tidyChanges"></ul>
+    <div class="row"><button class="btn primary" id="tidyApply" type="button">Toepassen</button><button class="btn ghost" id="tidyCancel" type="button">Annuleren</button></div>
+  </div>
+</div>
+<div class="trtip" id="trTip" hidden role="tooltip"></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -759,8 +783,8 @@ function onMessage(m){
     case "cvo": cvApplyOrder(m.ids); break;
     case "scr": if(!m.on) hideScreen(); break;
     case "cvpage": var pl = $("cvPageLbl"); if(pl){ pl.textContent = String(m.title || "").slice(0, 40) + " (" + m.i + "/" + m.n + ")"; } break;
-    case "recask": if(!isT){ $("recOv").hidden = false; } break;
-    case "recok": if(isT) recConsentReply(true); break;
+    case "recask": if(!isT){ $("recAiWrap").hidden = !m.ai; $("recAiS").checked = false; $("recOv").hidden = false; } break;
+    case "recok": if(isT) recConsentReply(true, !!m.ai); break;
     case "recno": if(isT) recConsentReply(false); break;
     case "recon": if(!isT){ recBadge(true); $("recOv").hidden = true; } break;
     case "recoff": if(!isT){ recBadge(false); $("recOv").hidden = true; } break;
@@ -782,11 +806,14 @@ function recAsk(){
   if(!peer || !online()){ toast("Start eerst de les; je leerling moet verbonden zijn"); return; }
   $("recStartOv").hidden = false;
 }
-function recConsentReply(yes){
+function recConsentReply(yes, ai){
   if(!REC.asked) return;
   REC.asked = false; clearTimeout(REC.askT);
   if(!yes){ toast("Je leerling gaf geen toestemming. Er wordt niets opgenomen."); return; }
   REC.sConsent = new Date().toISOString();
+  /* AI analysis only when the teacher asked for it AND the student ticked it */
+  REC.aiS = (REC.askAi && ai) ? REC.sConsent : null;
+  if(REC.askAi && !ai) toast("Opname zonder AI-analyse: je leerling gaf daarvoor geen toestemming");
   recStart();
 }
 function recAddStream(s){
@@ -832,20 +859,22 @@ function recFinish(){
   var b = bridge();
   if(!b){ recDownload(blob); alert("Online opslaan niet beschikbaar. De opname is als bestand gedownload."); return; }
   toast("Opname veilig opslaan...");
-  b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:REC.tConsent, studentConsentAt:REC.sConsent}).then(function(r){
-    if(r && r.ok) toast("Opname opgeslagen bij deze leerling");
+  b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:REC.tConsent, studentConsentAt:REC.sConsent, aiTeacherAt:REC.aiS ? REC.aiT : null, aiStudentAt:REC.aiS}).then(function(r){
+    if(r && r.ok) toast(r.analysis === "started" ? "Opname opgeslagen. AI-lesanalyse gestart; je krijgt hem ter controle." : r.analysis ? "Opname opgeslagen. " + r.analysis : "Opname opgeslagen bij deze leerling");
     else { recDownload(blob); alert("Online opslaan mislukt (" + ((r && r.error) || "onbekende fout") + "). De opname is als bestand gedownload, zodat er niets verloren gaat."); }
   }).catch(function(e){ recDownload(blob); alert("Online opslaan mislukt (" + ((e && e.message) || e) + "). De opname is als bestand gedownload."); });
 }
 $("recStartYes").addEventListener("click", function(){
   $("recStartOv").hidden = true;
   if(!online()){ toast("Je leerling is niet meer verbonden"); return; }
-  REC.tConsent = new Date().toISOString(); REC.asked = true; send({t:"recask"});
+  REC.tConsent = new Date().toISOString(); REC.asked = true;
+  REC.askAi = !!$("recAiT").checked; REC.aiT = REC.askAi ? REC.tConsent : null; REC.aiS = null;
+  send({t:"recask", ai:REC.askAi});
   toast("Toestemming gevraagd aan je leerling...");
   clearTimeout(REC.askT); REC.askT = setTimeout(function(){ if(REC.asked){ REC.asked = false; toast("Geen antwoord van je leerling; er wordt niet opgenomen"); } }, 60000);
 });
 $("recStartNo").addEventListener("click", function(){ $("recStartOv").hidden = true; });
-$("recYes").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recok"}); toast("Toestemming gegeven"); });
+$("recYes").addEventListener("click", function(){ var ai = !$("recAiWrap").hidden && $("recAiS").checked; $("recOv").hidden = true; send({t:"recok", ai:ai}); toast(ai ? "Toestemming gegeven (opname en AI-analyse)" : "Toestemming gegeven (alleen opname)"); });
 $("recNo").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recno"}); });
 $("recBtn").addEventListener("click", recAsk);
 $("recBadge").addEventListener("click", function(){
@@ -1848,6 +1877,7 @@ if(isT){
     var sel = $("cvPageSel"); sel.innerHTML = "";
     cvDoc.pages.forEach(function(p, i){ var o = document.createElement("option"); o.value = i; o.textContent = (i + 1) + ". " + p.title; sel.appendChild(o); });
     sel.value = cvDoc.cur;
+    if(typeof tidyUndoState === "function") tidyUndoState();
     send({t:"cvpage", title:curPage().title, i:cvDoc.cur + 1, n:cvDoc.pages.length});
   }
   function openPage(i){
@@ -1886,6 +1916,40 @@ if(isT){
     cvDoc.pages.splice(cvDoc.cur, 1); cvDoc.cur = Math.max(0, cvDoc.cur - 1);
     cvLoad(curPage().html || ""); renderPages(); persistCv();
   });
+
+  /* ---------- v28: canvas ordenen met AI (voorbeeld → expliciet toepassen → origineel bewaard) ---------- */
+  var tidyResult = null;
+  function tidyEsc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+  function tidyInline(s){ return tidyEsc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])_(.+?)_(?=[\s).,;:!?]|$)/g, "$1<i>$2</i>"); }
+  function tidyUndoState(){ var b = $("tidyUndo"); if(b) b.hidden = !(SB && cvDoc && curPage().prev); }
+  if(SB){
+    $("tidyBtn").hidden = false;
+    $("tidyBtn").addEventListener("click", function(){
+      if(!cvDoc) return; cvNormalize();
+      var blocks = cvBlocks().map(function(b){ return {t:b.getAttribute("data-t") || "p", text:b.innerText}; }).filter(function(x){ return x.text.trim(); });
+      if(!blocks.length){ toast("Deze canvaspagina is nog leeg"); return; }
+      var btn = this; busy(btn, true, "AI ordent...");
+      bridge().tidy(blocks).then(function(r){
+        tidyResult = JSON.parse(JSON.stringify(r));
+        $("tidyPrev").innerHTML = tidyResult.blocks.map(function(b){ return '<div class="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + tidyInline(b.text) + "</div>"; }).join("");
+        $("tidyChanges").innerHTML = (tidyResult.changes || []).map(function(c){ return "<li>" + tidyEsc(c) + "</li>"; }).join("");
+        $("tidyOv").hidden = false;
+      }).catch(function(e){ toast((e && e.message) || "Ordenen mislukt"); }).then(function(){ busy(btn, false); });
+    });
+    $("tidyCancel").addEventListener("click", function(){ $("tidyOv").hidden = true; tidyResult = null; });
+    $("tidyApply").addEventListener("click", function(){
+      if(!tidyResult || !cvDoc) return;
+      var page = curPage(); page.prev = CV.innerHTML; page.prevAt = new Date().toISOString();
+      var html = tidyResult.blocks.map(function(b){ return '<div class="b" data-t="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + (tidyInline(b.text) || "<br>") + "</div>"; }).join("");
+      cvLoad(html); persistCv(); $("tidyOv").hidden = true; tidyResult = null; tidyUndoState();
+      toast("Pagina geordend. Met ↶ zet je de originele versie terug.");
+    });
+    $("tidyUndo").addEventListener("click", function(){
+      var page = curPage(); if(!page.prev) return;
+      if(!confirm("De originele versie (van vóór het ordenen) terugzetten?")) return;
+      var prev = page.prev; delete page.prev; delete page.prevAt; cvLoad(prev); persistCv(); tidyUndoState(); toast("Originele versie teruggezet");
+    });
+  }
 
   /* ---------- whiteboards per leerling ---------- */
   var bdOwner, bdT = null;
@@ -2102,7 +2166,7 @@ if(isT){
     $("addStudent").hidden = true; $("delStudent").hidden = true; $("passOv").remove();
     $("exportBtn").title = "Back-up van deze les als bestand";
     connectCloudSB();
-    fetch("api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){ CLOUD.ai = !!(p && p.ai); });
+    CLOUD.ai = true; /* SB mode: AI calls authenticate with the TeachyRooms login; the server reports a missing key itself */
   }
   function connectCloud(pass){
     CLOUD.pass = pass;
@@ -2132,6 +2196,70 @@ if(isT){
     else ask("Log in om je notities online te bewaren.");
   });
 }
+
+/* =================================================================== VERTALEN BIJ HOVER (v28)
+   Personal only: reads the canvas text under the pointer, shows a tooltip, never edits the
+   canvas DOM and never sends anything to the other participant. Typed canvas text only. */
+(function(){
+  if(!SB) return;
+  var btn = $("trBtn"), tip = $("trTip"), on = false, timer = null, lastKey = "", seq = 0;
+  btn.hidden = false;
+  try{ on = localStorage.getItem("klas-translate") === "on"; }catch(e){}
+  function setOn(v){ on = v; btn.setAttribute("aria-pressed", v ? "true" : "false"); try{ localStorage.setItem("klas-translate", v ? "on" : "off"); }catch(e){} if(!v) hide(); }
+  setOn(on);
+  btn.addEventListener("click", function(){ setOn(!on); toast(on ? "Vertalen aan: beweeg over een woord (of tik erop)" : "Vertalen uit"); });
+  function hide(){ tip.hidden = true; lastKey = ""; }
+  var WORD = /[\p{L}\p{M}'’\-]/u;
+  function wordAt(x, y){
+    var range = null, node, offset;
+    if(document.caretPositionFromPoint){ var p = document.caretPositionFromPoint(x, y); if(p){ node = p.offsetNode; offset = p.offset; } }
+    else if(document.caretRangeFromPoint){ range = document.caretRangeFromPoint(x, y); if(range){ node = range.startContainer; offset = range.startOffset; } }
+    if(!node || node.nodeType !== 3 || !CV.contains(node)) return null;
+    var t = node.nodeValue, s = offset, e = offset;
+    while(s > 0 && WORD.test(t[s - 1])) s--;
+    while(e < t.length && WORD.test(t[e])) e++;
+    var w = t.slice(s, e).replace(/^['’\-]+|['’\-]+$/g, "");
+    if(!w || w.length > 60) return null;
+    /* check the pointer is really over the word (not just nearest caret) */
+    var r = document.createRange(); r.setStart(node, s); r.setEnd(node, e); var rect = r.getBoundingClientRect();
+    if(x < rect.left - 2 || x > rect.right + 2 || y < rect.top - 2 || y > rect.bottom + 2) return null;
+    var block = node.parentElement && node.parentElement.closest(".b"); var ctx = (block ? block.textContent : t).trim().slice(0, 600);
+    return {term:w, context:ctx, rect:rect};
+  }
+  function show(rect, html){
+    tip.innerHTML = html; tip.hidden = false;
+    var w = tip.offsetWidth, h = tip.offsetHeight, left = Math.min(window.innerWidth - w - 8, Math.max(8, rect.left + rect.width / 2 - w / 2));
+    var top = rect.top - h - 8; if(top < 8) top = rect.bottom + 8;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+  function lookup(hit){
+    var key = hit.term.toLowerCase() + "|" + hit.context; if(key === lastKey && !tip.hidden) return; lastKey = key;
+    var my = ++seq; show(hit.rect, "<b>" + esc(hit.term) + "</b><small>vertalen…</small>");
+    bridge().translate(hit.term, hit.context).then(function(r){
+      if(my !== seq || !on) return;
+      var html = "<b>" + esc(r.translation) + "</b>" + (r.note ? "<small>" + esc(r.note) + "</small>" : "");
+      if(r.expression && r.expression.toLowerCase() !== hit.term.toLowerCase()) html += '<div class="ex"><small>uitdrukking</small><b>' + esc(r.expression) + "</b>" + esc(r.expression_translation || "") + "</div>";
+      show(hit.rect, html);
+    }).catch(function(e){ if(my === seq) show(hit.rect, "<small>" + esc((e && e.message) || "Vertalen mislukt") + "</small>"); });
+  }
+  CV.addEventListener("mousemove", function(ev){
+    if(!on || ev.buttons) return;
+    clearTimeout(timer); var x = ev.clientX, y = ev.clientY;
+    timer = setTimeout(function(){ var hit = wordAt(x, y); if(hit) lookup(hit); else hide(); }, 380);
+  });
+  CV.addEventListener("mouseleave", function(){ clearTimeout(timer); hide(); });
+  /* selection of several words (expressions) or a tap on touch screens */
+  CV.addEventListener("mouseup", function(){
+    if(!on) return; var sel = window.getSelection(); var txt = sel ? String(sel).trim() : "";
+    if(txt && txt.length <= 120 && sel.rangeCount && CV.contains(sel.anchorNode)){ var rect = sel.getRangeAt(0).getBoundingClientRect(); var block = sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest(".b"); clearTimeout(timer); lookup({term:txt, context:(block ? block.textContent : txt).slice(0, 600), rect:rect}); }
+  });
+  CV.addEventListener("touchend", function(ev){
+    if(!on || !ev.changedTouches || !ev.changedTouches[0]) return; var t = ev.changedTouches[0];
+    setTimeout(function(){ var hit = wordAt(t.clientX, t.clientY); if(hit) lookup(hit); }, 30);
+  }, {passive:true});
+  document.addEventListener("scroll", hide, true);
+})();
 
 /* =================================================================== INKLAPBARE BALKEN (v28) */
 (function(){
