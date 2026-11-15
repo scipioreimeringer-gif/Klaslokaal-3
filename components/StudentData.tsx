@@ -6,7 +6,8 @@ import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUr
 import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
-import {GoalsPanel,SelfPractice,VocabGames,VocabManager} from './Learning';
+import {SelfPractice,VocabGames,VocabManager} from './Learning';
+import {LearningPath} from './LearningPath';
 import {subjectOf,authedPost} from '../lib/learning';
 import {Sparkles,Target,Gamepad2} from 'lucide-react';
 import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
@@ -123,7 +124,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
  const [b,setB]=useState<Bundle|null>(null);const [tab,setTab]=useState<Tab>('overzicht');
  const load=useCallback(async()=>{setB(await loadStudentBundle(supabase()!,studentId))},[studentId]);
  useEffect(()=>{setB(null);setTab((initialTab as Tab)||'overzicht');void load()},[load,initialTab]);
- const tabs:[Tab,string,typeof History][]=[['overzicht','Overzicht',LayoutGrid],['lessen','Lessen',History],['analyses',viewer==='teacher'?'Lesanalyses':'Samenvattingen',Sparkles],['woorden','Woordenschat',Languages],['doelen','Leerdoelen',Target],['huiswerk','Huiswerk',ClipboardList],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2] as [Tab,string,typeof History]]:[]),['bord','Bord & canvas',PenLine],['opnames','Opnames',Mic],...(viewer==='teacher'?[['prive','Privé',Lock] as [Tab,string,typeof History]]:[])];
+ const tabs:[Tab,string,typeof History][]=[['overzicht','Overzicht',LayoutGrid],['lessen','Lessen',History],['analyses',viewer==='teacher'?'Lesanalyses':'Samenvattingen',Sparkles],['woorden','Woordenschat',Languages],['doelen','Leertraject',Target],['huiswerk','Huiswerk',ClipboardList],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2] as [Tab,string,typeof History]]:[]),['bord','Bord & canvas',PenLine],['opnames','Opnames',Mic],...(viewer==='teacher'?[['prive','Privé',Lock] as [Tab,string,typeof History]]:[])];
  const ws:WsStudent=student||{id:studentId,subject:'',level:null,lesson_language:null};
  return <div className="workspace">
   <div className="tabs" role="tablist">{tabs.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/>{t(l)}</button>)}</div>
@@ -133,7 +134,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonHistory lessons={b.lessons}/></section>}
   {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId}/>}</section>}
   {tab==='woorden'&&<section className="card"><h3>{t("Woordenschat")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
-  {tab==='doelen'&&<section className="card"><h3><Target size={17}/> {t("Leerdoelen")}</h3><GoalsPanel student={ws} viewer={viewer}/></section>}
+  {tab==='doelen'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}

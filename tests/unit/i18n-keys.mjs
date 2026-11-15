@@ -25,7 +25,11 @@ export const DYNAMIC = [
   // server messages shown through t(error) (app/api/ai/*, lib/server/*)
   'Log eerst in', 'Ongeldige sessie, log opnieuw in', 'Supabase-configuratie ontbreekt', 'Onbekende fout',
   'De leerling heeft nog geen toestemming gegeven voor AI-analyse van deze opname.', 'Geef eerst zelf toestemming voor AI-analyse van deze opname.',
-  'Alleen beheerders mogen testtranscripten importeren.', 'Kies een testleerling.', 'Het transcript is te lang (maximaal 60.000 tekens).', 'Kies een leerling aan wie jij lesgeeft.', 'Voer eerst supabase/v33.sql uit.',
+  'Alleen beheerders mogen testtranscripten importeren.', 'Kies een testleerling.', 'Het transcript is te lang (maximaal 400.000 tekens).', 'Kies een leerling aan wie jij lesgeeft.', 'Voer eerst supabase/v33.sql uit.',
+  // v34: analysis 2.0 (route messages, stage labels and relevance labels in components/AnalysisV2.tsx)
+  'Ongeldige analyse', 'Analyse niet gevonden', 'Voer eerst supabase/v34.sql uit.', 'Alleen de docent start een analyse',
+  'Bronnen verzamelen en transcriberen', 'Transcript in delen analyseren', 'Fouten samenvoegen en tellen', 'Verslag en uitleg schrijven', 'Huiswerkconcept maken', 'Klaar',
+  'Lesdoel van vandaag', 'Al behandeld', 'Vandaag uitgelegd', 'Relevant', 'Voor later', 'Leertraject',
 ];
 
 function sourceFiles() {

@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Plus,Trash2,Search,Check,X,RotateCcw,Shuffle,Eye,Sparkles,Layers,ListChecks,Keyboard,Puzzle,Trophy,Target} from 'lucide-react';
 import {supabase} from '../lib/supabase';
-import {addVocab,authedPost,loadVocab,GOAL_STATUS_LABEL,LEVELS,SKILLS,SUBJECTS,VOCAB_STATUS_LABEL,subjectOf,type Goal,type GoalProgress,type GoalStatus,type VocabItem} from '../lib/learning';
+import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
 import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
 import {PenLine,Repeat,Wrench} from 'lucide-react';
@@ -34,35 +34,6 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
    <td><span className="tag">{v.source==='lesson'?tt("les"):v.source==='ai'?tt("AI · goedgekeurd"):v.source==='student'?tt("zelf"):tt("docent")}</span></td>
    <td>{canEdit(v)&&<button className="iconbtn danger" title={tt("Verwijderen")} onClick={()=>void del(v)}><Trash2 size={14}/></button>}</td></tr>)}</tbody></table>}
- </div>
-}
-
-/* ========================= Learning goals ========================= */
-export function GoalsPanel({student,viewer}:{student:{id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};viewer:'teacher'|'student'}){
- const [subject,setSubject]=useState(subjectOf(student));const [goals,setGoals]=useState<Goal[]>([]);const [prog,setProg]=useState<Record<string,GoalProgress>>({});const [err,setErr]=useState('');const [level,setLevel]=useState<string>(student.level&&LEVELS.includes(student.level as typeof LEVELS[number])?student.level:'all');
- const [nt,setNt]=useState({title:'',level:'A1',skill:'grammatica'});
- const load=useCallback(async()=>{const db=supabase()!;const [g,p]=await Promise.all([db.from('curriculum_goals').select('*').eq('subject',subject).order('sort'),db.from('student_goal_progress').select('*').eq('student_id',student.id)]);
-  if(g.error){setErr(/curriculum_goals/.test(g.error.message)||g.error.code==='PGRST205'?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):g.error.message);return}
-  setGoals((g.data||[]) as Goal[]);setProg(Object.fromEntries(((p.data||[]) as GoalProgress[]).map(x=>[x.goal_id,x])))},[subject,student.id]);
- useEffect(()=>{void load()},[load]);
- async function setStatus(goal:Goal,status:GoalStatus){const row={student_id:student.id,goal_id:goal.id,status,basis:'teacher' as const,updated_at:new Date().toISOString()};setProg(p=>({...p,[goal.id]:{...(p[goal.id]||{note:'',lesson_date:null}),...row}}));const r=await supabase()!.from('student_goal_progress').upsert(row,{onConflict:'student_id,goal_id'});if(r.error)setErr(r.error.message)}
- async function addGoal(){if(!nt.title.trim())return;const {data:{user}}=await supabase()!.auth.getUser();const r=await supabase()!.from('curriculum_goals').insert({subject,level:nt.level,skill:nt.skill,title:nt.title.trim(),owner_teacher:user!.id,sort:999});if(r.error)setErr(r.error.message);else{setNt({...nt,title:''});await load()}}
- async function saveSubject(v:string){setSubject(v);if(viewer==='teacher')await supabase()!.from('students').update({curriculum_subject:v}).eq('id',student.id)}
- const visible=goals.filter(g=>level==='all'||g.level===level);
- const byLevel=LEVELS.map(l=>({l,items:visible.filter(g=>g.level===l)})).filter(x=>x.items.length);
- const total=goals.length,done=goals.filter(g=>['covered','mastered'].includes(prog[g.id]?.status)).length;
- return <div className="goals">
-  {err&&<div className="notice">{err}</div>}
-  <div className="row between"><div className="row"><label className="row"><span className="label">{tt("Leerlijn")}</span><select className="field" value={subject} onChange={e=>void saveSubject(e.target.value)}>{Object.entries(SUBJECTS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
-   <label className="row"><span className="label">{tt("Niveau")}</span><select className="field" value={level} onChange={e=>setLevel(e.target.value)}><option value="all">{tt("Alle")}</option>{LEVELS.map(l=><option key={l}>{l}</option>)}</select></label></div>
-   <span className="muted">{tt("{0} van {1} doelen behandeld of beheerst", done, total)}</span></div>
-  <p className="muted small-print">{tt("Standaardleerlijn op basis van het ERK/CEFR (A0 is een optionele voorbereidende fase). Onderwerpen zijn richtpunten, niet exclusief voor één niveau. Status wordt alleen door de docent vastgesteld; AI kan voorstellen doen, maar bepaalt nooit dat iets beheerst is.")}</p>
-  {byLevel.map(({l,items})=><section key={l} className="goal-level"><h4>{l}{l==='A0'&&<small className="muted"> {tt("(voorbereidend)")}</small>}</h4>
-   {SKILLS.map(sk=>{const its=items.filter(g=>g.skill===sk);if(!its.length)return null;return <div key={sk} className="goal-skill"><span className="tag">{sk}</span><ul>{its.map(g=>{const p=prog[g.id];const st=p?.status||'not_started';return <li key={g.id} className={'goal st-'+st}>
-    <span className="grow"><b>{g.title}</b>{g.owner_teacher&&<span className="tag own">{tt("eigen doel")}</span>}{g.description&&<small className="muted block">{g.description}</small>}{p?.basis==='ai_confirmed'&&<small className="basis">{tt("AI-voorstel, bevestigd door docent")}</small>}</span>
-    {viewer==='teacher'?<select className="cell" value={st} onChange={e=>void setStatus(g,e.target.value as GoalStatus)}>{(Object.keys(GOAL_STATUS_LABEL) as GoalStatus[]).map(s=><option key={s} value={s}>{GOAL_STATUS_LABEL[s]}</option>)}</select>:<span className={'gstat gs-'+st}>{GOAL_STATUS_LABEL[st]}</span>}</li>})}</ul></div>})}
-  </section>)}
-  {viewer==='teacher'&&<form className="row goal-add" onSubmit={e=>{e.preventDefault();void addGoal()}}><Target size={16}/><input className="field grow" placeholder={tt("Eigen leerdoel toevoegen, bijv. 'Telefoongesprek met de huisarts'")} value={nt.title} onChange={e=>setNt({...nt,title:e.target.value})}/><select className="field" value={nt.level} onChange={e=>setNt({...nt,level:e.target.value})}>{LEVELS.map(l=><option key={l}>{l}</option>)}</select><select className="field" value={nt.skill} onChange={e=>setNt({...nt,skill:e.target.value})}>{SKILLS.map(s=><option key={s}>{s}</option>)}</select><button className="button small" type="submit"><Plus size={15}/> {tt("Toevoegen")}</button></form>}
  </div>
 }
 
