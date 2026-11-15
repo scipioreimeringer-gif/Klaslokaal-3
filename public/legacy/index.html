@@ -436,6 +436,90 @@ body.focus .mswitch{display:none}
 .tidyprev{max-height:50vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:#0f2a2e}
 .tidyprev .h{font-weight:800;margin:10px 0 4px}.tidyprev .li:before{content:"• ";color:var(--teal)}
 .tidychanges{margin:0;padding-left:18px;font-size:.82rem;color:var(--muted)}
+/* ---------- v28 indeling: maximale werkruimte ---------- */
+body.v28 .top{height:46px;min-height:46px!important;padding:0 8px!important;gap:6px!important;background:var(--dock);color:var(--dock-ink);border-bottom:0;box-shadow:none;justify-content:space-between}
+body.v28 .top .brand{display:none}
+.tb-left,.tb-right{display:flex;align-items:center;gap:6px;min-width:0}
+.tb-left{flex:1 1 auto}.tb-right{flex:none}
+.tb-title{font-weight:750;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tbbtn{width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--dock-ink);display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.tbbtn:hover,.popmenu[open]>summary.tbbtn{background:rgba(255,255,255,.12)}
+.tbbtn svg{width:18px;height:18px}
+body.v28 .top .conn{background:rgba(255,255,255,.1);color:var(--dock-ink);border:0}
+body.v28 .top .timer{color:var(--dock-ink);font-variant-numeric:tabular-nums;font-size:.82rem;opacity:.9}
+body.v28 .top #joinBtn{min-height:30px;padding:4px 12px}
+body.v28 .top .menu-pop{color:var(--ink);top:40px}
+body.v28 .mswitch{display:none!important}
+body.v28 #pWb>.phead,body.v28 #pSl>.phead{display:none!important}
+body.v28 .ws{padding:6px 8px 0!important}
+body.v28 .pbody{padding:6px}
+body.v28 .cvbody{padding:6px 8px}
+body.v28 .cvpage{padding:26px clamp(16px,3vw,48px) 80px!important}
+#pWb:has(.ftools:not(.collapsed):not([hidden])) .pbody{padding-top:50px}
+.ftools .cvbar{overflow:visible!important}
+.ftools .trbtn{width:30px;min-width:30px;padding:0!important;justify-content:center}
+.ftools #cvPageSel{max-width:120px}
+/* no thick focus frame on the shared canvas; a subtle, still visible indicator instead */
+body.v28 .cv:focus,body.v28 .cv:focus-visible{outline:none!important}
+body.v28 .cvpage:focus-within{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal-soft),0 4px 18px rgba(18,44,52,.05)}
+/* floating tool bar (one row, collapsible) */
+#pWb{position:relative}
+.ftools{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:2px;max-width:calc(100% - 16px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 20px rgba(14,40,48,.14);padding:3px}
+.ft-body{display:flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;overflow-y:visible;scrollbar-width:none}
+.ft-body::-webkit-scrollbar{display:none}
+.ftools .cvbar{padding:0;border:0;background:none}
+.ftools .ib{width:30px;height:30px;min-width:30px;border-radius:8px}
+.ftools .ib[aria-pressed="true"]{background:var(--teal-soft);border-color:var(--teal)}
+.ftools .ib .sw{width:16px;height:16px;border-radius:50%;display:block}
+.ftools .ib svg{width:17px;height:17px}
+.ftgrp{display:flex;align-items:center;gap:2px}
+.ftgrp[hidden]{display:none}
+.ftools .sizes{display:flex;gap:1px;border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 3px;margin:0 2px}
+.ftools .size .dot{display:block;border-radius:50%;background:currentColor}
+.ftools .pnav{display:flex;align-items:center;gap:1px;border-left:1px solid var(--line);padding-left:3px}
+.ftools .pinfo{font-size:.74rem;white-space:nowrap;padding:0 3px}
+.ft-toggle{width:26px;height:30px;border:0;background:transparent;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:var(--muted);flex:none}
+.ft-toggle:hover{background:var(--teal-soft)}.ft-toggle svg{width:16px;height:16px}
+.ftools.collapsed{left:8px;transform:none}
+.ftools.collapsed .ft-body{display:none}
+/* slides: slim bar on hover (always visible on touch screens) */
+#pSl{position:relative}
+.slbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:4px;background:rgba(12,40,48,.86);color:#fff;border-radius:12px;padding:3px 6px;opacity:0;transition:opacity .18s;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+#pSl:hover .slbar,.slbar:focus-within,.slbar:has(details[open]){opacity:1}
+@media(hover:none){.slbar{opacity:1}}
+.slbar .ib,.slbar .zoom-level{color:#fff;width:30px;height:30px;min-width:30px}
+.slbar .zoom-level{width:auto;background:transparent;border:0;font-size:.74rem;cursor:pointer;padding:0 4px}
+.slbar .zoom-controls{border-left:1px solid rgba(255,255,255,.2)}
+.slbar .pinfo{color:#fff;font-size:.78rem;padding:0 4px}
+.slnav{display:flex;align-items:center}
+.slbar .popmenu>summary{color:#fff;width:30px;height:30px;border-radius:8px}
+.slbar .menu-pop .mi{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;border-radius:8px;padding:7px 9px;font-size:.84rem;color:var(--ink);cursor:pointer;min-height:0;height:auto}
+.slbar .menu-pop .mi svg{width:16px;height:16px}
+.popmenu.up>.menu-pop{top:auto;bottom:40px}
+/* floating video */
+body.v28 .vwin{resize:both;overflow:hidden;min-width:150px;min-height:40px}
+.vwin.vmin{height:auto!important;min-height:0;resize:none}
+.vwin.vmin .vbody{display:none}
+.vwin.idle:not(.vmin){height:auto!important;min-height:0;resize:none}
+.vwin.idle .vbody{display:none}
+/* bottom bar: three groups */
+body.v28 .dock{justify-content:space-between}
+body.v28 .dock .menu-pop{top:auto;bottom:40px;right:0}
+body.v28 .dock .db[aria-pressed="true"]{background:rgba(255,255,255,.18)}
+body.v28 .dock .db svg{width:18px;height:18px}
+body.v28 .dock .popmenu>summary.db{display:inline-flex;align-items:center;gap:5px}
+body.v28 .dock .db.ai{color:var(--dock-ink)}
+@media(max-width:900px){body.v28 .dock .lbl{display:none}}
+@media(max-width:700px){
+  body.v28 .top #conn{display:none}
+  body.v28 .tb-title{font-size:.84rem}
+  body.v28 .dock{margin:2px 4px 4px!important;padding:3px 4px!important}
+  body.v28 .dock .grp{gap:1px}
+  body.v28 .dock .db{min-width:30px!important;padding:0 4px!important}
+  .ftools{top:4px}
+  body.v28 .cvpage{padding:18px 14px 60px!important}
+  #pWb:has(.ftools:not(.collapsed)) .pbody{padding-top:44px}
+}
 </style>
 </head>
 <body>
@@ -510,7 +594,7 @@ body.focus .mswitch{display:none}
     <div class="pbody" id="wbBody">
       <div class="surf" id="wbSurf" data-aspect="1.3333">
         <canvas class="bc"></canvas><canvas class="dc"></canvas>
-        <div class="msg" id="wbMsg"><div><b>Whiteboard</b>Teken met de pen, of kies <b style="display:inline;font-size:inherit">T</b> onderin om te typen.</div></div>
+        <div class="msg" id="wbMsg"><div><b>Whiteboard</b>Teken met de pen, of kies <b style="display:inline;font-size:inherit">T</b> in de werkbalk om te typen.</div></div>
       </div>
     </div>
     <div class="pbody cvbody" id="cvBody" hidden>
@@ -588,6 +672,7 @@ body.focus .mswitch{display:none}
     <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg><span id="vTitle">Video</span></span>
     <button class="ib" id="vSize" type="button" title="Groter of kleiner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
     <button class="ib" id="selfBtn" type="button" aria-pressed="false" title="Mezelf ook tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>
+    <button class="ib" id="vMin" type="button" title="Video minimaliseren / herstellen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg></button>
     <button class="ib" id="vClose" type="button" title="Video verbergen (de les loopt door)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div class="vbody" id="vbody">
@@ -1125,15 +1210,16 @@ function placeVideo(p){
   if(document.body.classList.contains("klas-video-on")) return;
   var W = window.innerWidth, H = window.innerHeight;
   var small = W <= 700;
-  var w = p && p.w ? p.w : (small ? 150 : 340), h = p && p.h ? p.h : (small ? 112 : 255);
+  if(p && (p.h < 80 || p.w < 120)) p = {x:p.x, y:p.y}; /* ignore a stored collapsed size */
+  var w = p && p.w ? p.w : (small ? 136 : 264), h = p && p.h ? p.h : (small ? 102 : 198);
   var maxW = small ? Math.round(W * 0.45) : W - 20;
   if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
   vw.style.width = w + "px"; vw.style.height = h + "px";
-  var x = p && p.x !== undefined ? p.x : W - w - (small ? 10 : 24), y = p && p.y !== undefined ? p.y : (small ? 96 : H - h - 100);
+  var x = p && p.x !== undefined ? p.x : W - w - (small ? 8 : 12), y = p && p.y !== undefined && p.y >= 46 ? p.y : 104; /* below the floating tool bar */
   vw.style.left = Math.max(0, Math.min(W - w, x)) + "px"; vw.style.top = Math.max(0, Math.min(H - h, y)) + "px";
 }
 placeVideo(store("klas-video"));
-function rememberVideo(){ var r = vw.getBoundingClientRect(); store("klas-video", {x:r.left, y:r.top, w:r.width, h:r.height}); }
+function rememberVideo(){ var r = vw.getBoundingClientRect(), prev = store("klas-video") || {}; var small = vw.classList.contains("vmin") || vw.classList.contains("idle"); /* collapsed: keep the real size */ store("klas-video", {x:r.left, y:r.top, w: small ? (prev.w || 264) : r.width, h: small ? (prev.h || 198) : r.height}); }
 (function(){
   var h = $("vhead"), sx, sy, ox, oy, on = false;
   h.addEventListener("pointerdown", function(e){
@@ -1160,7 +1246,7 @@ $("vSize").addEventListener("click", function(){
   vw.style.left = Math.max(0, Math.min(W - w, r.left)) + "px"; vw.style.top = Math.max(0, Math.min(H - hh, r.top)) + "px";
   rememberVideo();
 });
-function showVideo(v){ vw.hidden = !v; document.body.classList.toggle("klas-video-on",v); $("vidBtn").setAttribute("aria-pressed", v ? "true" : "false"); if(typeof layout === "function") layout(); }
+function showVideo(v){ vw.hidden = !v; store("klas-video-hidden", !v); $("vidBtn").setAttribute("aria-pressed", v ? "true" : "false"); if(typeof layout === "function") layout(); }
 $("vClose").addEventListener("click", function(){ showVideo(false); if(peer) toast("Video verborgen, de les loopt door"); });
 $("vidBtn").addEventListener("click", function(){ showVideo(vw.hidden); });
 
@@ -1215,7 +1301,7 @@ function Surface(surfId, bodyId){
   var S = {el:el, bc:bc, dc:dc, b:bc.getContext("2d"), d:dc.getContext("2d"), aspect:+el.getAttribute("data-aspect"), key:null, img:null};
   S.fit = function(){
     if(body.offsetParent === null) return;
-    var r = body.getBoundingClientRect(), pad = 20, W = r.width - pad, H = r.height - pad;
+    var r = body.getBoundingClientRect(), pad = 6, W = r.width - pad, H = r.height - pad;
     var w = Math.min(W, H * S.aspect), h = w / S.aspect;
     el.style.width = Math.max(50, w) + "px"; el.style.height = Math.max(30, h) + "px";
     var dpr = window.devicePixelRatio || 1;
@@ -1246,7 +1332,7 @@ function drawObj(S, o){
   }
   var p = o.p; if(!p || p.length < 2) return;
   d.save(); d.lineCap = "round"; d.lineJoin = "round";
-  if(o.c === "hl"){ d.strokeStyle = "rgba(255,225,77,.45)"; d.lineWidth = W * 0.02; } else { d.strokeStyle = o.c; d.lineWidth = W * 0.0038; }
+  var sz = o.sz || 1; if(o.c === "hl"){ d.strokeStyle = "rgba(255,225,77,.45)"; d.lineWidth = W * 0.02 * sz; } else { d.strokeStyle = o.c; d.lineWidth = W * 0.0038 * sz; }
   d.beginPath(); d.moveTo(p[0] / 1e4 * W, p[1] / 1e4 * H);
   if(p.length === 2) d.lineTo(p[0] / 1e4 * W + 0.1, p[1] / 1e4 * H);
   for(var i = 2; i < p.length; i += 2) d.lineTo(p[i] / 1e4 * W, p[i + 1] / 1e4 * H);
@@ -1290,6 +1376,7 @@ var slides = [], pdfDoc = null;
     body.classList.toggle("zoom-pan", scale > 1);
   }
   function setZoom(v){ scale = clamp(Math.round(v * 100) / 100, 1, 4); if(scale === 1){ panX = 0; panY = 0; } update(); }
+  window.__slZoom = setZoom; window.__slScale = function(){ return scale; };
   $("zoomIn").addEventListener("click", function(){ setZoom(scale + .25); });
   $("zoomOut").addEventListener("click", function(){ setZoom(scale - .25); });
   label.addEventListener("click", function(){ setZoom(1); });
@@ -1461,7 +1548,7 @@ function stopShare(){
 $("shareBtn").addEventListener("click", function(){ if(screenStream) stopShare(); else startShare(); });
 
 /* =================================================================== GEREEDSCHAP */
-var tool = "pen", color = "#0f2a2e", canDraw = true, mine = [], drawing = null, sentIdx = 0, lastSent = 0;
+var tool = "pen", color = "#0f2a2e", penSize = +store("klas-pensize") || 1, canDraw = true, mine = [], drawing = null, sentIdx = 0, lastSent = 0;
 function setTool(btn){
   tool = btn.getAttribute("data-tool"); if(btn.getAttribute("data-color")) color = btn.getAttribute("data-color");
   document.querySelectorAll("[data-tool]").forEach(function(b){ b.setAttribute("aria-pressed", b === btn ? "true" : "false"); });
@@ -1487,7 +1574,7 @@ function bindDraw(S){
     dc.setPointerCapture(e.pointerId);
     var p = pt(e);
     if(tool === "eraser"){ drawing = {erase:true, S:S}; eraseAt(S, p); return; }
-    drawing = {id:uid(), c: tool === "hl" ? "hl" : color, p:p.slice(), k:S.key, S:S};
+    drawing = {id:uid(), c: tool === "hl" ? "hl" : color, p:p.slice(), k:S.key, S:S}; if(penSize !== 1) drawing.sz = penSize;
     objs[S.key].push(drawing); mine.push({k:S.key, id:drawing.id});
     sentIdx = 0; lastSent = 0; drawObj(S, drawing); if(S === WB) wbInfo();
   });
@@ -1507,14 +1594,14 @@ function clean(o){ var c = {}; for(var k in o) if(k !== "S" && k !== "k") c[k] =
 function flush(){
   var s = drawing; if(!s || s.erase) return;
   var from = Math.max(0, sentIdx - 2), part = s.p.slice(from);
-  while(part.length > 600){ send({t:"obj", k:s.k, id:s.id, c:s.c, p:part.slice(0, 600), a:from > 0}); from += 598; part = s.p.slice(from); }
-  send({t:"obj", k:s.k, id:s.id, c:s.c, p:part, a:from > 0});
+  while(part.length > 600){ send({t:"obj", k:s.k, id:s.id, c:s.c, sz:s.sz, p:part.slice(0, 600), a:from > 0}); from += 598; part = s.p.slice(from); }
+  send({t:"obj", k:s.k, id:s.id, c:s.c, sz:s.sz, p:part, a:from > 0});
   sentIdx = s.p.length; lastSent = Date.now();
 }
 function sendObjWhole(k, o){
   if(o.ty === "tx"){ send({t:"obj", k:k, id:o.id, ty:"tx", c:o.c, x:o.x, y:o.y, txt:String(o.txt).slice(0, 1500), w:o.w}); return; }
   for(var from = 0; from < o.p.length; from += 598)
-    send({t:"obj", k:k, id:o.id, c:o.c, p:o.p.slice(from ? from - 2 : 0, from + 600), a:from > 0});
+    send({t:"obj", k:k, id:o.id, c:o.c, sz:o.sz, p:o.p.slice(from ? from - 2 : 0, from + 600), a:from > 0});
 }
 function wbTouched(k){ if(isT && window.wbDirty && String(k || "").indexOf("wb:") === 0) window.wbDirty(); }
 function remoteObj(m){
@@ -1523,7 +1610,7 @@ function remoteObj(m){
   for(var i = 0; i < list.length; i++) if(list[i].id === m.id){ o = list[i]; break; }
   if(m.ty === "tx"){ if(!o) list.push({id:m.id, ty:"tx", c:m.c, x:m.x, y:m.y, txt:m.txt, w:m.w}); }
   else {
-    if(!o){ o = {id:m.id, c:m.c, p:[]}; list.push(o); }
+    if(!o){ o = {id:m.id, c:m.c, p:[]}; if(m.sz && m.sz !== 1) o.sz = Math.max(0.5, Math.min(4, +m.sz || 1)); list.push(o); }
     else if(!m.a) return;
     var pts = m.a ? m.p.slice(2) : m.p; for(var j = 0; j < pts.length; j++) o.p.push(pts[j]);
   }
@@ -2346,13 +2433,6 @@ if(isT){
   function item(label, fn, cls){ var b = document.createElement("button"); b.type = "button"; b.textContent = label; if(cls) b.className = cls; b.addEventListener("click", function(){ $("moreMenu").open = false; fn(); }); pop.appendChild(b); return b; }
   function head(t){ var h = document.createElement("b"); h.className = "menu-h"; h.textContent = t; pop.appendChild(h); }
   var b = bridge();
-  if(SB && b && b.ui){
-    head("TeachyRooms");
-    item("← Terug naar profiel", function(){ b.ui.back(); });
-    if(isT && b.ui.privateNotes) item("🔒 Privénotities", function(){ b.ui.privateNotes(); });
-    item("✨ AI-assistent", function(){ b.ui.assistant(); });
-    item("Dashboard", function(){ b.ui.dashboard(); });
-  }
   head("Instellingen");
   /* move existing controls (with their listeners) into the menu: frees the top bar */
   var ui = $("uiLanguage").closest("label"); if(ui) pop.appendChild(ui);
@@ -2397,12 +2477,169 @@ if(isT){
   document.addEventListener("keydown", function(e){ if(e.key === "Escape" && document.body.classList.contains("focus") && window.__klasBars) window.__klasBars(false, false); });
 })();
 
+/* =================================================================== v28 INDELING: maximale werkruimte
+   One compact top bar, floating tool bar, slides bar on hover, floating video,
+   one regrouped bottom bar. Existing controls are MOVED (listeners intact), not rebuilt. */
+(function(){
+  var b = bridge(), body = document.body;
+  body.classList.add("v28");
+  var ICON = {
+    back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg>',
+    gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+    lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+    exit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+    canvas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 10h7M9 14h7M9 18h4"/></svg>',
+    board:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 13c2-4 4 0 6-3s3 1 4 0"/></svg>',
+    slides:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8 21h8M10 8l4 2.5-4 2.5z"/></svg>',
+    tools:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20l4-1 10-10-3-3L5 16z"/><path d="M14 6l3 3"/></svg>',
+    more:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+    chevl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg>',
+    trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
+    undo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
+    spark:'<span aria-hidden="true">✨</span>'
+  };
+  function el(tag, cls, html, title){ var e = document.createElement(tag); if(cls) e.className = cls; if(html) e.innerHTML = html; if(title){ e.title = title; e.setAttribute("aria-label", title); } if(tag === "button") e.type = "button"; return e; }
+  function popmenu(icon, title, cls){ var d = el("details", "popmenu " + (cls || "")); var s = el("summary", "dbx", icon, title); d.appendChild(s); var p = el("div", "menu-pop"); d.appendChild(p); return {d:d, pop:p}; }
+  function menuItem(pop, label, fn, details){ var x = el("button", "", label); x.addEventListener("click", function(){ if(details) details.open = false; fn(); }); pop.appendChild(x); return x; }
+
+  /* ---------- 1. ONE COMPACT TOP BAR ---------- */
+  var top = document.querySelector(".top");
+  var left = el("div", "tb-left");
+  var back = el("button", "tbbtn", ICON.back, "Terug naar profiel");
+  if(SB && b && b.ui) back.addEventListener("click", function(){ b.ui.back(); }); else back.hidden = true;
+  var title = el("span", "tb-title"); title.textContent = SB && b ? (isT ? (b.studentName || "Les") : "Mijn les") : (isT ? "Klas · docent" : "Klas");
+  left.appendChild(back); left.appendChild(title);
+  top.insertBefore(left, top.firstChild);
+  var right = el("div", "tb-right");
+  [$("recBadge"), $("conn"), $("timer"), $("joinBtn")].forEach(function(x){ if(x) right.appendChild(x); });
+  var gear = $("moreMenu"); gear.querySelector("summary").innerHTML = ICON.gear; gear.querySelector("summary").title = "Instellingen"; gear.querySelector("summary").className = "tbbtn";
+  right.appendChild(gear);
+  if(SB && isT && b && b.ui && b.ui.privateNotes){ var pn = el("button", "tbbtn", ICON.lock, "Privénotities (alleen jij)"); pn.addEventListener("click", function(){ b.ui.privateNotes(); }); right.appendChild(pn); }
+  if(SB && b && b.ui){ var ex = el("button", "tbbtn", ICON.exit, "Naar dashboard"); ex.addEventListener("click", function(){ if(peer && !confirm("De les verlaten en naar het dashboard gaan?")) return; b.ui.dashboard(); }); right.appendChild(ex); }
+  top.appendChild(right);
+  /* settings menu: student choice, hide top bar */
+  var pop = $("morePop");
+  $("topStudent").addEventListener("change", function(){ var o = $("topStudent").selectedOptions[0]; if(o && o.textContent) title.textContent = o.textContent; });
+  if(isT){ var lab = el("label", "language-pick"); var sp = el("span"); sp.textContent = "Leerling"; lab.appendChild(sp); lab.appendChild($("topStudent")); pop.insertBefore(lab, pop.children[1] || null); }
+  var th = $("topHide"); th.className = ""; th.innerHTML = "Bovenbalk verbergen"; th.addEventListener("click", function(){ gear.open = false; }); pop.appendChild(th);
+
+  /* ---------- 2. FLOATING TOOL BAR (canvas or whiteboard tools, one row, collapsible) ---------- */
+  var pWb = $("pWb"), ft = el("div", "ftools"); ft.id = "ftools"; pWb.appendChild(ft);
+  var ftBody = el("div", "ft-body"); ft.appendChild(ftBody);
+  ftBody.appendChild($("cvBar")); $("trBtn").textContent = "🌐"; $("trBtn").setAttribute("aria-label", "Vertalen aan/uit");                       /* canvas: text format, mark, colours, pages, ⋯, translate */
+  var cvUndo = el("button", "ib", ICON.undo, "Ongedaan maken (canvas)"); cvUndo.addEventListener("click", function(){ CV.focus(); document.execCommand("undo"); }); $("cvBar").insertBefore(cvUndo, $("cvBar").querySelector(".popmenu") || null);
+  var wbg = el("div", "ftgrp"); wbg.id = "wbTools"; ftBody.appendChild(wbg);   /* whiteboard: pens, marker, text, eraser, size, undo, clear, boards */
+  Array.prototype.slice.call(document.querySelectorAll("#tools [data-tool]")).forEach(function(t){ t.classList.remove("db"); t.classList.add("ib"); wbg.appendChild(t); });
+  var sizes = el("div", "sizes"); [1, 2, 3].forEach(function(s){ var sb = el("button", "ib size", '<span class="dot" style="width:' + (3 + s * 3) + 'px;height:' + (3 + s * 3) + 'px"></span>', "Penseeldikte " + s); sb.setAttribute("aria-pressed", penSize === s ? "true" : "false"); sb.addEventListener("click", function(){ penSize = s; store("klas-pensize", s); sizes.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-pressed", x === sb ? "true" : "false"); }); }); sizes.appendChild(sb); }); wbg.appendChild(sizes);
+  var wbUndo = el("button", "ib", ICON.undo, "Ongedaan maken"); wbUndo.addEventListener("click", undo); wbg.appendChild(wbUndo);
+  var wbClear = el("button", "ib", ICON.trash, "Bord wissen"); wbClear.addEventListener("click", function(){ if(!allowed() || !WB.key) return; if(confirm("Dit bord helemaal wissen?")) clearKey(WB.key); }); if(isT) wbg.appendChild(wbClear);
+  wbg.appendChild($("wbNav"));
+  var ftToggle = el("button", "ft-toggle", ICON.chevl, "Gereedschap inklappen");
+  ft.appendChild(ftToggle);
+  function ftState(collapsed){ ft.classList.toggle("collapsed", collapsed); ftToggle.title = collapsed ? "Gereedschap tonen" : "Gereedschap inklappen"; ftToggle.innerHTML = collapsed ? ICON.tools : ICON.chevl; store("klas-ftools", collapsed ? "collapsed" : "open"); }
+  ftToggle.addEventListener("click", function(){ ftState(!ft.classList.contains("collapsed")); });
+  ftState(store("klas-ftools") === "collapsed");
+  /* keep the floating bar in sync with Canvas/Whiteboard mode */
+  var _setMode = setMode;
+  setMode = function(m, remote){ _setMode(m, remote); wbg.hidden = mode !== "wb"; syncDock(); };
+  wbg.hidden = mode !== "wb";
+
+  /* ---------- 3. SLIDES: no top bar; slim bar on hover (always visible on touch) ---------- */
+  var pSl = $("pSl"), slbar = el("div", "slbar");
+  var nav = el("div", "slnav"); [$("slPrev"), $("slInfo"), $("slNext")].forEach(function(x){ nav.appendChild(x); }); slbar.appendChild(nav);
+  slbar.appendChild(document.querySelector("#pSl .zoom-controls"));
+  var slm = popmenu(ICON.more, "Meer opties voor slides", "up");
+  if(isT){
+    var pdfL = document.querySelector("#pSl .pdfbtn"); pdfL.className = "mi"; pdfL.querySelector(".pdftxt").textContent = "Pdf openen of vervangen"; slm.pop.appendChild(pdfL);
+    var shr = $("shareBtn"); shr.className = "mi"; $("shareLbl").style.display = "inline"; slm.pop.appendChild(shr);
+    menuItem(slm.pop, "Pdf sluiten", function(){ if(!slides.length && !SL.key) return; if(!confirm("De pdf sluiten? Je kunt hem later opnieuw openen.")) return; if(screenStream) stopShare(); slides = []; pdfDoc = null; SL.show(null); $("slInfo").textContent = "-"; $("slPrev").disabled = true; $("slNext").disabled = true; }, slm.d);
+  }
+  menuItem(slm.pop, "Slides-paneel sluiten", function(){ panels.pSl = false; if(mqPhone.matches){ mview = "wb"; store("klas-mview", mview); } layout(); }, slm.d);
+  slbar.appendChild(slm.d);
+  pSl.appendChild(slbar);
+  /* pinch-to-zoom on touch screens (trackpad pinch = ctrl+wheel, already handled) */
+  (function(){
+    var bodyEl = $("slBody"), pts = {}, start = null;
+    function dist(){ var k = Object.keys(pts); if(k.length < 2) return 0; var a = pts[k[0]], c = pts[k[1]]; return Math.hypot(a[0] - c[0], a[1] - c[1]); }
+    bodyEl.addEventListener("pointerdown", function(e){ if(e.pointerType !== "touch") return; pts[e.pointerId] = [e.clientX, e.clientY]; if(Object.keys(pts).length === 2 && window.__slScale){ start = {d:dist(), s:window.__slScale()}; } }, true);
+    bodyEl.addEventListener("pointermove", function(e){ if(!pts[e.pointerId]) return; pts[e.pointerId] = [e.clientX, e.clientY]; if(start && start.d){ e.preventDefault(); e.stopPropagation(); window.__slZoom(start.s * dist() / start.d); } }, true);
+    function up(e){ delete pts[e.pointerId]; if(Object.keys(pts).length < 2) start = null; }
+    bodyEl.addEventListener("pointerup", up, true); bodyEl.addEventListener("pointercancel", up, true);
+  })();
+
+  /* ---------- 4. FLOATING VIDEO: small, draggable, resizable, minimise, hide ---------- */
+  function setMin(v){ vw.classList.toggle("vmin", v); store("klas-video-min", v); $("vMin").title = v ? "Video herstellen" : "Video minimaliseren"; }
+  $("vMin").addEventListener("click", function(){ setMin(!vw.classList.contains("vmin")); });
+  setMin(!!store("klas-video-min"));
+  if(store("klas-video-hidden") === true) showVideo(false);
+  /* no active connection: only a small placeholder (header) instead of a big black box */
+  setInterval(function(){ vw.classList.toggle("idle", !local && !$("remotes").children.length); }, 1000);
+  vw.classList.toggle("idle", !local && !$("remotes").children.length);
+
+  /* ---------- 5. ONE COMPACT BOTTOM BAR: communication | material | lesson functions ---------- */
+  var dock = document.querySelector(".dock"), grps = dock.querySelectorAll(".grp");
+  var mid = grps[1], rgt = grps[2];
+  /* middle: Canvas, Whiteboard, Slides, Tools, Undo (+ teacher: student may draw/type) */
+  var bCv = el("button", "db", ICON.canvas + '<span class="lbl">Canvas</span>', "Canvas (samen typen)");
+  var bWb = el("button", "db", ICON.board + '<span class="lbl">Bord</span>', "Whiteboard (tekenen)");
+  var bSl = el("button", "db", ICON.slides + '<span class="lbl">Slides</span>', "Slides tonen of verbergen");
+  var bTl = el("button", "db", ICON.tools, "Gereedschap tonen of verbergen");
+  var allowLbl = $("allowDraw").closest("label"); var undoBtn = $("undo");
+  Array.prototype.slice.call(mid.childNodes).forEach(function(n){ mid.removeChild(n); });
+  [bCv, bWb, bSl, bTl, undoBtn].forEach(function(x){ mid.appendChild(x); });
+  if(allowLbl){ allowLbl.querySelector(".lbl").textContent = "Leerling mag tekenen"; mid.appendChild(allowLbl); }
+  document.querySelectorAll('.dock [data-panel]').forEach(function(x){ x.hidden = true; });
+  function openWork(m){
+    if(mqPhone.matches){ var already = mview !== "sl" && mode === m; mview = "wb"; store("klas-mview", mview); if(!already){ layout(); setMode(m); } return; }
+    if(panels.pWb && !$("pWb").hidden && mode === m){ panels.pWb = false; layout(); return; }
+    panels.pWb = true; layout(); setMode(m);
+  }
+  bCv.addEventListener("click", function(){ openWork("cv"); });
+  bWb.addEventListener("click", function(){ openWork("wb"); });
+  bSl.addEventListener("click", function(){ if(mqPhone.matches){ mview = mview === "sl" ? "wb" : "sl"; store("klas-mview", mview); } else panels.pSl = !panels.pSl; layout(); });
+  bTl.addEventListener("click", function(){ if(ft.hidden){ ft.hidden = false; ftState(false); } else ftState(!ft.classList.contains("collapsed")); });
+  function syncDock(){
+    if(!bCv) return;
+    var wbOpen = !$("pWb").hidden, slOpen = !$("pSl").hidden;
+    bCv.setAttribute("aria-pressed", wbOpen && mode === "cv" ? "true" : "false");
+    bWb.setAttribute("aria-pressed", wbOpen && mode === "wb" ? "true" : "false");
+    bSl.setAttribute("aria-pressed", slOpen ? "true" : "false");
+    bTl.setAttribute("aria-pressed", !ft.classList.contains("collapsed") ? "true" : "false");
+  }
+  var _layout = layout; layout = function(){ _layout(); syncDock(); };
+  /* right: Notes, Record, AI ✨, More ⋯ (then leave) */
+  var ai = $("aiMenu"); ai.classList.add("up"); ai.querySelector("summary").className = "db ai"; ai.querySelector("summary").innerHTML = ICON.spark + '<span class="lbl">AI</span>';
+  var aiPop = ai.querySelector(".menu-pop");
+  if(SB && b && b.ui){
+    if(isT){
+      menuItem(aiPop, "Huiswerk genereren", function(){ b.ui.assistant(); }, ai);
+      menuItem(aiPop, "Les voorbereiden", function(){ b.ui.assistant(); }, ai);
+    } else {
+      /* student: only own practice; no teacher drafts, no private notes */
+      aiPop.querySelectorAll("[data-ai]").forEach(function(x){ if(x.getAttribute("data-ai") !== "assistant") x.hidden = true; else { x.textContent = "AI-assistent openen"; x.addEventListener("click", function(){ ai.open = false; b.ui.assistant(); }); } });
+      ai.removeAttribute("data-teacher");
+      menuItem(aiPop, "Eigen oefeningen maken", function(){ b.ui.assistant(); }, ai);
+      menuItem(aiPop, "Woord vertalen: zet 🌐 Vertalen aan in het canvas", function(){ openWork("cv"); }, ai);
+      ai.hidden = false;
+    }
+  }
+  var dm = popmenu(ICON.more, "Meer opties", "up"); dm.d.querySelector("summary").className = "db";
+  menuItem(dm.pop, "Focusmodus (alleen lesmateriaal)", function(){ $("focusBtn").click(); }, dm.d);
+  var dh = $("dockHide"); dh.className = ""; dh.innerHTML = "Werkbalk verbergen"; dh.addEventListener("click", function(){ dm.d.open = false; }); dm.pop.appendChild(dh);
+  menuItem(dm.pop, "Video tonen of verbergen", function(){ showVideo(vw.hidden); }, dm.d);
+  var leave = $("leaveBtn");
+  [ $("notesBtn"), $("recBtn"), ai, dm.d, leave ].forEach(function(x){ if(x) rgt.appendChild(x); });
+  /* the old top-bar copies of focus mode are no longer needed there */
+  $("focusBtn").hidden = true;
+  layout(); syncDock();
+})();
+
 /* =================================================================== START */
 setPerm(true, true);
 setMode("wb", true);
 WB.show(WB.key || "wb:1", true);
 SL.show(null, true);
-document.body.classList.toggle("klas-video-on", !vw.hidden);
+/* v28: video is always a floating window (no reserved column) */
 layout();
 window.addEventListener("resize", function(){ WB.fit(); SL.fit(); placeVideo(store("klas-video")); });
 })();

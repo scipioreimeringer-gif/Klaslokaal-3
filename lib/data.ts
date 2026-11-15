@@ -11,7 +11,7 @@ export type StudentRecord = {
 export type LessonEntry = {id: string; student_id: string; lesson_date: string; notes: string; homework: string; words: LegacyWord[] | null; updated_at: string};
 export type Recording = {id: string; student_id: string; storage_path: string; mime_type: string; size_bytes: number; duration_seconds: number; teacher_consent_at: string; student_consent_at: string; created_at: string};
 export type ClassroomState = {board: BoardData | null; canvas: CanvasDoc | null; updated_at: string};
-export type BoardObj = {id: string; c: string; p?: number[]; ty?: 'tx'; x?: number; y?: number; txt?: string; w?: number};
+export type BoardObj = {id: string; c: string; p?: number[]; ty?: 'tx'; x?: number; y?: number; txt?: string; w?: number; sz?: number};
 export type BoardData = {list: string[]; cur: string; objs: Record<string, BoardObj[]>};
 export type CanvasDoc = {pages: {id: string; title: string; html: string}[]; cur: number};
 
