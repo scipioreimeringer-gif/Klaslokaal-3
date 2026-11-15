@@ -2,6 +2,7 @@
 import {useId,useState} from 'react';
 import {BarChart3} from 'lucide-react';
 import type {Point} from '../lib/stats';
+import {t as tt} from '../lib/i18n';
 
 /* Validated categorical chart palette (validate_palette.js, light mode: all checks pass).
    Brand teal #168F91 is too grey for data marks, so charts use its more saturated sibling. */
@@ -10,8 +11,8 @@ export const CHART={teal:'#0F9A90',coral:'#E0674A',violet:'#7B72D6',ochre:'#B889
 export function ChartCard({title,subtitle,children,empty,emptyText,table,className}:{title:string;subtitle?:string;children:React.ReactNode;empty?:boolean;emptyText?:string;table?:Point[];className?:string}){
  const [showTable,setShowTable]=useState(false);
  return <section className={'chart-card '+(className||'')}>
-  <header className="chart-head"><div><h3>{title}</h3>{subtitle&&<p>{subtitle}</p>}</div>{table&&!empty&&<button className="chart-toggle" onClick={()=>setShowTable(!showTable)} aria-pressed={showTable}>{showTable?'Grafiek':'Tabel'}</button>}</header>
-  {empty?<div className="chart-empty"><BarChart3 size={26}/><span>{emptyText||'Nog geen gegevens'}</span></div>
+  <header className="chart-head"><div><h3>{title}</h3>{subtitle&&<p>{subtitle}</p>}</div>{table&&!empty&&<button className="chart-toggle" onClick={()=>setShowTable(!showTable)} aria-pressed={showTable}>{showTable?tt("Grafiek"):tt("Tabel")}</button>}</header>
+  {empty?<div className="chart-empty"><BarChart3 size={26}/><span>{emptyText||tt("Nog geen gegevens")}</span></div>
    :showTable&&table?<table className="vocab chart-table"><tbody>{table.map(p=><tr key={p.key}><td>{p.label}</td><td className="num">{p.value}</td></tr>)}</tbody></table>
    :children}
  </section>

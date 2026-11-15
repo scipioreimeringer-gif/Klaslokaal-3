@@ -10,6 +10,7 @@ import {Flag} from '../../components/Flag';
 import {useQueryParam} from '../../lib/useQuery';
 import {subjectOf} from '../../lib/learning';
 import {buildLanguageCards,languageName,pickRelation} from '../../lib/languages';
+import {t} from '../../lib/i18n';
 
 /** One environment per language; inside it the existing tabs per teacher relation (data stays separate). */
 function Page(){
@@ -22,12 +23,12 @@ function Page(){
  const current=pickRelation(card,wanted);
  const go=(lang:string,student?:string)=>router.push('/mijn-profiel?taal='+lang+(student?'&student='+student:''));
  return <>
-  {cards.length>1&&<nav className="lang-switch" aria-label="Kies een taal">{cards.map(c=><button key={c.code} aria-pressed={c.code===card?.code} onClick={()=>go(c.code)}><Flag code={c.code} size={22}/><span>{languageName(c.code)}</span></button>)}</nav>}
+  {cards.length>1&&<nav className="lang-switch" aria-label={t("Kies een taal")}>{cards.map(c=><button key={c.code} aria-pressed={c.code===card?.code} onClick={()=>go(c.code)}><Flag code={c.code} size={22}/><span>{languageName(c.code)}</span></button>)}</nav>}
   <PendingLinks/>
   {error&&<div className="notice">{error}</div>}
-  {!loaded||!self.loaded?<div className="loader small"/>:!card?<section className="card"><h2>Nog geen talen</h2><p>Voeg op je dashboard een taal toe die je leert, of vraag je docent om je toe te voegen met het e-mailadres van dit account. Daarna verschijnt hier een uitnodiging die je kunt accepteren.</p><Link className="button" href="/">Naar mijn dashboard</Link></section>:<>
+  {!loaded||!self.loaded?<div className="loader small"/>:!card?<section className="card"><h2>{t("Nog geen talen")}</h2><p>{t("Voeg op je dashboard een taal toe die je leert, of vraag je docent om je toe te voegen met het e-mailadres van dit account. Daarna verschijnt hier een uitnodiging die je kunt accepteren.")}</p><Link className="button" href="/">{t("Naar mijn dashboard")}</Link></section>:<>
    <LanguageHeader card={card} current={current} teacherName={teacherName} onPick={id=>go(card.code,id)}/>
-   <p className="muted small">Alleen jij en je docent kunnen dit zien. Privénotities van je docent zijn nooit zichtbaar.</p>
+   <p className="muted small">{t("Alleen jij en je docent kunnen dit zien. Privénotities van je docent zijn nooit zichtbaar.")}</p>
    {current?<StudentPortal key={current.id} profile={current} teacherName={teacherName(current.id)} initialTab={tab} compact/>:<SelfStudy card={card} onChanged={()=>void self.reload()}/>}
   </>}
  </>

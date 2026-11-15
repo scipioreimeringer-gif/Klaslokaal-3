@@ -1,3 +1,4 @@
+import {t} from './i18n.ts';
 // Pure dashboard statistics, computed ONLY from stored rows. No imports so
 // Node can unit-test it directly. Nothing here invents or estimates values.
 
@@ -49,13 +50,13 @@ export function homeworkProgress(assignments: {id: string; published_at: string 
 export function groupCount(lessons: LessonLike[], labelOf: (studentId: string) => string, limit = 6): Point[] {
   const m = new Map<string, number>();
   for (const l of lessons) {
-    const k = (labelOf(l.student_id) || '').trim() || 'Overig';
+    const k = (labelOf(l.student_id) || '').trim() || t('Overig');
     m.set(k, (m.get(k) || 0) + 1);
   }
   const sorted = Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const head = sorted.slice(0, limit).map(([k, v]) => ({key: k, label: k, value: v}));
   const rest = sorted.slice(limit).reduce((s, [, v]) => s + v, 0);
-  if (rest) head.push({key: '__other', label: 'Overig', value: rest});
+  if (rest) head.push({key: '__other', label: t('Overig'), value: rest});
   return head;
 }
 

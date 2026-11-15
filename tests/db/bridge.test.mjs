@@ -15,7 +15,7 @@ import {isDeepStrictEqual as same} from 'node:util';
 const out = path.join(root, 'tests', '.build');
 execFileSync(process.execPath, [path.join(root, 'node_modules', 'typescript', 'bin', 'tsc'),
   'lib/classroomMapping.ts', 'lib/classroomBridge.ts', 'lib/data.ts',
-  '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--esModuleInterop', '--strict'], {cwd: root, stdio: 'inherit'});
+  '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--esModuleInterop', '--strict', '--rewriteRelativeImportExtensions'], {cwd: root, stdio: 'inherit'});
 const require = createRequire(import.meta.url);
 const {createTeacherBridge, createStudentBridge} = require(path.join(out, 'classroomBridge.js'));
 const {loadStudentBundle} = require(path.join(out, 'data.js'));

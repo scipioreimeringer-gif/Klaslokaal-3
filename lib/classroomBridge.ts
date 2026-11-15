@@ -1,6 +1,7 @@
 'use client';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {isMissingMigration} from './data';
+import {t, getLang} from './i18n';
 import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegacyDb,snapshot,type LegacyDb,type LegacyLesson,type LessonRow,type StudentRow} from './classroomMapping';
 
 /**
@@ -27,7 +28,9 @@ export type TeachyBridge = {
   /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
-  ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void};
+  ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void; setLang?(lang: string): void};
+  /** Interface language of the app (the classroom follows it; not the language being taught). */
+  uiLang?: string;
   /** Photo of the other participant (signed URL or Google photo), shown in the classroom top bar. */
   peerAvatar?: string;
 };
@@ -36,9 +39,9 @@ export type TranslateResult = {translation: string; expression: string | null; e
 
 async function postJson<T>(db: SupabaseClient, path: string, body: unknown): Promise<T> {
   const {data} = await db.auth.getSession();
-  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + (data.session?.access_token || '')}, body: JSON.stringify(body)});
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + (data.session?.access_token || '')}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body as object} : body)});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as {error?: string}).error || 'Fout ' + r.status);
+  if (!r.ok) throw new Error(t((j as {error?: string}).error || '') || t('Fout {0}', r.status));
   return j as T;
 }
 const translateCache = new Map<string, Promise<TranslateResult>>();
@@ -154,10 +157,10 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       if (!v28 && extra.length) await db.storage.from('recordings').remove(extra);
       if (row.error) { await db.storage.from('recordings').remove([path, ...extra]); return {ok: false, error: row.error.message}; }
       if (!ai) return {ok: true};
-      if (!v28) return {ok: true, analysis: 'AI-analyse niet gestart: database-update v28 ontbreekt'};
+      if (!v28) return {ok: true, analysis: t('AI-analyse niet gestart: database-update v28 ontbreekt')};
       // Both consented to AI processing: start the server-side analysis (transcription + draft).
       try { await postJson(db, '/api/ai/analyze', {recordingId: row.data.id}); return {ok: true, analysis: 'started'}; }
-      catch (e) { return {ok: true, analysis: 'Analyse niet gestart: ' + (e instanceof Error ? e.message : e)}; }
+      catch (e) { return {ok: true, analysis: t('Analyse niet gestart: {0}', e instanceof Error ? e.message : e)}; }
     },
     translate: translator(db),
     tidy: blocks => postJson(db, '/api/ai/tidy', {studentId: opts.studentId, blocks}),
@@ -193,15 +196,15 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
 }
 
 export function createStudentBridge(db: SupabaseClient, opts: {studentId: string; studentName: string}): TeachyBridge {
-  const refuse = async () => { throw new Error('Alleen de docent slaat het klaslokaal op'); };
+  const refuse = async () => { throw new Error(t('Alleen de docent slaat het klaslokaal op')); };
   return {
     version: 1, role: 'student', studentId: opts.studentId, studentName: opts.studentName,
     liveUrl: window.location.origin + '/klaslokaal/live?student=' + encodeURIComponent(opts.studentId),
     get: async () => null, put: refuse,
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
-    switchStudent() {}, uploadRecording: async () => ({ok: false, error: 'Alleen de docent kan opnames opslaan'}),
+    switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),
     previewImport: async () => [], importBackup: refuse,
     translate: translator(db),
-    tidy: async () => { throw new Error('Alleen de docent kan het canvas ordenen'); },
+    tidy: async () => { throw new Error(t('Alleen de docent kan het canvas ordenen')); },
   };
 }

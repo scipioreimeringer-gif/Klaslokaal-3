@@ -82,3 +82,11 @@ export async function enforceLimit(db: SupabaseClient, userId: string, kind: Usa
 }
 export const LANG_NAMES: Record<string, string> = {nl: 'Dutch', pt: 'Brazilian Portuguese', en: 'English', es: 'Spanish', fr: 'French', de: 'German'};
 export const langName = (code: string | null | undefined) => LANG_NAMES[code || ''] || 'Dutch';
+/** Interface language for explanations/instructions: the one sent by the client, else the user's profile setting, else Dutch.
+ *  (Separate from the language being learned; exercises themselves stay in that language.) */
+export async function uiLanguage(db: SupabaseClient, userId: string, requested?: unknown): Promise<string> {
+  if (typeof requested === 'string' && /^(nl|en|pt|es|fr|de)$/.test(requested)) return requested;
+  const {data} = await db.from('profiles').select('preferred_language').eq('id', userId).maybeSingle();
+  const p = (data as {preferred_language?: string} | null)?.preferred_language;
+  return p && /^(nl|en|pt|es|fr|de)$/.test(p) ? p : 'nl';
+}

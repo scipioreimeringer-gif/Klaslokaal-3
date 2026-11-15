@@ -799,6 +799,7 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="/legacy/i18n.js"></script>
 <script>
 /* ==========================================================================
    INSTELLINGEN
@@ -822,33 +823,73 @@ var TURN_URL     = "";   // of: de link van metered.ca, zoiets als "https://jouw
 "use strict";
 var $ = function(id){ return document.getElementById(id); };
 
-/* v14: personal interface language. Never translate student-created lesson content. */
-var UI_DICTIONARY = {"nl": {}, "pt": {"Interface": "Interface", "Lestaal": "Idioma da aula", "docent": "professor", "leerling": "aluno", "Link voor leerling": "Link para o aluno", "Start de les": "Iniciar aula", "Naar de les": "Entrar na aula", "Bord": "Quadro", "Slides": "Slides", "Allebei": "Ambos", "Whiteboard": "Quadro branco", "Canvas": "Canvas", "Vandaag": "Hoje", "Woorden": "Palavras", "Huiswerk": "Lição de casa", "Eerder": "Anteriores", "Profiel": "Perfil", "+ Leerling": "+ Aluno", "Les van vandaag": "Aula de hoje", "Nieuwe woorden van vandaag": "Palavras novas de hoje", "✨ Sorteer met AI": "✨ Organizar com IA", "Zet in canvas": "Adicionar ao canvas", "Huiswerk voor de volgende les": "Tarefa para a próxima aula", "Huiswerk van vorige keer": "Tarefa anterior", "Eerdere lessen": "Aulas anteriores", "Naam": "Nome", "Niveau": "Nível", "Doel": "Objetivo", "Over deze leerling": "Sobre este aluno", "Leerling verwijderen": "Excluir aluno", "✨ Lesverslag met AI": "✨ Resumo com IA", "Snel verslag": "Resumo rápido", "Back-up": "Backup", "Terugzetten": "Restaurar", "Niet verbonden": "Não conectado", "niet verbonden": "não conectado", "Kies eerst een leerling": "Selecione um aluno primeiro", "Nog geen leerlingen": "Nenhum aluno ainda", "Notities": "Anotações", "woord": "palavra", "uitleg": "explicação", "Kop": "Título", "Gewone tekst": "Texto normal", "Opsomming": "Lista"}, "en": {"Interface": "Interface", "Lestaal": "Lesson language", "docent": "teacher", "leerling": "student", "Link voor leerling": "Student link", "Start de les": "Start lesson", "Naar de les": "Join lesson", "Bord": "Board", "Slides": "Slides", "Allebei": "Both", "Whiteboard": "Whiteboard", "Canvas": "Canvas", "Vandaag": "Today", "Woorden": "Words", "Huiswerk": "Homework", "Eerder": "Previous", "Profiel": "Profile", "+ Leerling": "+ Student", "Les van vandaag": "Today’s lesson", "Nieuwe woorden van vandaag": "New words today", "✨ Sorteer met AI": "✨ Sort with AI", "Zet in canvas": "Add to canvas", "Huiswerk voor de volgende les": "Homework for next lesson", "Huiswerk van vorige keer": "Previous homework", "Eerdere lessen": "Previous lessons", "Naam": "Name", "Niveau": "Level", "Doel": "Goal", "Over deze leerling": "About this student", "Leerling verwijderen": "Delete student", "✨ Lesverslag met AI": "✨ AI lesson report", "Snel verslag": "Quick report", "Back-up": "Backup", "Terugzetten": "Restore", "Niet verbonden": "Not connected", "niet verbonden": "not connected", "Kies eerst een leerling": "Select a student first", "Nog geen leerlingen": "No students yet", "Notities": "Notes", "woord": "word", "uitleg": "explanation", "Kop": "Heading", "Gewone tekst": "Normal text", "Opsomming": "List"}, "es": {"Interface": "Interfaz", "Lestaal": "Idioma de la clase", "docent": "profesor", "leerling": "alumno", "Link voor leerling": "Enlace para el alumno", "Start de les": "Iniciar clase", "Naar de les": "Entrar a clase", "Bord": "Pizarra", "Slides": "Diapositivas", "Allebei": "Ambos", "Whiteboard": "Pizarra", "Canvas": "Lienzo", "Vandaag": "Hoy", "Woorden": "Palabras", "Huiswerk": "Tarea", "Eerder": "Anteriores", "Profiel": "Perfil", "+ Leerling": "+ Alumno", "Les van vandaag": "Clase de hoy", "Nieuwe woorden van vandaag": "Palabras nuevas de hoy", "✨ Sorteer met AI": "✨ Ordenar con IA", "Zet in canvas": "Añadir al lienzo", "Huiswerk voor de volgende les": "Tarea para la próxima clase", "Huiswerk van vorige keer": "Tarea anterior", "Eerdere lessen": "Clases anteriores", "Naam": "Nombre", "Niveau": "Nivel", "Doel": "Objetivo", "Over deze leerling": "Sobre este alumno", "Leerling verwijderen": "Eliminar alumno", "✨ Lesverslag met AI": "✨ Resumen con IA", "Snel verslag": "Resumen rápido", "Back-up": "Copia de seguridad", "Terugzetten": "Restaurar", "Niet verbonden": "Sin conexión", "niet verbonden": "sin conexión", "Kies eerst een leerling": "Selecciona un alumno primero", "Nog geen leerlingen": "Todavía no hay alumnos", "Notities": "Notas", "woord": "palabra", "uitleg": "explicación", "Kop": "Título", "Gewone tekst": "Texto normal", "Opsomming": "Lista"}, "fr": {"Interface": "Interface", "Lestaal": "Langue du cours", "docent": "professeur", "leerling": "élève", "Link voor leerling": "Lien pour l’élève", "Start de les": "Commencer le cours", "Naar de les": "Rejoindre le cours", "Bord": "Tableau", "Slides": "Diapositives", "Allebei": "Les deux", "Whiteboard": "Tableau blanc", "Canvas": "Canevas", "Vandaag": "Aujourd’hui", "Woorden": "Mots", "Huiswerk": "Devoirs", "Eerder": "Précédents", "Profiel": "Profil", "+ Leerling": "+ Élève", "Les van vandaag": "Cours du jour", "Nieuwe woorden van vandaag": "Nouveaux mots du jour", "✨ Sorteer met AI": "✨ Trier avec IA", "Zet in canvas": "Ajouter au canevas", "Huiswerk voor de volgende les": "Devoirs pour le prochain cours", "Huiswerk van vorige keer": "Devoirs précédents", "Eerdere lessen": "Cours précédents", "Naam": "Nom", "Niveau": "Niveau", "Doel": "Objectif", "Over deze leerling": "À propos de cet élève", "Leerling verwijderen": "Supprimer l’élève", "✨ Lesverslag met AI": "✨ Compte rendu IA", "Snel verslag": "Résumé rapide", "Back-up": "Sauvegarde", "Terugzetten": "Restaurer", "Niet verbonden": "Non connecté", "niet verbonden": "non connecté", "Kies eerst een leerling": "Choisissez d’abord un élève", "Nog geen leerlingen": "Aucun élève", "Notities": "Notes", "woord": "mot", "uitleg": "explication", "Kop": "Titre", "Gewone tekst": "Texte normal", "Opsomming": "Liste"}, "de": {"Interface": "Oberfläche", "Lestaal": "Unterrichtssprache", "docent": "Lehrkraft", "leerling": "Schüler", "Link voor leerling": "Link für Schüler", "Start de les": "Unterricht starten", "Naar de les": "Zum Unterricht", "Bord": "Tafel", "Slides": "Folien", "Allebei": "Beides", "Whiteboard": "Whiteboard", "Canvas": "Canvas", "Vandaag": "Heute", "Woorden": "Wörter", "Huiswerk": "Hausaufgaben", "Eerder": "Früher", "Profiel": "Profil", "+ Leerling": "+ Schüler", "Les van vandaag": "Heutige Stunde", "Nieuwe woorden van vandaag": "Neue Wörter heute", "✨ Sorteer met AI": "✨ Mit KI sortieren", "Zet in canvas": "Zum Canvas hinzufügen", "Huiswerk voor de volgende les": "Hausaufgaben für die nächste Stunde", "Huiswerk van vorige keer": "Letzte Hausaufgaben", "Eerdere lessen": "Frühere Stunden", "Naam": "Name", "Niveau": "Niveau", "Doel": "Ziel", "Over deze leerling": "Über diesen Schüler", "Leerling verwijderen": "Schüler löschen", "✨ Lesverslag met AI": "✨ KI-Unterrichtsbericht", "Snel verslag": "Kurzbericht", "Back-up": "Sicherung", "Terugzetten": "Wiederherstellen", "Niet verbonden": "Nicht verbunden", "niet verbonden": "nicht verbunden", "Kies eerst een leerling": "Wähle zuerst einen Schüler", "Nog geen leerlingen": "Noch keine Schüler", "Notities": "Notizen", "woord": "Wort", "uitleg": "Erklärung", "Kop": "Überschrift", "Gewone tekst": "Normaler Text", "Opsomming": "Aufzählung"}};
-var UI_LANGS = {nl:'Nederlands',pt:'Português brasileiro',en:'English',es:'Español',fr:'Français',de:'Deutsch'};
-var uiLang = localStorage.getItem('klas-ui-lang') || 'nl';
-if(!UI_LANGS[uiLang]) uiLang='nl';
-var uiOriginals=[];
-function captureUiText(){
-  var root=document.body;
-  var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
-  var n;
-  while((n=walker.nextNode())){
-    var p=n.parentElement;if(!p||p.closest('script,style,textarea,option,.cv,.words,.hist,#sorted,#remotes,#repText'))continue;
-    var value=n.nodeValue.trim();if(!value)continue;
-    if(Object.prototype.hasOwnProperty.call(UI_DICTIONARY.en,value)) uiOriginals.push({node:n,source:value});
+/* v29: interface language of the classroom. Follows the TeachyRooms setting (bridge.uiLang) and can be
+   changed here too. Translates interface text, tooltips, notices and dialogs, also when they are created
+   later (MutationObserver). Lesson content (canvas, notes, words, names) is never translated. */
+var UI_LANGS = {nl:'Nederlands',pt:'Português (Brasil)',en:'English',es:'Español',fr:'Français',de:'Deutsch'};
+var UI_COL = {en:0, pt:1, es:2, fr:3, de:4};
+var I18N = window.KLAS_I18N || {};
+var I18N_FRAG = Object.keys(I18N).filter(function(k){ return k.length >= 8; }).sort(function(a, b){ return b.length - a.length; });
+var uiLang = (function(){ var br = null; try{ br = window.parent !== window ? window.parent.teachyBridge : null; }catch(e){} var v = (br && br.uiLang) || localStorage.getItem('klas-ui-lang') || 'nl'; return UI_LANGS[v] ? v : 'nl'; })();
+function T(s){
+  if(uiLang === 'nl' || typeof s !== 'string' || !s) return s;
+  var c = UI_COL[uiLang], key = s.trim(), row = I18N[key];
+  if(row) return s.replace(key, row[c]);
+  var out = s;
+  for(var i = 0; i < I18N_FRAG.length; i++){ var k = I18N_FRAG[i]; if(out.indexOf(k) >= 0) out = out.split(k).join(I18N[k][c]); }
+  return out;
+}
+var I18N_SKIP = 'script,style,textarea,input,option,select,.cv,.words,.hist,#sorted,#remotes,#repText,.tidyprev,.trtip,.tb-title,#vTitle,#topStudent,[contenteditable="true"]';
+var I18N_ATTRS = ['title', 'aria-label', 'placeholder', 'data-ph'];
+var i18nState = new WeakMap();
+function trText(n){
+  var p = n.parentElement; if(!p || p.closest(I18N_SKIP)) return;
+  var st = i18nState.get(n), cur = n.nodeValue, src = st && st.out === cur ? st.src : cur;
+  if(!/[A-Za-zÀ-ÿ]/.test(src)) return;
+  var out = T(src); i18nState.set(n, {src:src, out:out});
+  if(out !== cur) n.nodeValue = out;
+}
+function trAttrs(el){
+  if(el.parentElement && el.parentElement.closest('.cv,#remotes')) return;
+  var st = i18nState.get(el) || {};
+  for(var i = 0; i < I18N_ATTRS.length; i++){
+    var a = I18N_ATTRS[i]; if(!el.hasAttribute(a)) continue;
+    var cur = el.getAttribute(a), s = st[a], src = s && s.out === cur ? s.src : cur, out = T(src);
+    st[a] = {src:src, out:out}; if(out !== cur) el.setAttribute(a, out);
   }
+  i18nState.set(el, st);
 }
+function trTree(root){
+  if(root.nodeType === 3){ trText(root); return; }
+  if(root.nodeType !== 1) return;
+  trAttrs(root); root.querySelectorAll('[title],[aria-label],[placeholder],[data-ph]').forEach(trAttrs);
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), n; while((n = w.nextNode())) trText(n);
+}
+var i18nObs = new MutationObserver(function(ms){
+  if(uiLang === 'nl') return;
+  i18nObs.disconnect();
+  ms.forEach(function(m){ if(m.type === 'characterData') trText(m.target); else if(m.type === 'attributes') trAttrs(m.target); else m.addedNodes.forEach(trTree); });
+  i18nWatch();
+});
+function i18nWatch(){ i18nObs.observe(document.body, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:I18N_ATTRS}); }
+/* dialogs inside the classroom */
+(function(){ var c = window.confirm.bind(window), a = window.alert.bind(window), p = window.prompt.bind(window);
+  window.confirm = function(m){ return c(T(String(m))); }; window.alert = function(m){ return a(T(String(m))); }; window.prompt = function(m, d){ return p(T(String(m)), d); }; })();
 function applyUiLanguage(){
-  document.documentElement.lang=uiLang==='pt'?'pt-BR':uiLang;
-  uiOriginals.forEach(function(x){if(!x.node.isConnected)return;var v=(UI_DICTIONARY[uiLang]||{})[x.source]||x.source;x.node.nodeValue=x.node.nodeValue.replace(x.node.nodeValue.trim(),v);});
-  document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.dataset.i18n;el.textContent=(UI_DICTIONARY[uiLang]||{})[k]||k;});
-  document.querySelectorAll('[data-ui-original-placeholder]').forEach(function(el){var k=el.dataset.uiOriginalPlaceholder;el.placeholder=(UI_DICTIONARY[uiLang]||{})[k]||k;});
-  document.getElementById('uiLanguage').value=uiLang;
+  document.documentElement.lang = uiLang === 'pt' ? 'pt-BR' : uiLang;
+  i18nObs.disconnect(); trTree(document.body); i18nWatch();
+  var sel = document.getElementById('uiLanguage'); if(sel) sel.value = uiLang;
 }
-document.querySelectorAll('[placeholder]').forEach(function(el){var k=el.getAttribute('placeholder');if(UI_DICTIONARY.en[k])el.dataset.uiOriginalPlaceholder=k;});
-captureUiText();
+function setUiLanguage(v, fromParent){
+  if(!UI_LANGS[v] || v === uiLang) return;
+  uiLang = v; localStorage.setItem('klas-ui-lang', v); applyUiLanguage();
+  if(!fromParent){ try{ var br = window.parent !== window ? window.parent.teachyBridge : null; if(br && br.ui && br.ui.setLang) br.ui.setLang(v); }catch(e){} }
+}
+window.__klasSetLang = function(v){ setUiLanguage(v, true); };
+/* language names without emoji flags (Windows shows those as letters) */
+document.querySelectorAll('#uiLanguage option, #lessonLanguage option, #pLessonLanguage option').forEach(function(o){ o.textContent = o.textContent.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, ''); });
 applyUiLanguage();
-document.getElementById('uiLanguage').addEventListener('change',function(){uiLang=this.value;localStorage.setItem('klas-ui-lang',uiLang);applyUiLanguage();});
+document.getElementById('uiLanguage').addEventListener('change', function(){ setUiLanguage(this.value); });
 
 var params = new URLSearchParams(location.search);
 /* v27: Supabase mode. Only active when this page is embedded by TeachyRooms

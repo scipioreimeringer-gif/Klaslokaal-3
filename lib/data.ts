@@ -1,6 +1,7 @@
 'use client';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {progressOf, type LegacyWord} from './classroomMapping';
+import {t, locale} from './i18n';
 
 export type StudentRecord = {
   id: string; teacher_id: string; user_id: string | null; name: string; email: string; subject: string;
@@ -56,7 +57,7 @@ export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
   const L = (lessons.data || []) as LessonEntry[];
   return {
     missing,
-    error: missing ? MIGRATION_HINT : (lessons.error?.message || recordings.error?.message || state.error?.message || null),
+    error: missing ? t(MIGRATION_HINT) : (lessons.error?.message || recordings.error?.message || state.error?.message || null),
     lessons: L,
     recordings: (recordings.data || []) as Recording[],
     state: (state.data || null) as ClassroomState | null,
@@ -83,10 +84,10 @@ export async function deleteRecording(db: SupabaseClient, r: Recording) {
   const paths = [r.storage_path, ...(tr.error ? [] : [tr.data?.teacher_track_path, tr.data?.student_track_path])].filter((p): p is string => !!p);
   const del = await db.from('lesson_recordings').delete().eq('id', r.id).select('id');
   if (del.error) return del.error.message;
-  if (!del.data?.length) return 'Geen toestemming om deze opname te verwijderen.';
+  if (!del.data?.length) return t('Geen toestemming om deze opname te verwijderen.');
   const file = await db.storage.from('recordings').remove(paths);
-  return file.error ? 'Opname-gegevens verwijderd, maar het bestand kon niet worden gewist: ' + file.error.message : null;
+  return file.error ? t('Opname-gegevens verwijderd, maar het bestand kon niet worden gewist: {0}', file.error.message) : null;
 }
 
-export const niceDate = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString('nl-NL', {weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'});
+export const niceDate = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString(locale(), {weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'});
 export const duration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;

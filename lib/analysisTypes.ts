@@ -1,3 +1,4 @@
+import {translated} from './i18n';
 // Shape of an AI lesson analysis (draft) and the teacher-approved final version.
 export type AnalysisVocab = {term: string; translation: string; example: string; kind: 'word' | 'expression'};
 export type CorrectionCategory = 'grammar' | 'conjugation' | 'word_order' | 'word_choice' | 'pronunciation' | 'other';
@@ -23,5 +24,5 @@ export type AnalysisDoc = {
   student_speaking_seconds?: number | null;          // measured from the student track, null when not separated
 };
 export type AnalysisStatus = 'queued' | 'processing' | 'ready' | 'approved' | 'failed';
-export const STATUS_LABEL: Record<AnalysisStatus, string> = {queued: 'In wachtrij', processing: 'In verwerking', ready: 'Klaar voor controle', approved: 'Goedgekeurd', failed: 'Verwerking mislukt'};
-export const CATEGORY_LABEL: Record<CorrectionCategory, string> = {grammar: 'Grammatica', conjugation: 'Werkwoordsvervoeging', word_order: 'Zinsbouw', word_choice: 'Woordkeuze', pronunciation: 'Uitspraak (onzeker)', other: 'Overig'};
+export const STATUS_LABEL: Record<AnalysisStatus, string> = translated({queued: 'In wachtrij', processing: 'In verwerking', ready: 'Klaar voor controle', approved: 'Goedgekeurd', failed: 'Verwerking mislukt'});
+export const CATEGORY_LABEL: Record<CorrectionCategory, string> = translated({grammar: 'Grammatica', conjugation: 'Werkwoordsvervoeging', word_order: 'Zinsbouw', word_choice: 'Woordkeuze', pronunciation: 'Uitspraak (onzeker)', other: 'Overig'});

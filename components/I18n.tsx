@@ -1,16 +1,42 @@
 'use client';
-import {createContext,useContext,useEffect,useState} from 'react';
-export const labels={nl:['Dashboard','Leerlingen','Klaslokaal','Agenda','AI & tools','Bibliotheek','Mijn docentprofiel','Jouw onderwijsruimte','Testomgeving'],en:['Dashboard','Students','Classroom','Calendar','AI & tools','Library','Teacher profile','Your teaching space','Demo environment'],es:['Panel','Estudiantes','Aula','Calendario','IA y herramientas','Biblioteca','Perfil docente','Tu espacio educativo','Entorno de prueba'],pt:['Painel','Alunos','Sala de aula','Agenda','IA e ferramentas','Biblioteca','Perfil do professor','Seu espaço de ensino','Ambiente de teste'],de:['Dashboard','Schüler','Klassenzimmer','Kalender','KI & Tools','Bibliothek','Lehrerprofil','Dein Lernraum','Testumgebung'],fr:['Tableau de bord','Élèves','Salle de classe','Calendrier','IA et outils','Bibliothèque','Profil enseignant','Votre espace pédagogique','Environnement test']} as const;
-export type Lang=keyof typeof labels;
-/** Labels added in v27: overview, my lessons, Portuguese, teacher, student, sign out, manage teachers. */
-export const extra:Record<Lang,[string,string,string,string,string,string,string,string,string]>={
- nl:['Overzicht','Mijn lessen','Portugees','Docent','Leerling','Uitloggen','Docenten beheren','Leerlijnen','Oefenen'],
- en:['Overview','My lessons','Portuguese','Teacher','Student','Sign out','Manage teachers','Learning paths','Practice'],
- es:['Resumen','Mis clases','Portugués','Docente','Alumno','Cerrar sesión','Gestionar docentes','Itinerarios','Practicar'],
- pt:['Visão geral','Minhas aulas','Português','Professor','Aluno','Sair','Gerenciar professores','Trilhas','Praticar'],
- de:['Übersicht','Meine Stunden','Portugiesisch','Lehrkraft','Schüler','Abmelden','Lehrkräfte verwalten','Lernpfade','Üben'],
- fr:['Aperçu','Mes cours','Portugais','Enseignant','Élève','Se déconnecter','Gérer les enseignants','Parcours','S’entraîner'],
-};
+// Interface language for the whole app (separate from the language someone learns or teaches).
+// Order of preference: the user's profile (restored after logging in) → this device → the browser → Dutch.
+// A change applies at once (the subtree re-renders in the new language) and is saved to the profile.
+import {createContext,Fragment,useContext,useEffect,useRef,useState} from 'react';
+import {usePathname} from 'next/navigation';
+import {Check,ChevronDown} from 'lucide-react';
+import {useAuth} from './Auth';
+import {Flag} from './Flag';
+import {supabase} from '../lib/supabase';
+import {LANGS,NATIVE,isLang,setCurrentLang,getLang,t,type Lang} from '../lib/i18n';
+export type {Lang} from '../lib/i18n';
+
+const KEY='klaslokaal-language';
 const Context=createContext<{lang:Lang;setLang:(x:Lang)=>void}>({lang:'nl',setLang:()=>{}});
-export function LanguageProvider({children}:{children:React.ReactNode}){const [lang,setLang]=useState<Lang>('nl');useEffect(()=>{const v=localStorage.getItem('klaslokaal-language') as Lang;if(v&&v in labels)setLang(v)},[]);function change(x:Lang){setLang(x);localStorage.setItem('klaslokaal-language',x)}return <Context.Provider value={{lang,setLang:change}}>{children}</Context.Provider>}
+/** Flag per interface language (English → UK flag, Portuguese → Brazilian flag). */
+export const LANG_FLAG:Record<Lang,string>={nl:'nl',en:'en',pt:'pt',es:'es',fr:'fr',de:'de'};
+
+export function LanguageProvider({children}:{children:React.ReactNode}){
+ const {user}=useAuth();const [lang,setState]=useState<Lang>(getLang());const path=usePathname()||'';
+ // the live classroom is never remounted on a language change (that would interrupt the lesson); it re-translates itself
+ const remountKey=path.startsWith('/klaslokaal/live')?'live':lang;
+ setCurrentLang(lang);
+ function apply(x:Lang){setCurrentLang(x);setState(x);try{localStorage.setItem(KEY,x)}catch{}if(typeof document!=='undefined')document.documentElement.lang=x==='pt'?'pt-BR':x}
+ // this device / browser
+ useEffect(()=>{let v:string|null=null;try{v=localStorage.getItem(KEY)}catch{}if(!isLang(v)){const b=(navigator.language||'').slice(0,2).toLowerCase();v=isLang(b)?b:'nl'}if(isLang(v))apply(v)},[]);// eslint-disable-line react-hooks/exhaustive-deps
+ // restore the saved choice after logging in
+ useEffect(()=>{if(!user)return;void supabase()?.from('profiles').select('preferred_language').eq('id',user.id).maybeSingle().then(({data})=>{const p=(data as {preferred_language?:string}|null)?.preferred_language;if(isLang(p)&&p!==getLang())apply(p)})},[user?.id]);// eslint-disable-line react-hooks/exhaustive-deps
+ function change(x:Lang){apply(x);if(user)void supabase()?.rpc('set_my_language',{lang:x})}
+ return <Context.Provider value={{lang,setLang:change}}><Fragment key={remountKey}>{children}</Fragment></Context.Provider>
+}
 export const useLanguage=()=>useContext(Context);
+
+/** Language picker with SVG flags (emoji flags do not render on Windows). */
+export function LanguagePicker({compact=false}:{compact?:boolean}){
+ const {lang,setLang}=useLanguage();const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null);
+ useEffect(()=>{if(!open)return;const close=(e:MouseEvent)=>{if(!ref.current?.contains(e.target as Node))setOpen(false)};const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};document.addEventListener('mousedown',close);document.addEventListener('keydown',key);return()=>{document.removeEventListener('mousedown',close);document.removeEventListener('keydown',key)}},[open]);
+ return <div className="langpick" ref={ref}>
+  <button type="button" className="langpick-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={t('Taal van de website')} title={t('Taal van de website')} onClick={()=>setOpen(o=>!o)}><Flag code={LANG_FLAG[lang]} size={22}/>{!compact&&<span>{lang.toUpperCase()}</span>}<ChevronDown size={14}/></button>
+  {open&&<ul className="langpick-menu" role="listbox" aria-label={t('Taal van de website')}>{LANGS.map(l=><li key={l}><button type="button" role="option" aria-selected={l===lang} onClick={()=>{setOpen(false);if(l!==lang)setLang(l)}}><Flag code={LANG_FLAG[l]} size={22}/><span>{NATIVE[l]}</span>{l===lang&&<Check size={15}/>}</button></li>)}</ul>}
+ </div>
+}

@@ -541,3 +541,19 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
 .crop-zoom input{width:200px}
 .danger-text{color:#b3412c}
 .buildinfo{font-size:10.5px;color:rgba(255,255,255,.55);padding:6px 8px 0;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* v30 — interface language picker with SVG flags */
+.langpick{position:relative}
+.langpick-btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--petrol-800);font-weight:700;font-size:13px;cursor:pointer}
+.langpick-btn:hover{border-color:var(--teal-500)}
+.langpick-menu{position:absolute;right:0;top:42px;z-index:80;min-width:210px;list-style:none;margin:0;padding:6px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(12,72,83,.18)}
+.langpick-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--petrol-900);font-size:14px;text-align:left;cursor:pointer}
+.langpick-menu button:hover,.langpick-menu button[aria-selected=true]{background:var(--teal-100)}
+.langpick-menu button svg:last-child:not(.flag){margin-left:auto;color:var(--teal-500)}
+.auth-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.auth-top .auth-logo{margin:0}
+/* longer translations: wrap instead of overflowing */
+.topbar-actions{flex-wrap:wrap;justify-content:flex-end}
+.tabs{flex-wrap:wrap}
+.button,.chipbar button{white-space:normal}
+@media(max-width:600px){.langpick-btn span{display:none}.langpick-menu{position:fixed;right:8px;left:auto;top:56px;max-width:calc(100vw - 16px)}}

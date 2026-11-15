@@ -1,3 +1,4 @@
+import {t} from './i18n.ts';
 // Languages a student learns: grouped from teacher–student relations (one students row per
 // teacher + language) plus self-study languages without a teacher (student_languages, v29).
 /** Language of one teacher–student relation. Same rule as SQL public.relation_language (v29). */
@@ -8,19 +9,21 @@ export function relationLanguage(s: {curriculum_subject?: string | null; subject
   return s.lesson_language || 'nl';
 }
 
+const L = (code: string, nl: string) => ({code, get name() { return t(nl); }});
+/** Names follow the interface language (translated when read). */
 export const LANGUAGES = [
-  {code: 'nl', name: 'Nederlands'},
-  {code: 'pt', name: 'Portugees (Brazilië)'},
-  {code: 'en', name: 'Engels'},
-  {code: 'es', name: 'Spaans'},
-  {code: 'fr', name: 'Frans'},
-  {code: 'de', name: 'Duits'},
-  {code: 'it', name: 'Italiaans'},
+  L('nl', 'Nederlands'),
+  L('pt', 'Portugees (Brazilië)'),
+  L('en', 'Engels'),
+  L('es', 'Spaans'),
+  L('fr', 'Frans'),
+  L('de', 'Duits'),
+  L('it', 'Italiaans'),
 ] as const;
 export const LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 
 export function languageName(code: string | null | undefined) {
-  return LANGUAGES.find(l => l.code === code)?.name || (code ? code.toUpperCase() : 'Onbekend');
+  return LANGUAGES.find(l => l.code === code)?.name || (code ? code.toUpperCase() : t('Onbekend'));
 }
 
 export type RelationLike = {id: string; teacher_id: string; subject?: string | null; curriculum_subject?: string | null; lesson_language?: string | null; level?: string | null; archived_at?: string | null};
