@@ -32,13 +32,13 @@ export function AuthProvider({children}:{children:React.ReactNode}){
    if(!u){setRole(null);setLinks([]);setPending([]);return}
    const [{data:p},{data:links},teachers,pending]=await Promise.all([
     db.from('profiles').select('role').eq('id',u.id).maybeSingle(),
-    db.from('students').select('id,name,subject').eq('user_id',u.id).order('name'),
+    db.from('students').select('id,name,subject,teacher_id').eq('user_id',u.id).neq('teacher_id',u.id).order('name'),
     db.rpc('my_teachers'),
     db.rpc('my_pending_student_links'),
    ]);
    const r=(['admin','teacher','pending_teacher','rejected_teacher'].includes(p?.role??'')?p?.role:'student') as Role;setRole(r);
    const names=new Map<string,string>(((teachers.data||[]) as {student_id:string;teacher_name:string}[]).map(t=>[t.student_id,t.teacher_name]));
-   setLinks(((links||[]) as {id:string;name:string;subject:string}[]).map(l=>({...l,teacher_name:names.get(l.id)||''})));
+   setLinks(((links||[]) as {id:string;name:string;subject:string;teacher_id:string}[]).filter(l=>l.teacher_id!==u.id).map(({teacher_id:_,...l})=>({...l,teacher_name:names.get(l.id)||''})));
    setPending(pending.error?[]:((pending.data||[]) as PendingLink[]));
   }catch{setUser(null);setRole(null)}finally{setLoading(false)}},[]);
  useEffect(()=>{try{const m=sessionStorage.getItem(MODE_KEY);if(m==='teacher'||m==='student')setModeState(m)}catch{}

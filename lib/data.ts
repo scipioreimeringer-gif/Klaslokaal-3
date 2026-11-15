@@ -32,7 +32,7 @@ export async function loadStudents(db: SupabaseClient, filter: {teacherId?: stri
   const build = (cols: string) => {
     let q = db.from('students').select(cols).order('name');
     if (filter.teacherId) q = q.eq('teacher_id', filter.teacherId);
-    if (filter.userId) q = q.eq('user_id', filter.userId);
+    if (filter.userId) q = q.eq('user_id', filter.userId).neq('teacher_id', filter.userId); // as a student: never relations I teach myself
     return q;
   };
   const r28 = await build(STUDENT_COLUMNS_V28);
