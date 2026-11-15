@@ -635,3 +635,9 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
  .lesson-rows .lr-lang{display:none}
 }
 @media(prefers-reduced-motion:reduce){.lstate.live::before,.spinner{animation:none}}
+
+/* v31 — language per relation */
+.lang-unset{color:#b3412c;font-style:normal;font-weight:600}
+.lang-settings .row{flex-wrap:wrap}
+.lang-settings select.field{min-width:220px;flex:1}
+
