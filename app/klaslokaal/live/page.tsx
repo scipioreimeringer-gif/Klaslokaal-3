@@ -50,9 +50,11 @@ function LiveRoom({studentId}:{studentId:string}){
  if(error)return <Nav><div className="notice">{error}</div><Link className="button secondary" href="/klaslokaal/live"><ArrowLeft size={15}/> Terug</Link></Nav>;
  if(!room||!ready)return <div className="live-page"><div className="loader"/></div>;
  const s=room.student;const myName=(user?.user_metadata?.full_name as string|undefined)||s.name;
+ // b=<commit>: every deploy gets a new classroom URL, so no browser can keep showing an old cached copy
+ const build=encodeURIComponent(process.env.NEXT_PUBLIC_BUILD_SHA||'');
  const src=room.as==='teacher'
-  ?`/legacy/index.html?sb=1&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}`
-  :`/legacy/index.html?sb=1&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}`;
+  ?`/legacy/index.html?sb=1&b=${build}&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}`
+  :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}`;
  return <main className="live-page bar-hidden">
   <div className="live-body">
    <iframe key={s.id+room.as} title={'Klaslokaal '+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame"/>

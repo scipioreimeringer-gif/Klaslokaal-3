@@ -72,6 +72,7 @@ export function AuthGate({children}:{children:React.ReactNode}){
  if(!user)return <div className="auth-wrap"><section className="auth-card">
   <div className="auth-logo"><span className="brandmark"><GraduationCap size={20}/></span> TeachyRooms</div><h1>Welkom</h1>
   <p>Log in met je Google-account. Daarna kies je je <b>docent</b>- of <b>leerlingprofiel</b>. Beide werken met hetzelfde account.</p>
+  <p className="muted small" title="Branch en commit van deze versie">Versie: {process.env.NEXT_PUBLIC_BUILD_ENV==='production'?'productie':'preview'} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</p>
   <button className="button auth-google" disabled={busy} onClick={async()=>{setBusy(true);const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.href}});if(error){setMessage(error.message);setBusy(false)}}}>Inloggen met Google</button>
   <div className="auth-divider"><span>of ontvang een inloglink</span></div>
   <form className="auth-form" onSubmit={async e=>{e.preventDefault();setBusy(true);setMessage('');const {error}=await db.auth.signInWithOtp({email:email.trim().toLowerCase(),options:{emailRedirectTo:window.location.href,shouldCreateUser:true}});setBusy(false);setMessage(error?error.message:'Controleer je e-mail en klik op de inloglink.');}}>

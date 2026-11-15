@@ -32,6 +32,7 @@ function Frame({children}:{children:React.ReactNode}){
    <div className="navlabel">{mode==='teacher'?x[3]:x[4]}</div>
    <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}</Link>)}
     {mode==='teacher'&&role==='admin'&&<Link href="/beheer" className={active('/beheer')?'active':''} onClick={()=>setOpen(false)}><ShieldCheck size={18}/>{x[6]}</Link>}</nav>
+   <div className="buildinfo" title="Welke versie draait hier (branch · commit)">{process.env.NEXT_PUBLIC_BUILD_ENV==='production'?'Productie':'Preview'} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</div>
    <div className="sidebottom"><Link className="sideaccount" href="/account" title="Mijn profiel en profielfoto" onClick={()=>setOpen(false)}><Avatar className="teacheravatar" userId={user?.id} name={user?.email||'?'} size={34} google={avatar}/><div className="sideuser"><strong>{mode==='teacher'?(role==='admin'?'Beheerder':x[3]):x[4]}</strong><small>{user?.email||''}</small></div></Link><button className="iconbtn" title={x[5]} aria-label={x[5]} onClick={()=>void supabase()?.auth.signOut()}><LogOut size={17}/></button></div>
   </aside>
   {open&&<div className="side-scrim" onClick={()=>setOpen(false)}/>}

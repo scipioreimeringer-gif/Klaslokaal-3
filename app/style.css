@@ -540,3 +540,4 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
 .crop-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(6,40,48,.55);pointer-events:none;outline:2px solid rgba(255,255,255,.8);outline-offset:-2px}
 .crop-zoom input{width:200px}
 .danger-text{color:#b3412c}
+.buildinfo{font-size:10.5px;color:rgba(255,255,255,.55);padding:6px 8px 0;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
