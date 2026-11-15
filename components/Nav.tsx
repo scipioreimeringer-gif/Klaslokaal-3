@@ -6,6 +6,7 @@ import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,Graduatio
 import {LanguageProvider,labels,extra,useLanguage,Lang} from './I18n';
 import {useAuth} from './Auth';
 import {supabase} from '../lib/supabase';
+import {AssistantLauncher} from './Assistant';
 
 function Frame({children}:{children:React.ReactNode}){
  const {lang,setLang}=useLanguage();const {user,role,mode,setMode,canTeach,studentLinks}=useAuth();const t=labels[lang],x=extra[lang];
@@ -45,6 +46,7 @@ function Frame({children}:{children:React.ReactNode}){
    </header>
    <div className="page">{children}</div>
   </main>
+  <AssistantLauncher/>
   <nav className="bottomnav" aria-label="Snelmenu">{links.slice(0,4).map(({href,icon:Icon,label})=><Link key={href} href={href} className={active(href)?'active':''}><Icon size={20}/><span>{label}</span></Link>)}<button onClick={()=>setOpen(true)}><Menu size={20}/><span>Meer</span></button></nav>
  </div>
 }

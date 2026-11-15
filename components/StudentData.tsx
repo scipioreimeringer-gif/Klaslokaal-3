@@ -7,6 +7,7 @@ import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
 import {GoalsPanel,SelfPractice,VocabGames,VocabManager} from './Learning';
+import {subjectOf} from '../lib/learning';
 import {Sparkles,Target,Gamepad2} from 'lucide-react';
 import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
 
@@ -105,7 +106,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?'AI-lesanalyses':'Lessamenvattingen'}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId}/>}</section>}
   {tab==='woorden'&&<section className="card"><h3>Woordenschat</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&<section className="card"><h3><Target size={17}/> Leerdoelen</h3><GoalsPanel student={ws} viewer={viewer}/></section>}
-  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> Oefenen &amp; spelletjes</h3><VocabGames studentId={studentId}/></section><section className="card"><h3><Sparkles size={17}/> Maak mijn huiswerk</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
+  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> Oefenen &amp; spelletjes</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> Maak mijn huiswerk</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>Whiteboard</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>Canvas</h3><CanvasPreview state={b.state}/></section></div>}
   {tab==='opnames'&&<section className="card"><h3>Lesopnames</h3><RecordingList items={b.recordings} onChange={()=>void load()}/></section>}

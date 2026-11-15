@@ -4,6 +4,8 @@ import {Plus,Trash2,Search,Check,X,RotateCcw,Shuffle,Eye,Sparkles,Layers,ListChe
 import {supabase} from '../lib/supabase';
 import {addVocab,authedPost,loadVocab,GOAL_STATUS_LABEL,LEVELS,SKILLS,SUBJECTS,VOCAB_STATUS_LABEL,subjectOf,type Goal,type GoalProgress,type GoalStatus,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
+import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
+import {PenLine,Repeat,Wrench} from 'lucide-react';
 
 /* ========================= Vocabulary ========================= */
 export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teacher'|'student'}){
@@ -64,34 +66,44 @@ export function GoalsPanel({student,viewer}:{student:{id:string;subject:string;l
 }
 
 /* ========================= Games ========================= */
-type GameKind='flashcards'|'quiz'|'typing'|'match';
+type GameKind='flashcards'|'quiz'|'typing'|'match'|'sentence'|'conjugate'|'errors';
+type TypeItem={id?:string;prompt:string;hint?:string;answers:string[]};
 async function saveSession(studentId:string,kind:string,score:number,total:number,started:number,details:unknown,assignmentId?:string|null){
  const db=supabase()!;const {data:{user}}=await db.auth.getUser();if(!user)return;
  await db.from('practice_sessions').insert({student_id:studentId,user_id:user.id,kind,score,total,duration_seconds:Math.round((Date.now()-started)/1000),details,assignment_id:assignmentId||null});
 }
 const record=(id:string,ok:boolean)=>supabase()!.rpc('record_vocab_practice',{item:id,correct:ok});
 
-export function VocabGames({studentId}:{studentId:string}){
- const [items,setItems]=useState<VocabItem[]|null>(null);const [game,setGame]=useState<GameKind|null>(null);const [result,setResult]=useState<string>('');
- const load=useCallback(async()=>{const r=await loadVocab(supabase()!,studentId);setItems(practiceOrder(r.items.filter(i=>i.translation)))},[studentId]);
+export function VocabGames({studentId,subject}:{studentId:string;subject?:string}){
+ const [items,setItems]=useState<VocabItem[]|null>(null);const [game,setGame]=useState<GameKind|null>(null);const [result,setResult]=useState<string>('');const [corr,setCorr]=useState<TypeItem[]>([]);
+ const load=useCallback(async()=>{const r=await loadVocab(supabase()!,studentId);setItems(practiceOrder(r.items.filter(i=>i.translation)));
+  const s=await supabase()!.rpc('student_lesson_summaries',{sid:studentId});const list=((s.data||[]) as {final:{corrections?:{original:string;corrected:string;explanation:string;certainty?:string}[]}}[]).flatMap(x=>x.final?.corrections||[]).filter(c=>c.original&&c.corrected&&c.certainty!=='uncertain');setCorr(list.slice(0,12).map(c=>({prompt:c.original,hint:c.explanation,answers:[c.corrected]})))},[studentId]);
  useEffect(()=>{void load()},[load]);
  if(!items)return <div className="loader small"/>;
- if(items.length<2)return <p className="muted">Je hebt minstens 2 woorden met een betekenis nodig om te oefenen. Woorden uit je lessen verschijnen automatisch; je kunt ze ook zelf toevoegen bij Woordenschat.</p>;
+ const sentences:TypeItem[]=items.flatMap((v):TypeItem[]=>{const b=v.example?blankSentence(v.example,v.term):null;return b?[{id:v.id,prompt:b,hint:v.translation,answers:[v.term]}]:[]}).slice(0,10);
+ const drills:TypeItem[]=subject&&hasDrills(subject)?drillSet(subject,10,Date.now()%100000).map(d=>({prompt:` · `,hint:` — `,answers:d.answers})):[];
+ if(items.length<2&&!corr.length&&!drills.length)return <p className="muted">Je hebt minstens 2 woorden met een betekenis nodig om te oefenen. Woorden uit je lessen verschijnen automatisch; je kunt ze ook zelf toevoegen bij Woordenschat.</p>;
  const deck=items.slice(0,12);
  const done=(label:string)=>{setResult(label);setGame(null);void load()};
  if(game==='flashcards')return <Flashcards deck={deck} studentId={studentId} onDone={done}/>;
  if(game==='quiz')return <Quiz deck={deck} pool={items} studentId={studentId} onDone={done}/>;
  if(game==='typing')return <Typing deck={deck} studentId={studentId} onDone={done}/>;
  if(game==='match')return <Match deck={deck.slice(0,6)} studentId={studentId} onDone={done}/>;
+ if(game==='sentence')return <TypeGame title="Zinnen aanvullen" kind="sentence" items={sentences} studentId={studentId} onDone={done}/>;
+ if(game==='conjugate')return <TypeGame title="Werkwoorden vervoegen" kind="conjugate" items={drills} studentId={studentId} onDone={done}/>;
+ if(game==='errors')return <TypeGame title="Fouten verbeteren" kind="errors" items={corr} studentId={studentId} onDone={done} long/>;
  const due=items.filter(i=>new Date(i.due_at).getTime()<=Date.now()).length;
  return <div>
   {result&&<div className="game-result"><Trophy size={18}/> {result}</div>}
   <p className="muted">{due} woorden staan klaar om te herhalen. Moeilijke woorden komen vaker terug (gespreide herhaling); na 5 keer achter elkaar goed is een woord “beheerst”.</p>
   <div className="game-grid">
-   <button className="game-tile" onClick={()=>setGame('flashcards')}><Layers size={24}/><b>Flashcards</b><small>Omdraaien en zelf beoordelen</small></button>
+   <button className="game-tile" disabled={items.length<2} onClick={()=>setGame('flashcards')}><Layers size={24}/><b>Flashcards</b><small>Omdraaien en zelf beoordelen</small></button>
    <button className="game-tile" disabled={items.length<4} onClick={()=>setGame('quiz')}><ListChecks size={24}/><b>Meerkeuzequiz</b><small>{items.length<4?'Minstens 4 woorden nodig':'Kies de juiste vertaling'}</small></button>
-   <button className="game-tile" onClick={()=>setGame('typing')}><Keyboard size={24}/><b>Typ het woord</b><small>Schrijf het woord bij de betekenis</small></button>
-   <button className="game-tile" disabled={items.length<3} onClick={()=>setGame('match')}><Puzzle size={24}/><b>Matchspel</b><small>Verbind woord en betekenis</small></button>
+   <button className="game-tile" disabled={items.length<2} onClick={()=>setGame('typing')}><Keyboard size={24}/><b>Vertaalspel</b><small>Schrijf het woord bij de betekenis</small></button>
+   <button className="game-tile" disabled={items.length<3} onClick={()=>setGame('match')}><Puzzle size={24}/><b>Woorden koppelen</b><small>Verbind woord en betekenis</small></button>
+   <button className="game-tile" disabled={!sentences.length} onClick={()=>setGame('sentence')}><PenLine size={24}/><b>Zinnen aanvullen</b><small>{sentences.length?'Vul het ontbrekende woord in':'Nodig: woorden met voorbeeldzin'}</small></button>
+   <button className="game-tile" disabled={!drills.length} onClick={()=>setGame('conjugate')}><Repeat size={24}/><b>Werkwoorden vervoegen</b><small>{drills.length?'Presens en verleden tijden':'Beschikbaar voor Nederlands en Portugees'}</small></button>
+   <button className="game-tile" disabled={!corr.length} onClick={()=>setGame('errors')}><Wrench size={24}/><b>Fouten verbeteren</b><small>{corr.length?'Je eigen fouten uit goedgekeurde lesanalyses':'Nog geen goedgekeurde correcties'}</small></button>
   </div>
  </div>
 }
@@ -135,6 +147,18 @@ function Typing({deck,studentId,onDone}:{deck:VocabItem[];studentId:string;onDon
  </GameShell>
 }
 
+function TypeGame({title,kind,items,studentId,onDone,long}:{title:string;kind:string;items:TypeItem[];studentId:string;onDone:(s:string)=>void;long?:boolean}){
+ const [i,setI]=useState(0);const [val,setVal]=useState('');const [res,setRes]=useState<null|'correct'|'accent'|'wrong'>(null);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);const inp=useRef<HTMLInputElement&HTMLTextAreaElement>(null);
+ const it=items[i];
+ async function submit(e:React.FormEvent){e.preventDefault();if(res){setRes(null);setVal('');if(i+1>=items.length){await saveSession(studentId,kind,score.current,items.length,started.current,{wrong:wrong.current});onDone(`${title}: ${score.current} van ${items.length} goed`)}else{setI(i+1);setTimeout(()=>inp.current?.focus(),0)}return}
+  const r=checkText(val,it.answers);setRes(r);const ok=r!=='wrong';if(it.id)void record(it.id,ok);if(ok)score.current++;else wrong.current.push(it.answers[0])}
+ return <GameShell title={title} i={i} n={items.length} onQuit={()=>onDone('')}>
+  <form className="drill-card" onSubmit={e=>void submit(e)}><div className="drill-q"><small className="muted">{it.hint}</small><strong className={long?'long':''}>{it.prompt}</strong></div>
+   <div className="row">{long?<textarea ref={inp} autoFocus className="field grow" rows={2} spellCheck={false} value={val} readOnly={!!res} onChange={e=>setVal(e.target.value)} placeholder="Schrijf de verbeterde zin…"/>:<input ref={inp} autoFocus className="field grow" autoComplete="off" autoCapitalize="off" spellCheck={false} value={val} readOnly={!!res} onChange={e=>setVal(e.target.value)}/>}<button className="button" type="submit">{res?'Volgende':'Controleer'}</button></div>
+   {res&&<p className={'drill-result '+res}>{res==='correct'?<><Check size={16}/> Top!</>:res==='accent'?<><Check size={16}/> Bijna: let op de accenten → <b>{it.answers[0]}</b></>:<><X size={16}/> Juist is: <b>{it.answers[0]}</b></>}</p>}</form>
+ </GameShell>
+}
+
 function Match({deck,studentId,onDone}:{deck:VocabItem[];studentId:string;onDone:(s:string)=>void}){
  const right=useMemo(()=>mcOptions(deck[0].translation,deck.map(d=>d.translation),deck.length).concat(deck.map(d=>d.translation)).filter((x,i,a)=>a.indexOf(x)===i),[deck]);
  const [sel,setSel]=useState<string|null>(null);const [matched,setMatched]=useState<string[]>([]);const [flash,setFlash]=useState('');const mistakes=useRef(0);const started=useRef(Date.now());
@@ -147,9 +171,9 @@ function Match({deck,studentId,onDone}:{deck:VocabItem[];studentId:string;onDone
 }
 
 /* ========================= Exercises (AI) ========================= */
-export type ExerciseItem={type:'multiple_choice'|'fill_in'|'translate'|'write'|'reading';prompt:string;passage:string;options:string[];answer:string;accept:string[];explanation:string};
+export type ExerciseItem={type:'multiple_choice'|'fill_in'|'translate'|'conjugate'|'correct_error'|'make_sentence'|'write'|'reading';prompt:string;passage:string;options:string[];answer:string;accept:string[];explanation:string};
 export type ExerciseSet={title:string;items:ExerciseItem[]};
-const KIND_LABELS:Record<string,string>={woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invuloefeningen',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'};
+const KIND_LABELS:Record<string,string>={woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invulzinnen',meerkeuze:'Meerkeuze',werkwoorden:'Werkwoorden vervoegen',fouten:'Fouten verbeteren',zinnen:'Zinnen maken',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'};
 
 export function ExerciseForm({studentId,defaultLevel,onReady,teacher}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean}){
  const [kinds,setKinds]=useState<string[]>(['gemengd']);const [level,setLevel]=useState(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState('');const [minutes,setMinutes]=useState(10);const [lessonDate,setLessonDate]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');
@@ -169,7 +193,7 @@ export function ExerciseForm({studentId,defaultLevel,onReady,teacher}:{studentId
 /** Interactive player with feedback; stores the result as a practice session. */
 export function ExercisePlayer({set,studentId,kind='exercise',assignmentId,onFinish}:{set:ExerciseSet;studentId:string;kind?:'exercise'|'homework';assignmentId?:string|null;onFinish:(score:number,total:number,answers:string[])=>void}){
  const [answers,setAnswers]=useState<string[]>(set.items.map(()=>''));const [checked,setChecked]=useState(false);const started=useRef(Date.now());
- const auto=(it:ExerciseItem)=>it.type!=='write';
+ const auto=(it:ExerciseItem)=>it.type!=='write'&&it.type!=='make_sentence';
  const results=set.items.map((it,i)=>auto(it)?checkText(answers[i],[it.answer,...(it.accept||[])]):null);
  const score=results.filter(r=>r==='correct'||r==='accent').length,total=set.items.filter(auto).length;
  async function check(){setChecked(true);await saveSession(studentId,kind,score,total,started.current,{title:set.title,items:set.items.map((it,i)=>({prompt:it.prompt,given:answers[i],answer:it.answer,result:results[i]}))},assignmentId);onFinish(score,total,answers)}
@@ -179,7 +203,7 @@ export function ExercisePlayer({set,studentId,kind='exercise',assignmentId,onFin
     {it.passage&&<blockquote className="passage">{it.passage}</blockquote>}
     <p className="ex-prompt">{it.prompt}</p>
     {it.type==='multiple_choice'&&it.options.length?<div className="quiz-opts small">{it.options.map(o=><button key={o} disabled={checked} className={'quiz-opt'+(answers[i]===o?' chosen':'')+(checked&&o===it.answer?' right':'')} onClick={()=>setAnswers(a=>a.map((x,j)=>j===i?o:x))}>{o}</button>)}</div>
-     :it.type==='write'?<textarea className="field" rows={3} disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>
+     :(it.type==='write'||it.type==='make_sentence'||it.type==='correct_error')?<textarea className="field" rows={3} disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>
      :<input className="field" disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>}
     {checked&&<p className="ex-feedback">{results[i]==='correct'?'✓ Goed':results[i]==='accent'?'≈ Bijna (accenten)':results[i]==='wrong'?<>✗ Juist: <b>{it.answer}</b></>:<>Voorbeeldantwoord: <i>{it.answer}</i></>}{it.explanation&&<small className="block">{it.explanation}</small>}</p>}
    </div></div>)}

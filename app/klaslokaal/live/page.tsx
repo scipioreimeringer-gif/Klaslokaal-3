@@ -2,10 +2,11 @@
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Suspense,useEffect,useState} from 'react';
-import {ArrowLeft,Lock,Video,X,GraduationCap,UserRound,ChevronUp,ChevronDown} from 'lucide-react';
+import {ArrowLeft,Video,X} from 'lucide-react';
 import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 import {PrivateNotes} from '../../../components/StudentData';
+import {AssistantPanel} from '../../../components/Assistant';
 import {supabase} from '../../../lib/supabase';
 import {useQueryParam} from '../../../lib/useQuery';
 import {createStudentBridge,createTeacherBridge} from '../../../lib/classroomBridge';
@@ -25,9 +26,7 @@ function Picker(){
 
 function LiveRoom({studentId}:{studentId:string}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
- const [barHidden,setBarHidden]=useState(false);
- useEffect(()=>{try{setBarHidden(localStorage.getItem('teachy-live-bar')==='hidden')}catch{}},[]);
- const toggleBar=(h:boolean)=>{setBarHidden(h);try{localStorage.setItem('teachy-live-bar',h?'hidden':'shown')}catch{}};
+ const [assistOpen,setAssistOpen]=useState(false);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
   const db=supabase()!;const r=await db.from('students').select('id,teacher_id,user_id,name,email,subject,notes,goals,homework,history,level,lesson_language,about,room_code').eq('id',studentId).maybeSingle();
   if(cancelled)return;
@@ -39,6 +38,8 @@ function LiveRoom({studentId}:{studentId:string}){
   if(!as){setError('Geen toegang tot dit klaslokaal.');return}
   if(!s.room_code){setError(MIGRATION_HINT);return}
   window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
+  // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
+  window.teachyBridge.ui={back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true)};
   setRoom({student:s,as});setReady(true);
  })();return()=>{cancelled=true}},[studentId,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
@@ -48,15 +49,11 @@ function LiveRoom({studentId}:{studentId:string}){
  const src=room.as==='teacher'
   ?`/legacy/index.html?sb=1&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}`
   :`/legacy/index.html?sb=1&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}`;
- return <main className={'live-page'+(barHidden?' bar-hidden':'')}>
-  {barHidden&&<button className="live-bar-show" onClick={()=>toggleBar(false)} title="TeachyRooms-balk tonen"><ChevronDown size={15}/> {room.as==='teacher'?s.name:(s.subject||'Mijn les')}</button>}
-  {!barHidden&&<div className="live-toolbar">
-   <div className="live-identity"><Link href={room.as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id} className="live-back" title="Terug naar profiel"><ArrowLeft size={16}/></Link><span className="live-logo"><GraduationCap size={16}/></span><strong>{room.as==='teacher'?s.name:(s.subject||'Mijn les')}</strong><span className="live-tag">{room.as==='teacher'?<><UserRound size={12}/> Docent</>:'Leerling'}</span></div>
-   <div className="live-actions">{room.as==='teacher'&&<button className={'live-btn'+(privOpen?' on':'')} onClick={()=>setPrivOpen(!privOpen)}><Lock size={14}/><span>Privénotities</span></button>}<Link href="/" className="live-btn"><span>Dashboard</span></Link><button className="live-btn icon" onClick={()=>toggleBar(true)} title="Balk inklappen voor meer ruimte" aria-label="Balk inklappen"><ChevronUp size={15}/></button></div>
-  </div>}
+ return <main className="live-page bar-hidden">
   <div className="live-body">
    <iframe key={s.id+room.as} title={'Klaslokaal '+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame"/>
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label="Sluiten" onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
+   {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
   </div>
  </main>;
 }

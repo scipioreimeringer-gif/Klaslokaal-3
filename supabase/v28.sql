@@ -248,7 +248,7 @@ create table if not exists public.practice_sessions (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  kind text not null check (kind in ('flashcards','quiz','typing','match','exercise','homework')),
+  kind text not null,
   assignment_id uuid references public.assignments(id) on delete set null,  -- null = self-made practice
   score integer not null default 0 check (score >= 0),
   total integer not null default 0 check (total >= 0 and score <= total),
@@ -256,6 +256,8 @@ create table if not exists public.practice_sessions (
   details jsonb,
   created_at timestamptz not null default now()
 );
+alter table public.practice_sessions drop constraint if exists practice_sessions_kind_check;
+alter table public.practice_sessions add constraint practice_sessions_kind_check check (kind in ('flashcards','quiz','typing','match','sentence','conjugate','errors','exercise','homework'));
 create index if not exists practice_sessions_student_idx on public.practice_sessions(student_id, created_at desc);
 alter table public.practice_sessions enable row level security;
 drop policy if exists "practice read" on public.practice_sessions;

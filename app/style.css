@@ -466,3 +466,21 @@ textarea.field{width:100%;resize:vertical;line-height:1.55}
   .quiz-opts{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.statcard,.game-tile,.flipcard .face,.quiz-opt,.match-item{transition:none!important;animation:none!important}}
+
+/* ---------- v28: central AI assistant ---------- */
+.assistant-fab{position:fixed;right:18px;bottom:18px;z-index:35;width:52px;height:52px;border-radius:50%;border:0;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--teal-500),var(--violet-500));box-shadow:0 10px 26px rgba(12,72,83,.3);transition:transform .15s}
+.assistant-fab:hover{transform:translateY(-2px) scale(1.04)}
+.assistant{position:fixed;right:16px;bottom:16px;z-index:60;width:min(390px,calc(100vw - 24px));max-height:min(80vh,720px);overflow:auto;display:grid;gap:10px;align-content:start;padding:14px;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(12,72,83,.28);border:1px solid var(--line);animation:pop .2s ease}
+.assistant-head{display:flex;align-items:center;gap:8px}.assistant-head b{flex:1}
+.assistant-mark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:9px;color:#fff;background:linear-gradient(135deg,var(--teal-500),var(--violet-500))}
+.assistant-actions{display:grid;gap:6px}
+.assistant-action{display:flex;align-items:center;gap:10px;text-align:left;width:100%;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:10px 12px;color:var(--ink);cursor:pointer;transition:border-color .15s,transform .15s}
+.assistant-action:hover{border-color:var(--teal-400);transform:translateY(-1px)}
+.assistant-action span{flex:1}.assistant-action b{display:block;font-size:13.5px}.assistant-action small{display:block;color:var(--muted);font-size:12px}
+.assistant-action svg:first-child{color:var(--teal-500);flex:none}
+.plan{display:grid;gap:4px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,var(--mint-100),#fff)}.plan h4{margin:8px 0 2px}.plan ul,.plan ol{margin:0;padding-left:18px}
+.live-assistant .assistant{right:12px;bottom:12px}
+.tag.uncertain{background:var(--yellow-100);color:var(--yellow-700);border-color:#f0dca4}
+.uncertain-row td{background:#fffbef}
+.drill-q strong.long{font-size:16px;line-height:1.4}
+@media(max-width:700px){.assistant-fab{bottom:86px;right:14px}}

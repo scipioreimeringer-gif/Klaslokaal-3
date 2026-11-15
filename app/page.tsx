@@ -10,12 +10,12 @@ import {activeStudents,cumulativeWords,groupCount,homeworkProgress,isEmptySeries
 import {sessionsPerWeek} from '../lib/answers';
 import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
-import type {AnalysisStatus} from '../lib/analysisTypes';
+import {CATEGORY_LABEL,type AnalysisDoc,type AnalysisStatus,type CorrectionCategory} from '../lib/analysisTypes';
 import {UsersRound,BookOpenCheck,Languages,ClipboardList,Video,Plus,ChevronRight,BookOpen,Presentation,Activity,Mic,CalendarCheck,Sparkles} from 'lucide-react';
 
-type V28={vocab:{student_id:string;status:string}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[]};
+type V28={vocab:{student_id:string;status:string}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[];summaries:{lesson_date:string;final:AnalysisDoc}[]};
 type Dash={students:StudentRecord[];lessons:LessonLike[];assignments:{id:string;published_at:string|null}[];submissions:{assignment_id:string}[];error:string;loaded:boolean}&V28;
-const EMPTY:Dash={students:[],lessons:[],assignments:[],submissions:[],error:'',loaded:false,vocab:[],progress:[],practice:[],analyses:[]};
+const EMPTY:Dash={students:[],lessons:[],assignments:[],submissions:[],error:'',loaded:false,vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
 
 /** Loads the real stored data for the dashboard (RLS limits it to what this user may see). */
 function useDashboard(filter:{teacherId?:string;userId?:string}|null){
@@ -28,16 +28,16 @@ function useDashboard(filter:{teacherId?:string;userId?:string}|null){
   if(l.error&&!isMissingMigration(l.error))error=l.error.message;
   const A=(a.data||[]) as Dash['assignments'];const pub=A.filter(x=>x.published_at).map(x=>x.id);
   const s=pub.length?await db.from('homework_submissions').select('assignment_id').in('assignment_id',pub):{data:[]};
-  let v28:V28={vocab:[],progress:[],practice:[],analyses:[]};
+  let v28:V28={vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
   if(r.v28){const [vv,pp,pr,an]=await Promise.all([db.from('vocab_items').select('student_id,status').in('student_id',ids),db.from('student_goal_progress').select('student_id,status,goal_id,curriculum_goals(level)').in('student_id',ids),db.from('practice_sessions').select('student_id,kind,score,total,created_at').in('student_id',ids).order('created_at',{ascending:false}).limit(500),filter.teacherId?db.from('lesson_analyses').select('id,student_id,lesson_date,status').in('student_id',ids).in('status',['ready','processing','failed']).order('created_at',{ascending:false}):Promise.resolve({data:[]})]);
-   v28={vocab:(vv.data||[]) as V28['vocab'],progress:(pp.data||[]) as unknown as V28['progress'],practice:(pr.data||[]) as V28['practice'],analyses:(an.data||[]) as V28['analyses']};}
+   v28={vocab:(vv.data||[]) as V28['vocab'],progress:(pp.data||[]) as unknown as V28['progress'],practice:(pr.data||[]) as V28['practice'],analyses:(an.data||[]) as V28['analyses'],summaries:filter.userId?(await Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id})))).flatMap(x=>(x.data||[]) as V28['summaries']):[]};}
   if(!cancelled)setD({students:r.data,lessons:(l.data||[]) as LessonLike[],assignments:A,submissions:(s.data||[]) as Dash['submissions'],error,loaded:true,...v28});
  })();return()=>{cancelled=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
  return d;
 }
 
 function SpeakingCard(){
- return <ChartCard title="Spreektijd en spreekvaardigheid" subtitle="Per les" empty emptyText="Nog niet gemeten. TeachyRooms registreert spreektijd en spreekvaardigheid nog niet, dus hier worden geen cijfers verzonnen."><span/></ChartCard>
+ return <ChartCard title="Spreektijd en spreekvaardigheid" subtitle="Per les" empty emptyText="Spreektijd wordt alleen gemeten bij opnames met aparte sporen (opname met AI-analyse). Per leerling zie je hem in de lesanalyse en op het leerlingdashboard. Spreekvaardigheid wordt niet als cijfer berekend."><span/></ChartCard>
 }
 
 function TeacherHome(){
@@ -84,6 +84,9 @@ function StudentHome(){
  const last=d.lessons.map(l=>l.lesson_date).sort().pop();
  const perWeek=sessionsPerWeek(d.practice,8);const vstat=[{key:'new',label:'Nieuw',value:d.vocab.filter(v=>v.status==='new').length},{key:'practicing',label:'Aan het oefenen',value:d.vocab.filter(v=>v.status==='practicing').length},{key:'mastered',label:'Beheerst',value:d.vocab.filter(v=>v.status==='mastered').length}];
  const perLevel=['A0','A1','A2','B1','B2','C1','C2'].map(l=>({key:l,label:l,value:d.progress.filter(p=>p.curriculum_goals?.level===l&&(p.status==='covered'||p.status==='mastered')).length})).filter(x=>x.value>0);
+ const catCount=new Map<string,number>();d.summaries.forEach(s=>(s.final?.corrections||[]).filter(c=>c.certainty!=='uncertain').forEach(c=>{const k=CATEGORY_LABEL[(c.category||'other') as CorrectionCategory];catCount.set(k,(catCount.get(k)||0)+1)}));
+ const errorsByCat=Array.from(catCount.entries()).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({key:k,label:k,value:v}));
+ const speaking=d.summaries.filter(s=>s.final?.student_speaking_seconds!=null).sort((a,b)=>a.lesson_date<b.lesson_date?-1:1).slice(-8).map(s=>({key:s.lesson_date,label:new Date(s.lesson_date+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}),value:Math.round((s.final.student_speaking_seconds||0)/60)}));
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
  return <><PendingLinks/>
   <div className="hero mint"><div><div className="eyebrow">LEERLINGDASHBOARD</div><h1>Mijn lessen</h1><p>Je voortgang, woorden en huiswerk bij al je docenten op één plek.</p><div className="heroactions"><Link className="button light" href="/mijn-profiel"><BookOpen size={17}/> Mijn lessen</Link><Link className="button ghost-light" href="/portugees"><Languages size={17}/> Portugees voorbereiden</Link></div></div><div className="hero-art" aria-hidden><BookOpen size={76}/></div></div>
@@ -100,9 +103,10 @@ function StudentHome(){
    <ChartCard className="span2" title="Lesactiviteit" subtitle="Gevolgde lessen per maand" empty={d.loaded&&isEmptySeries(perMonth)} emptyText="Nog geen lessen opgeslagen." table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
    <ChartCard className="span2" title="Oefenactiviteit" subtitle="Oefensessies per week · gemeten" empty={d.loaded&&isEmptySeries(perWeek)} emptyText="Nog niet geoefend. Probeer de spelletjes bij Oefenen!" table={perWeek}><BarChart data={perWeek} color={CHART.coral}/></ChartCard>
    <ChartCard title="Mijn woorden" subtitle={avg!==null?`Gemiddelde oefenscore % · gemeten`:'Status · gemeten'} empty={d.loaded&&!d.vocab.length} emptyText="Nog geen woorden in je lijst." table={vstat}><HBars data={vstat} color={CHART.teal}/></ChartCard>
+   <ChartCard title="Terugkerende fouten" subtitle="Uit goedgekeurde lesanalyses · AI, gecontroleerd door docent" empty={d.loaded&&!errorsByCat.length} emptyText="Nog geen goedgekeurde lesanalyses met correcties." table={errorsByCat}><HBars data={errorsByCat} color={CHART.coral}/></ChartCard>
+   <ChartCard title="Mijn spreektijd" subtitle="Minuten per opgenomen les · gemeten" empty={d.loaded&&!speaking.length} emptyText="Nog niet gemeten. Spreektijd wordt alleen gemeten bij opnames met aparte sporen (AI-analyse aan)." table={speaking}><BarChart data={speaking} color={CHART.teal} unit=" min"/></ChartCard>
    <ChartCard title="Leerdoelen per niveau" subtitle="Behandeld of beheerst · docentbeoordeling" empty={d.loaded&&!perLevel.length} emptyText="Je docent heeft nog geen leerdoelen bijgehouden." table={perLevel}><HBars data={perLevel} color={CHART.ochre}/></ChartCard>
    <ChartCard title="Voortgang per taal of vak" subtitle="Aantal lessen" empty={d.loaded&&!bySubject.length} emptyText="Nog geen lessen." table={bySubject}><HBars data={bySubject} color={CHART.ochre}/></ChartCard>
-   <SpeakingCard/>
   </div>
   <section className="panel"><div className="panelheader"><div><h2>Mijn docenten</h2><p>Alleen jij en je docent zien deze gegevens</p></div></div>
    {studentLinks.length===0?<div className="emptystate"><BookOpen size={30}/><strong>Nog geen leerlingprofiel gekoppeld</strong><p>Vraag je docent om je toe te voegen met het e-mailadres van dit account. De uitnodiging verschijnt dan hierboven.</p></div>:
