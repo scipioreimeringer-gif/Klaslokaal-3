@@ -52,7 +52,8 @@ export function chunkText(chunk: Chunk, byId: Map<string, Utterance>) {
 
 /* ---------------- verification & merging ---------------- */
 export type RawError = {utterance_id: string; original: string; corrected: string; category: string; topic_id: string | null; kind: 'error' | 'slip' | 'self_correction'; certainty: 'certain' | 'uncertain'};
-export type RawChunk = {errors: RawError[]; covered: {topic_id: string | null; label: string}[]; positives: {utterance_id: string; note: string}[]; new_words: {term: string; translation: string}[]};
+export type RawChunk = {errors: RawError[]; covered: {topic_id: string | null; label: string}[]; positives: {utterance_id: string; note: string}[]; new_words: {term: string; translation: string; status?: WordStatus}[]};
+export type WordStatus = 'introduced' | 'practised' | 'difficult';
 
 const norm = (s: string) => String(s || '').toLowerCase().replace(/[“”"‘’'`.,!?;:()…\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
 /** Category key: synonyms map to one key so the same rule is explained once. Unknown categories stay possible. */
@@ -134,7 +135,7 @@ export function trendFor(key: string, count: number, studentUtts: number, histor
 }
 
 /** Merge all chunk results into grouped categories (max 2 examples each), sorted by relevance then frequency. */
-export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topics: Topic[]; studentLevel: string; todayTopicIds: string[]; history: HistoryItem[]}) {
+export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topics: Topic[]; studentLevel: string; todayTopicIds: string[]; history: HistoryItem[]; knownWords?: string[]}) {
   const byId = new Map(utts.map(u => [u.id, u]));
   const separated = speakersKnown(utts);
   const all = results.flatMap(r => r.errors || []);
@@ -176,9 +177,17 @@ export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topic
     if (!covered.some(x => (x.topic_id && topics.has(x.topic_id) ? x.topic_id : norm(x.label)) === k)) covered.push({topic_id: c.topic_id && topics.has(c.topic_id) ? c.topic_id : null, label: c.label.trim().slice(0, 80)});
   }
   const positives = results.flatMap(r => r.positives || []).filter(p => byId.get(p.utterance_id)?.speaker !== 'teacher').slice(0, 8);
-  const words = new Map<string, {term: string; translation: string}>();
-  for (const w of results.flatMap(r => r.new_words || [])) { const k = norm(w.term); if (k && !words.has(k)) words.set(k, {term: w.term.trim(), translation: w.translation.trim()}); }
-  return {categories, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].slice(0, 20), dropped, separated, studentUtterances: studentUtts};
+  // vocabulary: one entry per word; "difficult" wins over "introduced" over "practised". Known words (already in the list) are never "introduced".
+  const rank: Record<WordStatus, number> = {difficult: 3, introduced: 2, practised: 1};
+  const known = new Set((opts.knownWords || []).map(norm));
+  const words = new Map<string, {term: string; translation: string; status: WordStatus}>();
+  for (const w of results.flatMap(r => r.new_words || [])) {
+    const k = norm(w.term); if (!k) continue;
+    let st: WordStatus = w.status || 'introduced'; if (st === 'introduced' && known.has(k)) st = 'practised';
+    const prev = words.get(k);
+    if (!prev) words.set(k, {term: w.term.trim(), translation: w.translation.trim(), status: st}); else if (rank[st] > rank[prev.status]) prev.status = st;
+  }
+  return {categories, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 30), dropped, separated, studentUtterances: studentUtts};
 }
 
 /** Categories that may get homework: only material that was taught (checklist status, today's goals, explained this lesson).

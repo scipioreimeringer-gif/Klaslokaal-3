@@ -30,6 +30,9 @@ export const DYNAMIC = [
   'Ongeldige analyse', 'Analyse niet gevonden', 'Voer eerst supabase/v34.sql uit.', 'Alleen de docent start een analyse',
   'Bronnen verzamelen en transcriberen', 'Transcript in delen analyseren', 'Fouten samenvoegen en tellen', 'Verslag en uitleg schrijven', 'Huiswerkconcept maken', 'Klaar',
   'Lesdoel van vandaag', 'Al behandeld', 'Vandaag uitgelegd', 'Relevant', 'Voor later', 'Leertraject',
+  // v35: word list and classroom games (components/Games.tsx labels, route messages)
+  'Woordenlijst', 'Flashcards', '30 Seconds', 'Taboe', 'Woorden uit de vorige les', 'Woorden uit de laatste vijf lessen', 'Alle woorden', 'Woorden die de leerling moeilijk vindt', 'Zelf kiezen',
+  'Alleen de docent kan woorden van het canvas laten herkennen.', 'Alleen de docent start een spelronde.', 'Ongeldige spelronde', 'De leerling heeft nog geen account gekoppeld en kan daarom niet uitleggen.', 'Voer eerst supabase/v35.sql uit.', 'Deze ronde is al gestart.',
 ];
 
 function sourceFiles() {

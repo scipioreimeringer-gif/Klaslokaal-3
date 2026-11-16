@@ -1,6 +1,7 @@
 /* TeachyRooms classroom interface translations. Key = Dutch text; row = [en, pt-BR, es, fr, de].
    Generated; checked by tests/unit/i18n.test.mjs. Never applied to lesson content (canvas, notes, names). */
 window.KLAS_I18N = {"Klas":["Class","Aula","Clase","Classe","Klasse"],
+"Spelletjes":["Games","Jogos","Juegos","Jeux","Spiele"],
 "Opname loopt":["Recording","Gravando","Grabando","Enregistrement en cours","Aufnahme läuft"],
 "Interface":["Interface","Interface","Interfaz","Interface","Oberfläche"],
 "Lestaal":["Lesson language","Idioma da aula","Idioma de la clase","Langue du cours","Unterrichtssprache"],

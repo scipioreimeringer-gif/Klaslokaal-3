@@ -543,6 +543,7 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
     <button type="button" data-ai="report">Lesverslag maken</button>
     <button type="button" data-ai="assistant">Assistent openen (huiswerk, volgende les…)</button>
   </div></details>
+  <button class="barbtn" id="gamesBtn" type="button" hidden title="Spelletjes" aria-label="Spelletjes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="7" width="18" height="11" rx="4"/><path d="M8 11v3M6.5 12.5h3M15 12h.01M17.5 14h.01"/></svg></button>
   <button class="barbtn" id="focusBtn" type="button" title="Focusmodus: alleen bord en slides (Esc om terug te gaan)" aria-label="Focusmodus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <details class="popmenu" id="moreMenu"><summary class="barbtn" title="Meer">⋯</summary><div class="menu-pop" id="morePop"></div></details>
   <button class="barbtn" id="topHide" type="button" title="Bovenbalk inklappen" aria-label="Bovenbalk inklappen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg></button>
@@ -897,6 +898,9 @@ var params = new URLSearchParams(location.search);
    All storage then goes through the logged-in user's Supabase session (RLS). */
 function bridge(){ try{ return (window.parent !== window && window.parent.teachyBridge) || null; }catch(e){ return null; } }
 var SB = params.get("sb") === "1" && !!bridge();
+/* v35: word games run in the app (parent page); they use this data channel. Only the explaining player ever loads cards. */
+window.__klasGameSend = function(m){ if(m && m.t === "game") send(m); };
+window.__klasOnline = function(){ return online(); };
 if(SB){ document.documentElement.setAttribute("data-theme", "light"); }
 var isT = params.get("rol") !== "leerling";
 if(SB && bridge().role === "student") isT = false;
@@ -934,7 +938,8 @@ function deliver(m, except){
 function onMessage(m){
   if(!m || !m.t) return;
   switch(m.t){
-    case "hello": if(isT) sendState(); break;
+    case "hello": if(isT){ sendState(); var gh = bridge(); if(gh && gh.onPeerHello) try{ gh.onPeerHello(); }catch(e){} } break;
+    case "game": var gb = bridge(); if(gb && gb.onGame) try{ gb.onGame(m); }catch(e){} break;
     case "slide": incomingSlide(m); break;
     case "chunk": incomingChunk(m); break;
     case "show": SL.show(m.k, true); markNew("sl"); break;
@@ -2490,6 +2495,8 @@ if(isT){
     chk("…met AI-lesanalyse (als leerling instemt)", "ai");
     window.__klasAutoRec = function(){ var c = store(key) || {}; return c.on ? {ai:!!c.ai} : null; };
   }
+  /* v35: word games (flashcards, 30 Seconds, Taboo) for teacher and student */
+  if(SB && b && b.ui && b.ui.games){ $("gamesBtn").hidden = false; $("gamesBtn").addEventListener("click", function(){ b.ui.games(); }); }
   /* AI menu (teacher, SB only): one place for AI, closed by default */
   if(SB && isT){
     $("aiMenu").hidden = false;

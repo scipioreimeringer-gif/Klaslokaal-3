@@ -21,7 +21,8 @@ export const ChunkSchema = z.object({
   })).describe('max 40, only real mistakes of the student'),
   covered: z.array(z.object({topic: z.string().nullable(), label: z.string()})).describe('max 6: topics the teacher explained or practised in this part'),
   positives: z.array(z.object({utterance_id: z.string(), note: z.string()})).describe('max 3: strong or correct student utterances worth praising'),
-  new_words: z.array(z.object({term: z.string(), translation: z.string()})).describe('max 6: words/expressions the teacher introduced or explained'),
+  new_words: z.array(z.object({term: z.string().describe('exact spelling as used in the lesson'), translation: z.string(), status: z.enum(['introduced', 'practised', 'difficult']).describe('introduced = new word explained by the teacher; practised = a word used again; difficult = the student clearly struggled with it (asked, could not recall, used it wrongly)')}))
+    .describe('max 8: words/expressions that were introduced, practised again or were difficult for the student. A word written down is NOT proof that the student knows it.'),
 });
 export const SynthesisSchema = z.object({
   report: z.object({
@@ -52,7 +53,7 @@ export type AnalysisV2 = {
   later_note: string;
   covered: {topic_id: string | null; label: string}[];
   positives: {utterance_id: string; text: string; note: string}[];
-  vocabulary: {term: string; translation: string}[];
+  vocabulary: {term: string; translation: string; status?: 'introduced' | 'practised' | 'difficult'}[];
   checklist_suggestions: Suggestion[];
   homework: {assignment_id: string | null; items: number; skipped_reason: string | null} | null;
   speakers_separated: boolean; student_utterances: number; chunks: number; dropped_unverified: number;
@@ -79,7 +80,7 @@ export type Store = {
 export type Context = {
   utterances: Utterance[]; lessonDate: string; targetLang: string; targetName: string; uiName: string; level: string;
   notes: string; board: string; lessonGoals: {topic_id: string | null; title: string}[]; topics: Topic[]; history: HistoryItem[];
-  isTest: boolean; guide: string; thinNote?: string; chunkWords?: number; concurrency?: number; maxAttempts?: number; deadline?: number;
+  isTest: boolean; guide: string; thinNote?: string; knownWords?: string[]; chunkWords?: number; concurrency?: number; maxAttempts?: number; deadline?: number;
 };
 
 const now = () => Date.now();
@@ -121,7 +122,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       'kind: "slip" for an obvious one-off speech error, "self_correction" when the student immediately corrected it themselves, otherwise "error".',
       'No explanations. Keep it compact. Lines marked as context must not be analysed.',
       `Topic list (use the alias in "topic" when a mistake or covered topic belongs to it):\n${topicList || '(none)'}`,
-      `Translations in new_words: ${ctx.uiName}.`,
+      `new_words: translations in ${ctx.uiName}. status "difficult" only with evidence in the student lines.`,
     ].join('\n');
     let i = 0; const conc = ctx.concurrency || 4;
     const worker = async () => {
@@ -134,7 +135,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
             errors: r.errors.slice(0, 40).map(e => ({utterance_id: e.utterance_id, original: e.original, corrected: e.corrected, category: e.category, topic_id: e.topic ? toId.get(e.topic) || null : null, kind: e.kind, certainty: e.certainty}))
               .filter(e => c.ids.includes(e.utterance_id)), // never count context lines twice
             covered: r.covered.slice(0, 6).map(x => ({topic_id: x.topic ? toId.get(x.topic) || null : null, label: x.label})),
-            positives: r.positives.slice(0, 3).filter(p => c.ids.includes(p.utterance_id)), new_words: r.new_words.slice(0, 6),
+            positives: r.positives.slice(0, 3).filter(p => c.ids.includes(p.utterance_id)), new_words: r.new_words.slice(0, 8),
           };
           await store.savePart(c.index, 'done', raw, null);
         } catch (e) { await store.savePart(c.index, 'failed', null, e instanceof Error ? e.message : String(e)); }
@@ -150,7 +151,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
     }
     /* 2. merge (deterministic) */
     await store.stage('merge', {total: chunks.length});
-    const merged = mergeChunks(done.sort((a, b) => a.index - b.index).map(p => p.result!), utts, {topics: ctx.topics, studentLevel: ctx.level, todayTopicIds: ctx.lessonGoals.map(g => g.topic_id).filter(Boolean) as string[], history: ctx.history});
+    const merged = mergeChunks(done.sort((a, b) => a.index - b.index).map(p => p.result!), utts, {topics: ctx.topics, studentLevel: ctx.level, todayTopicIds: ctx.lessonGoals.map(g => g.topic_id).filter(Boolean) as string[], history: ctx.history, knownWords: ctx.knownWords});
     draft = {
       version: 2, report: null, categories: merged.categories, later_note: '', covered: merged.covered,
       positives: merged.positives.map(p => ({utterance_id: p.utterance_id, text: byId.get(p.utterance_id)?.text || '', note: p.note})),
@@ -175,6 +176,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       lesson_goals: ctx.lessonGoals.map(g => g.title), teacher_notes: ctx.notes.slice(0, 1500) || '(none)', board: ctx.board.slice(0, 2500) || '(none)',
       checklist: topics.map(t => `${toAlias.get(t.id)} [${t.level}] ${t.title}: ${STATUS_NL[t.status]}`),
       speakers_separated: draft.speakers_separated, student_lines: draft.student_utterances,
+      vocabulary: {introduced: draft.vocabulary.filter(v => v.status === 'introduced').map(v => v.term).slice(0, 12), practised: draft.vocabulary.filter(v => v.status === 'practised').map(v => v.term).slice(0, 12), difficult: draft.vocabulary.filter(v => v.status === 'difficult').map(v => v.term).slice(0, 12)},
     };
     try {
       const s = await ask('synthesis', SynthesisSchema, [
@@ -183,6 +185,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
         'The mistakes are already grouped and counted: do NOT add, remove or recount mistakes. Write exactly one short explanation per category key (one rule).',
         'covered = what was taught (from covered topics, lesson goals, notes and board) even if the student made few mistakes. went_well = concrete strengths. focus = most relevant categories (relevance current/known first; never "later").',
         'Never invent things the student said. Notes and board describe what was taught, not what the student said.',
+        'vocabulary: mention new and difficult words in covered/focus where useful. A word on the board or introduced by the teacher is NOT mastered by the student.',
         'suggestions: checklist changes (topic alias from the checklist, status covered / in_progress (= still practising) / mastered). Only with evidence from this lesson; "mastered" only when the student used it correctly several times (evidence_count = number of correct uses) and made no mistakes in it. Max 8.',
         'later_note: mention advanced mistakes (relevance "later") only as material for later, never as a weakness. Empty if none.',
         'source_quality: good when speakers were separated and the transcript is substantial; partial or poor otherwise, explained in quality_note.',
@@ -218,7 +221,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
           'Use ONLY grammar and vocabulary the student already knows (listed topics, this lesson). Never require grammar that has not been taught. For A0/A1: very short, very simple, familiar words.',
           'Give the correct answer (and accepted variants) for auto-checkable items; for open tasks give a model answer and a short assessment guideline in "explanation".',
           `Instructions in ${explainIn}. options only for multiple_choice (else empty). passage empty unless needed.`,
-        ].join('\n'), JSON.stringify({categories: cats.map(c => ({key: c.key, label: c.label, explanation: c.explanation, examples: c.examples.map(e => `${e.original} → ${e.corrected}`)})), known_topics: known.slice(0, 60), lesson_words: draft.vocabulary.map(v => v.term).slice(0, 20), lesson_goals: ctx.lessonGoals.map(g => g.title)}), 3500);
+        ].join('\n'), JSON.stringify({categories: cats.map(c => ({key: c.key, label: c.label, explanation: c.explanation, examples: c.examples.map(e => `${e.original} → ${e.corrected}`)})), known_topics: known.slice(0, 60), lesson_words: [...draft.vocabulary].sort((a, b) => Number(b.status === 'difficult') - Number(a.status === 'difficult')).map(v => v.term).slice(0, 20), lesson_goals: ctx.lessonGoals.map(g => g.title)}), 3500);
         const allowed = new Set(cats.map(c => c.key)); const per = new Map<string, number>();
         const items = h.items.filter(it => allowed.has(it.category_key) && (per.set(it.category_key, (per.get(it.category_key) || 0) + 1).get(it.category_key)! <= 3))
           .map(it => ({type: it.type, prompt: it.prompt, passage: it.passage, options: it.type === 'multiple_choice' ? it.options : [], answer: it.answer, accept: it.accept, explanation: it.explanation}));

@@ -8,6 +8,8 @@ import {canvasText, subjectCode, type StudentCtx} from './context';
 import {formatDialogue, mergeSpeakers, speakingTime} from '../transcript';
 import {parseUtterances, wordCount, type Topic, type HistoryItem, type RawChunk} from '../analysis/core';
 import {runPipeline, PIPELINE_VERSION, type Ask, type Store, type AnalysisV2, type Stage} from '../analysis/pipeline';
+import {detectCanvasVocab} from './vocab';
+import {normTerm} from '../vocab/core';
 
 export const LANG_GUIDE: Record<string, string> = {
   pt: 'BRAZILIAN Portuguese: verb conjugation (e.g. "ontem eu vai" → "ontem eu fui"), ser/estar, gender/number agreement, prepositions and contractions, word order, word choice and false friends. Normal informal Brazilian speech is NOT an error ("a gente", "tá", "pra", "né", omitted object pronouns, "ter" for "haver").',
@@ -85,6 +87,7 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
         .then(r => ((r.data || []) as {lesson_date: string; final: AnalysisV2 | null; is_test?: boolean; pipeline_version?: number}[])
           .filter(x => !x.is_test && x.final?.version === 2).map(x => ({lesson_date: x.lesson_date, student_utterances: x.final!.student_utterances || 0, categories: (x.final!.categories || []).map(c => ({key: c.key, count: c.count}))}))),
     ]);
+    const knownWords = ((await db.from('vocab_items').select('term').eq('student_id', student.id)).data || []).map(x => (x as {term: string}).term);
     const notes = [lesson?.notes, teacherNotes].filter(Boolean).join('\n');
     const utterances = parseUtterances(transcript);
     const studentWords = utterances.filter(u => u.speaker !== 'teacher').reduce((n, u) => n + wordCount(u.text), 0);
@@ -126,12 +129,13 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
     const res = await runPipeline({
       utterances, lessonDate: a.lesson_date, targetLang: subject, targetName: target, uiName: ui, level: student.level || 'A1',
       notes, board, lessonGoals: goals.map(g => ({topic_id: g.goal_id, title: g.custom_title || g.curriculum_goals?.title || ''})).filter(g => g.title),
-      topics, history: hist, isTest: test, guide: LANG_GUIDE[subject] || '',
+      topics, history: hist, isTest: test, guide: LANG_GUIDE[subject] || '', knownWords,
       thinNote: studentWords < 60 && !notes && !board ? `Te weinig lesinhoud voor zinvol huiswerk (${studentWords} woorden van de leerling, geen notities of bord).` : undefined,
       deadline: opts.started + 240_000,
     }, ask, store);
     if (studentSeconds !== null && res.doc) { const d = {...res.doc, student_speaking_seconds: studentSeconds}; await db.from('lesson_analyses').update(test ? {draft: d} : {draft: d, final: d}).eq('id', analysisId); }
     paused = res.state === 'paused';
+    if (res.state === 'done' && res.doc && !test) await syncVocabulary(db, student, res.doc, {userId: opts.userId, ui: opts.ui, lessonDate: a.lesson_date, lessonId: a.lesson_id || null, known: knownWords}).catch(() => undefined); // never fails the analysis
   } catch (e) {
     await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', error: (e instanceof Error ? e.message : 'Onbekende fout').slice(0, 500)}).eq('id', analysisId);
   } finally {
@@ -139,5 +143,15 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
   }
   // continue in a fresh invocation (Vercel time limit) — resumes from the stored parts/draft
   if (paused) await fetch(`${opts.origin}/api/ai/analyze`, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${opts.token}`}, body: JSON.stringify({resumeId: analysisId, uiLang: opts.ui})}).catch(() => undefined);
+}
+/** After a (non-test) analysis: new words → suggestions for the teacher; words the student found difficult → flagged
+ *  (priority in flashcards and games; never "mastered"); new typed words on the canvas → suggestions too. */
+async function syncVocabulary(db: SupabaseClient, student: StudentCtx, doc: AnalysisV2, o: {userId: string; ui: string; lessonDate: string; lessonId: string | null; known: string[]}) {
+  const known = new Set(o.known.map(normTerm)); const subject = subjectCode(student);
+  for (const v of doc.vocabulary || []) {
+    if (v.status === 'difficult' && known.has(normTerm(v.term))) await db.from('vocab_items').update({difficult: true, due_at: new Date().toISOString(), updated_at: new Date().toISOString()}).eq('student_id', student.id).ilike('term', v.term.replace(/[%_\\]/g, '\\$&'));
+    else if (!known.has(normTerm(v.term))) await db.from('vocab_suggestions').insert({student_id: student.id, term: v.term.slice(0, 120), translation: v.translation.slice(0, 300), kind: /\s/.test(v.term.trim()) ? 'expression' : 'word', lang: subject.length === 2 ? subject : null, origin: 'analysis', lesson_date: o.lessonDate, lesson_id: o.lessonId});
+  }
+  await detectCanvasVocab(db, student, {userId: o.userId, ui: o.ui, lessonDate: o.lessonDate, lessonId: o.lessonId});
 }
 export {PIPELINE_VERSION};

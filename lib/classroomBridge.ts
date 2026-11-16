@@ -30,7 +30,10 @@ export type TeachyBridge = {
   /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
-  ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void; setLang?(lang: string): void};
+  ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void; setLang?(lang: string): void; games?(): void};
+  /** v35 word games: messages {t:'game'} from the other player, and (teacher) the student (re)connected. */
+  onGame?(m: unknown): void;
+  onPeerHello?(): void;
   /** Interface language of the app (the classroom follows it; not the language being taught). */
   uiLang?: string;
   /** Photo of the other participant (signed URL or Google photo), shown in the classroom top bar. */

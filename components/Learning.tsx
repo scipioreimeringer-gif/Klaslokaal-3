@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Plus,Trash2,Search,Check,X,RotateCcw,Shuffle,Eye,Sparkles,Layers,ListChecks,Keyboard,Puzzle,Trophy,Target} from 'lucide-react';
+import {Plus,Trash2,Search,Check,X,RotateCcw,Shuffle,Eye,Sparkles,Layers,ListChecks,Keyboard,Puzzle,Trophy,Flag} from 'lucide-react';
+import {niceDate} from '../lib/data';
 import {supabase} from '../lib/supabase';
 import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
@@ -9,6 +10,34 @@ import {PenLine,Repeat,Wrench} from 'lucide-react';
 import {t as tt, translated} from '../lib/i18n';
 
 /* ========================= Vocabulary ========================= */
+/** Teacher: words recognised on the canvas or in the AI lesson analysis, waiting for review. Nothing enters the list unseen. */
+type Sug={id:string;term:string;translation:string;example:string;pos:string|null;kind:'word'|'expression';lang:string|null;origin:'canvas'|'analysis';lesson_date:string|null;lesson_id:string|null;source_page:string|null};
+function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
+ const [rows,setRows]=useState<Sug[]|null>(null);const [msg,setMsg]=useState('');const [busy,setBusy]=useState(false);
+ const load=useCallback(async()=>{const r=await supabase()!.from('vocab_suggestions').select('id,term,translation,example,pos,kind,lang,origin,lesson_date,lesson_id,source_page').eq('student_id',studentId).eq('status','pending').order('created_at');
+  if(r.error){setRows([]);if(!/vocab_suggestions|PGRST205/.test(r.error.message))setMsg(r.error.message);return}setRows((r.data||[]) as Sug[])},[studentId]);
+ useEffect(()=>{void load()},[load]);
+ async function scan(){setBusy(true);setMsg('');try{const r=await authedPost<{added:number;scannedPages:number}>(supabase()!,'/api/vocab/detect',{studentId});setMsg(r.added?tt('{0} nieuwe woorden gevonden. Controleer ze hieronder.',r.added):r.scannedPages?tt('Geen nieuwe woorden gevonden op het canvas.'):tt('Het canvas is niet veranderd sinds de vorige keer.'));await load()}catch(e){setMsg(e instanceof Error?e.message:String(e))}setBusy(false)}
+ async function accept(list:Sug[]){setBusy(true);const db=supabase()!;let added=0;
+  for(const s of list){const r=await db.from('vocab_items').insert({student_id:studentId,term:s.term.trim(),translation:s.translation.trim(),example:s.example.trim(),kind:s.kind,pos:s.pos||null,lang:s.lang,source:s.origin==='analysis'?'ai':'canvas',lesson_date:s.lesson_date,lesson_id:s.lesson_id,source_page:s.source_page});
+   if(!r.error)added++;await db.from('vocab_suggestions').update({status:'accepted',decided_at:new Date().toISOString(),term:s.term.trim(),translation:s.translation.trim()}).eq('id',s.id)}
+  setMsg(tt('{0} woorden toegevoegd aan de woordenlijst.',added));setBusy(false);await load();onAdded()}
+ async function reject(s:Sug){await supabase()!.from('vocab_suggestions').update({status:'rejected',decided_at:new Date().toISOString()}).eq('id',s.id);await load()}
+ const up=(id:string,p:Partial<Sug>)=>setRows(x=>x?.map(r=>r.id===id?{...r,...p}:r)||null);
+ if(!rows)return null;
+ return <section className="vocab-suggest">
+  <div className="row between wrap"><h4><Sparkles size={15}/> {tt('Voorgestelde woorden')} {rows.length>0&&<span className="tag">{rows.length}</span>}</h4>
+   <div className="row wrap"><button className="button small secondary" disabled={busy} onClick={()=>void scan()}>{tt('Woorden van het canvas herkennen')}</button>{rows.length>1&&<button className="button small" disabled={busy} onClick={()=>void accept(rows)}><Check size={14}/> {tt('Alles toevoegen')}</button>}</div></div>
+  {msg&&<p className="muted" role="status">{msg}</p>}
+  {rows.length?<table className="vocab edit"><tbody>{rows.map(s=><tr key={s.id}>
+   <td><input className="cell" value={s.term} onChange={e=>up(s.id,{term:e.target.value})} aria-label={tt('Woord')}/></td>
+   <td><input className="cell" value={s.translation} onChange={e=>up(s.id,{translation:e.target.value})} aria-label={tt('Betekenis')}/></td>
+   <td className="muted small-print">{s.pos||''}{s.source_page?' · '+s.source_page:''}{s.origin==='analysis'?' · '+tt('AI-lesanalyse'):''}</td>
+   <td className="row"><button className="button small" disabled={busy||!s.term.trim()} onClick={()=>void accept([s])}><Check size={13}/> {tt('Toevoegen')}</button><button className="iconbtn danger" title={tt('Afwijzen')} onClick={()=>void reject(s)}><X size={14}/></button></td></tr>)}</tbody></table>
+  :<p className="muted small-print">{tt('Geen voorstellen. Getypte tekst op het canvas wordt herkend; handgeschreven tekst op het bord niet, omdat die niet betrouwbaar te lezen is.')}</p>}
+ </section>
+}
+
 export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teacher'|'student'}){
  const [items,setItems]=useState<VocabItem[]|null>(null);const [err,setErr]=useState('');const [q,setQ]=useState('');const [filter,setFilter]=useState<'all'|VocabItem['status']>('all');
  const [term,setTerm]=useState('');const [tr,setTr]=useState('');const [ex,setEx]=useState('');
@@ -23,16 +52,18 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
  const shown=items.filter(i=>(filter==='all'||i.status===filter)&&(i.term+' '+i.translation+' '+i.example).toLowerCase().includes(q.toLowerCase()));
  return <div>
   {err&&<div className="notice">{err}</div>}
+  {viewer==='teacher'&&<Suggestions studentId={studentId} onAdded={()=>void load()}/>}
   <div className="chipbar"><button aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>{tt("Alle ({0})", items.length)}</button>{(['new','practicing','mastered'] as const).map(s=><button key={s} aria-pressed={filter===s} onClick={()=>setFilter(s)}>{VOCAB_STATUS_LABEL[s]} ({counts[s]})</button>)}</div>
   <form className="row vocab-add" onSubmit={e=>{e.preventDefault();void add()}}><input className="field" placeholder={tt("Woord of uitdrukking")} value={term} onChange={e=>setTerm(e.target.value)}/><input className="field" placeholder={tt("Betekenis")} value={tr} onChange={e=>setTr(e.target.value)}/><input className="field grow" placeholder={tt("Voorbeeldzin (optioneel)")} value={ex} onChange={e=>setEx(e.target.value)}/><button className="button small" type="submit"><Plus size={15}/> {tt("Toevoegen")}</button></form>
   <label className="searchbox"><Search size={16}/><input placeholder={tt("Zoeken…")} value={q} onChange={e=>setQ(e.target.value)}/></label>
   {!shown.length?<p className="muted">{tt("Nog geen woorden. Woorden uit de live les, goedgekeurde AI-analyses en woorden die je hier toevoegt, komen in deze lijst.")}</p>:
-  <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Bron")}</th><th/></tr></thead><tbody>{shown.map(v=><tr key={v.id}>
+  <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Les")}</th><th>{tt("Bron")}</th><th/></tr></thead><tbody>{shown.map(v=><tr key={v.id}>
    <td>{canEdit(v)?<input className="cell" value={v.term} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,term:e.target.value}:i)||null)} onBlur={e=>void patch(v,{term:e.target.value})}/>:<b>{v.term}</b>}</td>
    <td>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
    <td className="muted">{canEdit(v)?<input className="cell" value={v.example} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,example:e.target.value}:i)||null)} onBlur={e=>void patch(v,{example:e.target.value})}/>:v.example}</td>
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
-   <td><span className="tag">{v.source==='lesson'?tt("les"):v.source==='ai'?tt("AI · goedgekeurd"):v.source==='student'?tt("zelf"):tt("docent")}</span></td>
+   <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.pos?<small className="block">{v.pos}</small>:null}</td>
+   <td><span className="tag">{v.source==='lesson'?tt("les"):v.source==='ai'?tt("AI · goedgekeurd"):v.source==='canvas'?tt("canvas"):v.source==='student'?tt("zelf"):tt("docent")}</span>{v.difficult&&<span className="tag uncertain">{tt('moeilijk')}</span>}{viewer==='teacher'&&<button className="iconbtn" title={v.difficult?tt('Niet meer als moeilijk markeren'):tt('Markeren als moeilijk')} onClick={()=>void patch(v,{difficult:!v.difficult})}><Flag size={13}/></button>}</td>
    <td>{canEdit(v)&&<button className="iconbtn danger" title={tt("Verwijderen")} onClick={()=>void del(v)}><Trash2 size={14}/></button>}</td></tr>)}</tbody></table>}
  </div>
 }

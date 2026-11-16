@@ -7,6 +7,7 @@ import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 import {PrivateNotes} from '../../../components/StudentData';
 import {AssistantPanel} from '../../../components/Assistant';
+import {GamesPanel} from '../../../components/Games';
 import {usePhoto} from '../../../components/Avatar';
 import {supabase} from '../../../lib/supabase';
 import {useQueryParam} from '../../../lib/useQuery';
@@ -35,7 +36,7 @@ function Picker(){
 
 function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|null}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
- const [assistOpen,setAssistOpen]=useState(false);
+ const [assistOpen,setAssistOpen]=useState(false);const [gamesOpen,setGamesOpen]=useState(false);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
   const db=supabase()!;const r=await db.from('students').select('id,teacher_id,user_id,name,email,subject,notes,goals,homework,history,level,lesson_language,about,room_code').eq('id',studentId).maybeSingle();
   if(cancelled)return;
@@ -50,7 +51,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
   window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
-  window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true)};
+  window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true),games:()=>setGamesOpen(o=>!o)};
   setRoom({student:s,as});setReady(true);
  })();return()=>{cancelled=true}},[studentId,lessonParam,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
@@ -73,6 +74,8 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
    <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame"/>
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
+   {/* always mounted: receives the game state even while closed (the student's panel opens when a game starts) */}
+   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen} onOpen={()=>setGamesOpen(true)} onClose={()=>setGamesOpen(false)}/>
   </div>
  </main>;
 }

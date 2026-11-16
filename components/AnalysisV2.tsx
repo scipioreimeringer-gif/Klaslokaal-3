@@ -129,7 +129,8 @@ export function TeacherAnalysisV2({a,onChange}:{a:V2Row;onChange:()=>void}){
    </li>)}</ul></>}
 
   {!!doc.vocabulary.length&&<><h4>{tt("Nieuwe woorden uit de les")}</h4>
-   <table className="vocab edit"><tbody>{doc.vocabulary.map((v,i)=><tr key={i}><td><input type="checkbox" checked={keep[i]} onChange={()=>setKeep(k=>k.map((x,j)=>j===i?!x:x))}/></td><td><b>{v.term}</b></td><td>{v.translation}</td></tr>)}</tbody></table>
+   <table className="vocab edit"><tbody>{doc.vocabulary.map((v,i)=><tr key={i}><td><input type="checkbox" checked={keep[i]} onChange={()=>setKeep(k=>k.map((x,j)=>j===i?!x:x))}/></td><td><b>{v.term}</b></td><td>{v.translation}</td><td>{v.status&&<span className={'tag'+(v.status==='difficult'?' uncertain':'')}>{v.status==='difficult'?tt('nog moeilijk'):v.status==='practised'?tt('opnieuw geoefend'):tt('nieuw')}</span>}</td></tr>)}</tbody></table>
+   {!a.is_test&&<p className="muted small-print">{tt('Nieuwe woorden staan ook als voorstel in de Woordenlijst; woorden die nog moeilijk zijn, krijgen voorrang bij flashcards en spelletjes.')}</p>}
    {!a.is_test&&<button className="button small secondary" onClick={()=>void addWords()}><Plus size={14}/> {tt("Aangevinkte woorden naar de woordenlijst")}</button>}</>}
 
   <h4><ClipboardList size={15}/> {tt("Huiswerk")}</h4>
