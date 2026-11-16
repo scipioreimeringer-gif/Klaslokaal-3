@@ -2,7 +2,8 @@
 // Word games in the live classroom: Flashcards, 30 Seconds and Taboo, synchronised between teacher and student
 // over the classroom's existing data channel. The teacher's browser is the host (lib/games/state.ts).
 // Cards of a 30 Seconds / Taboo round are loaded ONLY by the explaining player, from game_rounds (RLS).
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {createPortal} from 'react-dom';
 import {X,Pause,Play,Repeat2,Check,Layers,Timer,Ban,Sparkles,ChevronLeft,ChevronRight,RotateCcw,Square} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {authedPost} from '../lib/learning';
@@ -18,7 +19,10 @@ const bridge=()=>(window as unknown as {teachyBridge?:{onGame?:(m:unknown)=>void
 const KIND_LABEL:Record<Kind,string>={flash:'Flashcards',thirty:'30 Seconds',taboo:'Taboe'};
 const SEL_LABEL:Record<Selection['mode'],string>={last_lesson:'Woorden uit de vorige les',last5:'Woorden uit de laatste vijf lessen',all:'Alle woorden',difficult:'Woorden die de leerling moeilijk vindt',manual:'Zelf kiezen'};
 
-export function GamesPanel({studentId,role,open,onOpen,onClose}:{studentId:string;role:Role;open:boolean;onOpen:()=>void;onClose:()=>void}){
+type Props={studentId:string;role:Role;open:boolean;onOpen:()=>void;onClose:()=>void;mount?:Element|null};
+/** v36: rendered inside the classroom's "Spelletjes" tab (host = a shadow-DOM mount in the work panel); without a host it floats over the classroom. */
+export function GamesPanel(props:Props){const view=GamesView(props);return props.mount?createPortal(view,props.mount):view}
+function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  const host=role==='teacher';const store='teachy-game-'+studentId;
  const [state,setState]=useState<GameState|null>(()=>{if(!host||typeof window==='undefined')return null;try{const x=JSON.parse(sessionStorage.getItem(store)||'null') as GameState|null;return x&&x.phase!=='ended'?{...x,phase:x.phase==='running'?'paused':x.phase,runningSince:null}:null}catch{return null}});
  const ref=useRef(state);ref.current=state;
@@ -78,7 +82,7 @@ export function GamesPanel({studentId,role,open,onOpen,onClose}:{studentId:strin
   void supabase()!.from('game_rounds').select('cards').eq('id',rid).maybeSingle().then(({data})=>{if(!c&&data)setCards({roundId:rid,cards:(data as {cards:Card[]}).cards})});return()=>{c=true}},[explaining,state?.roundId,cards?.roundId]);
  function guessed(i:number){const c=cards?.cards[i];act({a:'guessed',index:i});if(c&&state?.roundId)void supabase()!.rpc('game_mark_guessed',{p_round:state.roundId,p_vocab:c.vocab_id})}
 
- if(!open)return null;
+ if(!open&&!mount)return null;
  const left=state?Math.ceil(remaining(state,now)/1000):0;
  const head=<div className="row between"><h3><Layers size={17}/> {tt('Spelletjes')}{state&&<small className="muted"> · {tt(KIND_LABEL[state.kind])}</small>}</h3><button className="iconbtn" aria-label={tt('Sluiten')} onClick={onClose}><X size={18}/></button></div>;
 

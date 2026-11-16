@@ -522,6 +522,63 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
   body.v28 .cvpage{padding:18px 14px 60px!important}
   #pWb:has(.ftools:not(.collapsed)) .pbody{padding-top:44px}
 }
+
+/* ============================================================
+   v36 — camera modes + one work panel with tabs (local layout only)
+   ============================================================ */
+.mswitch,body.v28 .mswitch{display:flex!important;gap:4px;padding:10px 16px 0;flex-wrap:wrap;align-items:center}
+body.focus .mswitch,body.v28.focus .mswitch{display:none!important}
+.mswitch button{flex:0 0 auto;padding:7px 14px;display:inline-flex;align-items:center;gap:6px}
+.mswitch button svg{width:16px;height:16px}
+.mswitch .mvideo{margin-right:6px}
+.mswitch button.live:before{content:"";width:8px;height:8px;border-radius:50%;background:#d0523a;display:inline-block}
+@media (max-width:700px){body .mswitch,body.v28 .mswitch{padding:6px 8px 0!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none}body .mswitch button,body.v28 .mswitch button{flex:0 0 auto!important;width:auto!important;padding:7px 12px!important;white-space:nowrap}.mswitch .mvideo span{display:none}}
+/* video window: only the floating mode can be dragged / resized freely */
+body:not(.cam-float) .vwin{resize:none;max-width:none;max-height:none;min-width:0;min-height:0;z-index:15;box-shadow:0 4px 24px rgba(17,36,49,.09);border-radius:14px}
+body:not(.cam-float) .vhead{cursor:default;touch-action:auto}
+body:not(.cam-float) #vSize,body:not(.cam-float) .vgrip,body:not(.cam-float) #vMin{display:none}
+body:not(.cam-float) .vwin.vmin .vbody,body:not(.cam-float) .vwin.idle .vbody{display:block}
+body.cam-full .vbody .remotes,body.cam-left .vbody .remotes,body.cam-right .vbody .remotes,body.cam-center .vbody .remotes{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+body.cam-full .vbody .remotes video,body.cam-left .vbody .remotes video,body.cam-right .vbody .remotes video,body.cam-center .vbody .remotes video{object-fit:contain;background:#0b1514}
+body.cam-full .vph b{font-size:1.4rem}body.cam-full .vph span{font-size:1rem;max-width:460px}
+body.cam-full .ws{visibility:hidden}
+body.cam-full #camFull{background:rgba(127,212,202,.2)}
+.vgrip{position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;z-index:3;background:linear-gradient(135deg,transparent 55%,rgba(255,255,255,.55) 55%,rgba(255,255,255,.55) 62%,transparent 62%,transparent 72%,rgba(255,255,255,.55) 72%,rgba(255,255,255,.55) 79%,transparent 79%)}
+.camsplit{position:fixed;z-index:16;touch-action:none;display:flex;align-items:center;justify-content:center}
+.camsplit:after{content:"";background:var(--line-strong);border-radius:4px}
+.camsplit.v{cursor:col-resize}.camsplit.v:after{width:4px;height:48px}
+.camsplit.h{cursor:row-resize}.camsplit.h:after{height:4px;width:48px}
+.camsplit:hover:after,.camsplit.on:after{background:var(--teal)}
+.cammenu{position:fixed;z-index:80;background:var(--surface,#fff);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(6,47,58,.18);padding:8px;display:grid;gap:2px;min-width:220px}
+.cammenu .menu-h{font-size:.74rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
+.cammenu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer;color:var(--ink)}
+.cammenu button:hover{background:var(--teal-soft)}
+.cammenu button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+.cammenu .camw{display:flex;gap:4px;padding:0 4px}.cammenu .camw button{flex:1;text-align:center;border:1px solid var(--line)}
+.cammenu .camlock{display:flex;align-items:center;gap:8px;padding:8px 10px;font-weight:700;cursor:pointer}
+.cammenu small{color:var(--muted);padding:0 10px 4px;max-width:240px}
+.vshow{position:fixed;right:16px;bottom:92px;z-index:30;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--surface,#fff);border-radius:100px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer;box-shadow:0 8px 22px rgba(14,32,46,.14)}
+.vshow svg{width:16px;height:16px}
+/* own camera: picture-in-picture, movable to any corner */
+.vbody .selfv{cursor:pointer}
+.vbody.self-bl .selfv{left:8px;right:auto}.vbody.self-tl .selfv{left:8px;right:auto;top:8px;bottom:auto}.vbody.self-tr .selfv{top:8px;bottom:auto}
+body.cam-full .vbody .selfv{max-width:220px;width:22%}
+/* screen tab (nothing shared yet) and games tab */
+.scrempty{display:flex;align-items:center;justify-content:center;text-align:center}
+.scrempty>div{display:flex;flex-direction:column;gap:10px;align-items:center;max-width:420px;color:var(--muted)}
+.scrempty b{color:var(--ink);font-size:1.05rem}
+.gamesbody{overflow:auto;padding:0}
+#gamesHost{min-height:100%}
+/* pre-join check */
+.precheck{max-width:460px}
+.previd{position:relative;aspect-ratio:4/3;background:#0b1514;border-radius:12px;overflow:hidden}
+.previd video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.prevph{position:absolute;inset:0;display:grid;place-items:center;color:#cfe0dc;font-weight:700}
+.premeter{display:flex;align-items:center;gap:10px;font-size:.84rem;font-weight:700}
+.premeter i{flex:1;height:8px;border-radius:8px;background:var(--line);overflow:hidden}
+.premeter b{display:block;height:100%;width:0;background:var(--teal);transition:width .08s}
+.prebtns{gap:8px;flex-wrap:wrap}
+
 </style>
 </head>
 <body>
@@ -551,10 +608,13 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
 <button class="barshow" id="topShow" type="button" hidden title="Bovenbalk tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>Balk</button>
 <button class="barshow" id="dockShow" type="button" hidden title="Werkbalk tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg>Werkbalk</button>
 
-<div class="mswitch" id="mswitch" role="group" aria-label="Wat wil je zien?">
-  <button type="button" data-mview="wb" aria-pressed="true">Bord</button>
-  <button type="button" data-mview="sl" aria-pressed="false">Slides</button>
-  <button type="button" data-mview="both" aria-pressed="false">Allebei</button>
+<div class="mswitch" id="mswitch" role="tablist" aria-label="Werkpaneel">
+  <button type="button" data-cam="full" class="mvideo" aria-pressed="false" title="Volledige video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg><span>Video</span></button>
+  <button type="button" role="tab" data-mview="wb" aria-pressed="true">Whiteboard</button>
+  <button type="button" role="tab" data-mview="sl" aria-pressed="false">Slides</button>
+  <button type="button" role="tab" data-mview="both" class="mboth" aria-pressed="false">Allebei</button>
+  <button type="button" role="tab" data-mview="scr" aria-pressed="false">Scherm</button>
+  <button type="button" role="tab" data-mview="games" aria-pressed="false" id="tabGames" hidden>Spelletjes</button>
 </div>
 <main class="ws" id="ws">
   <!-- WHITEBOARD (links) -->
@@ -638,6 +698,13 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
     </div>
   </section>
 
+  <!-- SCHERM (v36: eigen tab; het gedeelde scherm zelf verschijnt in het slidevlak, zodat er overheen getekend kan worden) -->
+  <section class="panel" id="pScr" hidden>
+    <div class="phead"><span class="ptitle">Scherm delen</span></div>
+    <div class="pbody scrempty"><div><b>Er wordt nu geen scherm gedeeld.</b><span data-teacher>Deel een tabblad, venster of je hele scherm. Het videogesprek loopt gewoon door.</span><span data-student hidden>Zodra je docent een scherm deelt, zie je het hier.</span><button class="btn primary" id="scrStart" data-teacher type="button">Scherm delen</button></div></div>
+  </section>
+  <!-- SPELLETJES (v36: de app toont hier Flashcards, 30 Seconds en Taboe) -->
+  <section class="panel" id="pGames" hidden><div class="pbody gamesbody"><div id="gamesHost"></div></div></section>
   <div class="ws-empty" id="wsEmpty" hidden><div><b>Alles is dicht.</b><br>Open het whiteboard of de slides onderin.</div></div>
 </main>
 
@@ -673,6 +740,8 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
 <div class="vwin" id="vwin">
   <div class="vhead" id="vhead">
     <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg><span id="vTitle">Video</span></span>
+    <button class="ib" id="camPin" type="button" title="Camera-indeling: zwevend, vast links of rechts" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 16v5"/></svg></button>
+    <button class="ib" id="camFull" type="button" title="Volledige video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="ib" id="vSize" type="button" title="Groter of kleiner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
     <button class="ib" id="selfBtn" type="button" aria-pressed="false" title="Mezelf ook tonen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>
     <button class="ib" id="vMin" type="button" title="Video minimaliseren / herstellen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg></button>
@@ -683,7 +752,23 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
     <video class="selfv" id="selfV" muted playsinline autoplay hidden></video>
     <div class="vph" id="vph"><b id="vHead">Nog niet verbonden</b><span id="vMsg">Klik bovenaan op "Start de les".</span></div>
   </div>
+  <div class="vgrip" id="vGrip" title="Sleep om de grootte te veranderen"></div>
 </div>
+<div class="cammenu" id="camMenu" hidden role="menu" aria-label="Camera-indeling">
+  <b class="menu-h">Camera</b>
+  <button type="button" data-camm="full">Volledig scherm</button>
+  <button type="button" data-camm="float">Zwevend</button>
+  <button type="button" data-camm="left">Vast links</button>
+  <button type="button" data-camm="center">Midden</button>
+  <button type="button" data-camm="right">Vast rechts</button>
+  <button type="button" data-camm="hidden">Video verbergen</button>
+  <b class="menu-h">Breedte van de video</b>
+  <div class="camw"><button type="button" data-camw="0.3">30%</button><button type="button" data-camw="0.4">40%</button><button type="button" data-camw="0.5">50%</button></div>
+  <label class="camlock"><input type="checkbox" id="camLock"> Indeling vergrendelen</label>
+  <small>Alleen voor jou. De andere deelnemer kiest een eigen indeling.</small>
+</div>
+<button class="vshow" id="vShow" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>Video tonen</button>
+<div class="camsplit" id="camSplit" hidden title="Sleep om de verdeling te veranderen"></div>
 
 <!-- NOTITIES -->
 <aside class="drawer" id="drawer" hidden data-teacher>
@@ -742,6 +827,15 @@ body.v28 .dock .db.ai{color:var(--dock-ink)}
     <input class="inp" id="joinName" placeholder="Je naam" autocomplete="name" required>
     <button class="btn primary" type="submit">Naar de les</button>
   </form>
+</div>
+<div class="ov" id="preOv" hidden>
+  <div class="dlg precheck" role="dialog" aria-modal="true" aria-labelledby="preTitle">
+    <h2 id="preTitle">Camera en microfoon</h2>
+    <div class="previd"><video id="preV" muted playsinline autoplay></video><div class="prevph" id="prePh">Camera wordt gestart…</div></div>
+    <div class="premeter"><span>Microfoon</span><i><b id="preLvl"></b></i></div>
+    <p class="muted" id="preMsg">Je browser vraagt toestemming voor je camera en microfoon.</p>
+    <div class="row prebtns"><button class="btn primary" id="preJoin" type="button">Deelnemen</button><button class="btn ghost" id="preNoCam" type="button">Zonder camera deelnemen</button></div>
+  </div>
 </div>
 <div class="ov" id="newOv" hidden>
   <form class="dlg" id="newForm">
@@ -917,7 +1011,7 @@ function copy(text, msg){ (navigator.clipboard ? navigator.clipboard.writeText(t
 
 /* =================================================================== VERBINDING */
 var peer = null, local = null, conns = {}, calls = {}, tConn = null, tCall = null, remoteStreams = {};
-var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = false, retryT = null, myName = "";
+var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = store("klas-self") !== false, retryT = null, myName = "";
 var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40) : "";
 var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
 var TEACHER_ID = "learnwithscip-klas-" + ROOM;
@@ -1080,6 +1174,8 @@ function status(head, msg){
   if(msg !== undefined) $("vMsg").textContent = msg || "";
 }
 function getMedia(){
+  if(window.__noMedia) return Promise.resolve(null);
+  if(window.__preMedia && window.__preMedia.active) return Promise.resolve(window.__preMedia);
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve(null);
   var v = {width:{ideal:640}, height:{ideal:480}, facingMode:"user"}, a = {echoCancellation:true, noiseSuppression:true};
   return navigator.mediaDevices.getUserMedia({video:v, audio:a})
@@ -1105,7 +1201,8 @@ function watchIce(c, id){
 }
 function afterJoin(){
   $("joinBtn").hidden = true; $("leaveBtn").hidden = false; showVideo(true);
-  if(local){ $("selfV").srcObject = local; }
+  if(local){ $("selfV").srcObject = local; $("selfV").hidden = !selfView; $("selfBtn").setAttribute("aria-pressed", selfView ? "true" : "false");
+    cam = local.getVideoTracks().some(function(t){ return t.enabled && t.readyState === "live"; }); $("camBtn").classList.toggle("off", !cam); }
   else toast("Geen camera of microfoon gevonden. Je kunt wel meekijken.");
 }
 
@@ -1221,6 +1318,7 @@ function leave(){
   $("joinBtn").hidden = false; $("leaveBtn").hidden = true;
 }
 $("joinBtn").addEventListener("click", function(){
+  if(SB && window.__klasPrecheck){ window.__klasPrecheck(); return; }
   if(isT) startTeacher();
   else { $("joinOv").hidden = false; $("joinName").value = params.get("naam") || ""; $("joinName").focus(); }
 });
@@ -1233,7 +1331,7 @@ $("copyLink").addEventListener("click", function(){
 $("micBtn").addEventListener("click", function(){ if(!local) return; mic = !mic; local.getAudioTracks().forEach(function(t){ t.enabled = mic; }); this.classList.toggle("off", !mic); });
 $("camBtn").addEventListener("click", function(){ if(!local) return; cam = !cam; local.getVideoTracks().forEach(function(t){ t.enabled = cam; }); this.classList.toggle("off", !cam); });
 $("selfBtn").addEventListener("click", function(){
-  selfView = !selfView; this.setAttribute("aria-pressed", selfView ? "true" : "false");
+  selfView = !selfView; store("klas-self", selfView); this.setAttribute("aria-pressed", selfView ? "true" : "false");
   $("selfV").hidden = !selfView || !local;
 });
 setInterval(function(){
@@ -1255,7 +1353,7 @@ if(!isT && !ROOM) status("Verkeerde link", "Vraag je docent om de link van de le
 /* ---------- videovenster: slepen, verbergen, onthouden ---------- */
 var vw = $("vwin");
 function placeVideo(p){
-  if(document.body.classList.contains("klas-video-on")) return;
+  if(!camFloat()) return;
   var W = window.innerWidth, H = window.innerHeight;
   var small = W <= 700;
   if(p && (p.h < 80 || p.w < 120)) p = {x:p.x, y:p.y}; /* ignore a stored collapsed size */
@@ -1267,11 +1365,12 @@ function placeVideo(p){
   vw.style.left = Math.max(0, Math.min(W - w, x)) + "px"; vw.style.top = Math.max(0, Math.min(H - h, y)) + "px";
 }
 placeVideo(store("klas-video"));
-function rememberVideo(){ var r = vw.getBoundingClientRect(), prev = store("klas-video") || {}; var small = vw.classList.contains("vmin") || vw.classList.contains("idle"); /* collapsed: keep the real size */ store("klas-video", {x:r.left, y:r.top, w: small ? (prev.w || 264) : r.width, h: small ? (prev.h || 198) : r.height}); }
+function camFloat(){ return document.body.classList.contains("cam-float"); }
+function rememberVideo(){ if(!camFloat()) return; var r = vw.getBoundingClientRect(), prev = store("klas-video") || {}; var small = vw.classList.contains("vmin") || vw.classList.contains("idle"); /* collapsed: keep the real size */ store("klas-video", {x:r.left, y:r.top, w: small ? (prev.w || 264) : r.width, h: small ? (prev.h || 198) : r.height}); }
 (function(){
   var h = $("vhead"), sx, sy, ox, oy, on = false;
   h.addEventListener("pointerdown", function(e){
-    if(document.body.classList.contains("klas-video-on")) return;
+    if(!camFloat()) return;
     if(e.target.closest("button")) return;
     on = true; h.setPointerCapture(e.pointerId); vw.classList.add("dragging");
     var r = vw.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
@@ -1294,7 +1393,7 @@ $("vSize").addEventListener("click", function(){
   vw.style.left = Math.max(0, Math.min(W - w, r.left)) + "px"; vw.style.top = Math.max(0, Math.min(H - hh, r.top)) + "px";
   rememberVideo();
 });
-function showVideo(v){ vw.hidden = !v; store("klas-video-hidden", !v); $("vidBtn").setAttribute("aria-pressed", v ? "true" : "false"); if(typeof layout === "function") layout(); }
+function showVideo(v){ if(window.__camShow){ window.__camShow(v); return; } vw.hidden = !v; store("klas-video-hidden", !v); $("vidBtn").setAttribute("aria-pressed", v ? "true" : "false"); if(typeof layout === "function") layout(); }
 $("vClose").addEventListener("click", function(){ showVideo(false); if(peer) toast("Video verborgen, de les loopt door"); });
 $("vidBtn").addEventListener("click", function(){ showVideo(vw.hidden); });
 
@@ -1303,32 +1402,43 @@ var panels = {pWb:false, pSl:false}, saved = store("klas-panels"); if(saved) pan
 var leftFr = store("klas-split") || 0.5;
 var mqPhone = window.matchMedia("(max-width:700px)"), mqPortrait = window.matchMedia("(max-width:1024px) and (orientation:portrait)");
 var mview = store("klas-mview") || "wb";
+/* v36: one work panel with tabs (whiteboard, slides, both, screen, games). The tab is a LOCAL choice;
+   shared content (board, slides, screen, game) keeps syncing as before. */
+if(["wb","sl","both","scr","games"].indexOf(mview) < 0) mview = "wb";
+if(store("klas-tab")) mview = store("klas-tab"); if(mview === "games") mview = "wb";
 function layout(){
   var ws = $("ws"), phone = mqPhone.matches, stackIt = phone || mqPortrait.matches;
-  var a = panels.pWb, b = panels.pSl;
-  if(phone){ a = mview !== "sl"; b = mview !== "wb"; }
-  $("pWb").hidden = !a; $("pSl").hidden = !b; $("wsEmpty").hidden = a || b;
+  var scrEmpty = mview === "scr" && !SL.screen;
+  var a = mview === "wb" || mview === "both", b = (mview === "sl" || mview === "both" || mview === "scr") && !scrEmpty, g = mview === "games";
+  panels = {pWb:a, pSl:b};
+  $("pWb").hidden = !a; $("pSl").hidden = !b; $("pScr").hidden = !scrEmpty; $("pGames").hidden = !g; $("wsEmpty").hidden = true;
   var both = a && b;
   $("split").hidden = !both || stackIt;
   ws.classList.toggle("stack", both && stackIt);
   ws.style.gridTemplateColumns = both && !stackIt ? (leftFr * 100) + "% 8px 1fr" : "1fr";
   ws.style.gridTemplateRows = both && stackIt ? "1fr 1fr" : "1fr";
-  document.querySelectorAll("[data-panel]").forEach(function(btn){ btn.setAttribute("aria-pressed", panels[btn.getAttribute("data-panel")] ? "true" : "false"); });
-  document.querySelectorAll("[data-mview]").forEach(function(btn){ btn.setAttribute("aria-pressed", btn.getAttribute("data-mview") === mview ? "true" : "false"); });
-  document.body.classList.toggle("klas-video-only", !a && !b);
-  store("klas-panels", panels);
+  document.querySelectorAll("[data-mview]").forEach(function(btn){ var on = btn.getAttribute("data-mview") === mview; btn.setAttribute("aria-pressed", on ? "true" : "false"); btn.setAttribute("aria-selected", on ? "true" : "false"); if(on) btn.classList.remove("new"); });
+  var sb = document.querySelector('[data-mview="scr"]'); if(sb) sb.classList.toggle("live", !!SL.screen);
+  store("klas-tab", mview);
+  if(window.__camLayout) window.__camLayout();
   requestAnimationFrame(function(){ WB.fit(); SL.fit(); });
 }
+/* switch the work-panel tab: why = "user" (clicked) or "content" (screen shared, game started by the other player) */
+window.__klasTab = function(t, why){
+  if(["wb","sl","both","scr","games"].indexOf(t) < 0) return;
+  mview = t; layout(); if(window.__camWork) window.__camWork(why || "user");
+};
 document.querySelectorAll("[data-mview]").forEach(function(btn){
-  btn.addEventListener("click", function(){ mview = btn.getAttribute("data-mview"); btn.classList.remove("new"); store("klas-mview", mview); layout(); });
+  btn.addEventListener("click", function(){ btn.classList.remove("new"); window.__klasTab(btn.getAttribute("data-mview"), "user"); });
 });
 function markNew(which){
-  if(!mqPhone.matches || mview === "both" || mview === which) return;
+  if(mview === which || (mview === "both" && (which === "sl" || which === "wb")) || (which === "sl" && mview === "scr" && SL.screen)) return;
   var btn = document.querySelector('[data-mview="' + which + '"]'); if(btn) btn.classList.add("new");
+  if(document.body.classList.contains("cam-full")){ var v = document.querySelector('[data-cam="full"]'); if(v) v.classList.add("new"); }
 }
 [mqPhone, mqPortrait].forEach(function(mq){ if(mq.addEventListener) mq.addEventListener("change", layout); });
-document.querySelectorAll("[data-panel]").forEach(function(btn){ btn.addEventListener("click", function(){ var p = btn.getAttribute("data-panel"); panels[p] = !panels[p]; layout(); }); });
-document.querySelectorAll("[data-close]").forEach(function(btn){ btn.addEventListener("click", function(){ panels[btn.getAttribute("data-close")] = false; layout(); }); });
+document.querySelectorAll("[data-panel]").forEach(function(btn){ btn.hidden = true; btn.addEventListener("click", function(){ window.__klasTab(btn.getAttribute("data-panel") === "pSl" ? "sl" : "wb", "user"); }); }); /* v36: tabs replace these */
+document.querySelectorAll("[data-close]").forEach(function(btn){ btn.hidden = true; }); /* v36: one panel at a time; tabs switch */
 (function(){
   var s = $("split"), on = false;
   s.addEventListener("pointerdown", function(e){ on = true; s.setPointerCapture(e.pointerId); vw.classList.add("dragging"); });
@@ -1557,15 +1667,15 @@ function showScreen(stream, key){
   SL.screen = true; SL.key = key || "scr"; if(!objs[SL.key]) objs[SL.key] = [];
   scrV.srcObject = stream; scrV.hidden = false; scrV.muted = isT;
   var p = scrV.play(); if(p && p.catch) p.catch(function(){ toast("Tik op het scherm om het geluid aan te zetten"); scrV.addEventListener("click", function(){ scrV.play(); }, {once:true}); });
-  $("slMsg").hidden = true; $("slTitle").textContent = "Gedeeld scherm"; $("slInfo").textContent = "";
-  if(!panels.pSl){ panels.pSl = true; layout(); }
+  $("slMsg").hidden = true; $("slTitle").textContent = isT ? "Jij deelt je scherm" : "Je docent deelt het scherm"; $("slInfo").textContent = "";
+  window.__klasTab("scr", "content");
   markNew("sl"); SL.redraw(); fitScreen();
 }
 function hideScreen(){
   if(!SL.screen) return;
   SL.screen = false; scrV.srcObject = null; scrV.hidden = true;
   SL.aspect = 16 / 9; $("slTitle").textContent = "Slides";
-  SL.show(prevSlKey, true); SL.fit();
+  SL.show(prevSlKey, true); SL.fit(); if(mview === "scr") layout();
 }
 function shareTo(id){
   if(!peer || !screenStream) return;
@@ -2496,7 +2606,7 @@ if(isT){
     window.__klasAutoRec = function(){ var c = store(key) || {}; return c.on ? {ai:!!c.ai} : null; };
   }
   /* v35: word games (flashcards, 30 Seconds, Taboo) for teacher and student */
-  if(SB && b && b.ui && b.ui.games){ $("gamesBtn").hidden = false; $("gamesBtn").addEventListener("click", function(){ b.ui.games(); }); }
+  if(SB && b && b.ui && b.ui.games){ $("gamesBtn").hidden = false; $("gamesBtn").addEventListener("click", function(){ window.__klasTab("games", "user"); }); $("tabGames").hidden = false; }
   /* AI menu (teacher, SB only): one place for AI, closed by default */
   if(SB && isT){
     $("aiMenu").hidden = false;
@@ -2695,6 +2805,162 @@ SL.show(null, true);
 /* v28: video is always a floating window (no reserved column) */
 layout();
 window.addEventListener("resize", function(){ WB.fit(); SL.fit(); placeVideo(store("klas-video")); });
+/* =================================================================== v36: CAMERA MODES (local per user)
+   full (default at lesson start) · float (drag + resize) · left · center · right · hidden.
+   Only CSS classes and the position of the existing video window change: the <video> elements,
+   the PeerJS calls and the camera/microphone tracks are never recreated. Nothing here is sent
+   to the other participant (each person has an own layout). */
+(function(){
+  var KEY = "klas-cam-" + (isT ? "t" : "s"), MODES = ["full", "float", "left", "center", "right", "hidden"];
+  var P = store(KEY) || {}; if(typeof P !== "object" || !P) P = {};
+  /* predictable start: always the full video, unless the user locked a layout */
+  var mode = P.lock && MODES.indexOf(P.mode) >= 0 ? P.mode : "full", beforeHidden = null;
+  var GAP = 12, MINW = 240, split = $("camSplit"), menu = $("camMenu"), B = document.body;
+  function save(){ store(KEY, P); }
+  function eff(){ return mqPhone.matches && (mode === "left" || mode === "right") ? "center" : mode; }
+  function fit(){ requestAnimationFrame(function(){ try{ WB.fit(); SL.fit(); }catch(e){} }); }
+  function position(){
+    var m = eff(), ws = $("ws"), r = ws.getBoundingClientRect(), W = window.innerWidth, top = r.top + (mqPhone.matches ? 6 : 12), H = Math.max(140, r.bottom - top);
+    var st = {set left(v){ vw.style.setProperty("left", v, "important"); }, set top(v){ vw.style.setProperty("top", v, "important"); }, set width(v){ vw.style.setProperty("width", v, "important"); }, set height(v){ vw.style.setProperty("height", v, "important"); }};
+    if(m === "float" || m === "hidden"){ ["left", "top", "width", "height"].forEach(function(p){ if(vw.style.getPropertyPriority(p)) vw.style.removeProperty(p); }); }
+    ["margin-left", "margin-right", "padding-top"].forEach(function(p){ ws.style.removeProperty(p); }); split.hidden = true;
+    var gap = mqPhone.matches ? 8 : GAP;
+    if(m === "full"){ st.left = gap + "px"; st.top = top + "px"; st.width = (W - 2 * gap) + "px"; st.height = H + "px"; }
+    else if(m === "left" || m === "right"){
+      var w = Math.round(Math.max(MINW, Math.min(W * 0.6, W - 360, (P.w || 0.32) * W)));
+      st.top = top + "px"; st.height = H + "px"; st.width = w + "px"; st.left = (m === "left" ? gap : W - gap - w) + "px";
+      ws.style.setProperty(m === "left" ? "margin-left" : "margin-right", (w + gap) + "px", "important");
+      split.hidden = false; split.className = "camsplit v"; split.style.top = top + "px"; split.style.height = H + "px"; split.style.width = "12px";
+      split.style.left = (m === "left" ? gap + w : W - gap - w - 12) + "px";
+    } else if(m === "center"){
+      var h = Math.round(Math.max(mqPhone.matches ? 140 : 170, Math.min(H * 0.62, (P.h || (mqPhone.matches ? 0.3 : 0.4)) * H)));
+      st.left = gap + "px"; st.width = (W - 2 * gap) + "px"; st.top = top + "px"; st.height = h + "px";
+      ws.style.setProperty("padding-top", (h + 18) + "px", "important");
+      split.hidden = false; split.className = "camsplit h"; split.style.left = gap + "px"; split.style.width = (W - 2 * gap) + "px"; split.style.top = (top + h + 2) + "px"; split.style.height = "12px";
+    }
+  }
+  function apply(){
+    var m = eff();
+    MODES.forEach(function(x){ B.classList.remove("cam-" + x); }); B.classList.add("cam-" + m);
+    vw.hidden = m === "hidden"; $("vShow").hidden = m !== "hidden";
+    $("vidBtn").setAttribute("aria-pressed", m !== "hidden" ? "true" : "false");
+    document.querySelectorAll('[data-cam="full"]').forEach(function(b){ b.setAttribute("aria-pressed", m === "full" ? "true" : "false"); if(m !== "full") b.classList.remove("new"); });
+    menu.querySelectorAll("[data-camm]").forEach(function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-camm") === mode ? "true" : "false"); });
+    menu.querySelectorAll("[data-camw]").forEach(function(b){ b.setAttribute("aria-pressed", Math.abs((P.w || 0.32) - +b.getAttribute("data-camw")) < 0.03 ? "true" : "false"); });
+    $("camLock").checked = !!P.lock;
+    $("camPin").setAttribute("aria-pressed", m === "left" || m === "right" || m === "center" ? "true" : "false");
+    position(); if(m === "float") placeVideo(store("klas-video")); fit();
+  }
+  function setMode(m, why){
+    if(MODES.indexOf(m) < 0 || (why === "auto" && P.lock)) return;
+    if(camFloat()) rememberVideo(); /* keep the floating position and size for next time */
+    if(m === "hidden" && mode !== "hidden") beforeHidden = mode;
+    if(m !== "full" && m !== "hidden") P.last = m;
+    mode = m; if(P.lock) P.mode = m; save(); apply();
+  }
+  /* hooks used by the rest of the classroom */
+  window.__camLayout = position;
+  window.__camShow = function(v){ if(v){ if(mode === "hidden") setMode(beforeHidden || P.last || "full", "user"); } else setMode("hidden", "user"); };
+  /* a work tab was chosen (or content arrived): leave the full video, unless the layout is locked */
+  window.__camWork = function(){ if(mode === "full") setMode(P.last || "right", "auto"); };
+
+  /* menu */
+  function closeMenu(){ menu.hidden = true; }
+  $("camPin").addEventListener("click", function(e){
+    e.stopPropagation(); if(!menu.hidden){ closeMenu(); return; }
+    menu.hidden = false; var r = this.getBoundingClientRect(), mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 300;
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + "px";
+    menu.style.top = (r.bottom + mh + 8 > window.innerHeight ? Math.max(8, r.top - mh - 6) : r.bottom + 6) + "px";
+  });
+  document.addEventListener("click", function(e){ if(!menu.hidden && !menu.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeMenu(); });
+  menu.querySelectorAll("[data-camm]").forEach(function(b){ b.addEventListener("click", function(){ setMode(b.getAttribute("data-camm"), "user"); closeMenu(); }); });
+  menu.querySelectorAll("[data-camw]").forEach(function(b){ b.addEventListener("click", function(){ P.w = +b.getAttribute("data-camw"); if(mode !== "left" && mode !== "right") setMode(P.last === "left" ? "left" : "right", "user"); else { save(); apply(); } }); });
+  $("camLock").addEventListener("change", function(){ P.lock = this.checked; P.mode = mode; save(); toast(P.lock ? "Camera-indeling vergrendeld" : "Camera-indeling ontgrendeld"); });
+  $("camFull").addEventListener("click", function(){ setMode(mode === "full" ? (P.last || "right") : "full", "user"); });
+  document.querySelectorAll('[data-cam="full"]').forEach(function(b){ b.addEventListener("click", function(){ setMode(mode === "full" ? (P.last || "right") : "full", "user"); }); });
+  $("vShow").addEventListener("click", function(){ window.__camShow(true); });
+
+  /* divider between video and work panel (docked / center) */
+  (function(){ var on = false;
+    split.addEventListener("pointerdown", function(e){ on = true; split.setPointerCapture(e.pointerId); vw.classList.add("dragging"); split.classList.add("on"); });
+    split.addEventListener("pointermove", function(e){
+      if(!on) return; var m = eff(), W = window.innerWidth;
+      if(m === "left") P.w = (e.clientX - GAP) / W; else if(m === "right") P.w = (W - e.clientX - GAP) / W;
+      else if(m === "center"){ var r = $("ws").getBoundingClientRect(); P.h = (e.clientY - r.top - 12) / Math.max(1, r.bottom - r.top - 12); }
+      P.w = Math.max(0.15, Math.min(0.6, P.w || 0.32)); P.h = Math.max(0.2, Math.min(0.62, P.h || 0.4)); position();
+    });
+    function up(){ if(!on) return; on = false; vw.classList.remove("dragging"); split.classList.remove("on"); save(); fit(); }
+    split.addEventListener("pointerup", up); split.addEventListener("pointercancel", up);
+  })();
+
+  /* floating window: resize grip (also with touch), always kept inside the classroom */
+  (function(){ var g = $("vGrip"), on = false, sx, sy, sw, sh;
+    g.addEventListener("pointerdown", function(e){ if(!camFloat()) return; on = true; g.setPointerCapture(e.pointerId); vw.classList.add("dragging"); var r = vw.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; sw = r.width; sh = r.height; e.preventDefault(); });
+    g.addEventListener("pointermove", function(e){ if(!on) return; var r = vw.getBoundingClientRect();
+      vw.style.width = Math.max(160, Math.min(window.innerWidth - r.left - 4, sw + e.clientX - sx)) + "px";
+      vw.style.height = Math.max(120, Math.min(window.innerHeight - r.top - 4, sh + e.clientY - sy)) + "px"; });
+    function up(){ if(!on) return; on = false; vw.classList.remove("dragging"); rememberVideo(); }
+    g.addEventListener("pointerup", up); g.addEventListener("pointercancel", up);
+  })();
+  function keepInside(){ if(!camFloat()) return; var r = vw.getBoundingClientRect(); placeVideo({x:r.left, y:r.top, w:Math.min(r.width, window.innerWidth - 16), h:Math.min(r.height, window.innerHeight - 60)}); }
+
+  /* own camera preview: tap to move it to another corner */
+  var CORNERS = ["br", "bl", "tl", "tr"]; function corner(){ var vb = $("vbody"); CORNERS.forEach(function(c){ vb.classList.remove("self-" + c); }); vb.classList.add("self-" + (P.self || "br")); }
+  $("selfV").title = "Tik om je eigen beeld naar een andere hoek te verplaatsen";
+  $("selfV").addEventListener("click", function(){ P.self = CORNERS[(CORNERS.indexOf(P.self || "br") + 1) % 4]; save(); corner(); });
+  corner();
+
+  window.addEventListener("resize", function(){ apply(); keepInside(); });
+  [mqPhone, mqPortrait].forEach(function(mq){ if(mq.addEventListener) mq.addEventListener("change", apply); });
+  if(window.ResizeObserver){ var top = document.querySelector(".top"); if(top) new ResizeObserver(position).observe(top); new ResizeObserver(position).observe($("mswitch")); }
+  apply();
+})();
+
+/* screen tab: share straight from the empty tab (same function as the top bar button) */
+$("scrStart").addEventListener("click", function(){ if(!screenStream) startShare(); });
+
+/* =================================================================== v36: CAMERA AND MICROPHONE CHECK BEFORE JOINING
+   Uses the normal browser permission prompt. The stream from this check is reused for the call
+   (getMedia), so the browser asks only once. A refused permission never blocks the classroom. */
+(function(){
+  if(!SB) return;
+  var raf = 0, actx = null;
+  function stopMeter(){ cancelAnimationFrame(raf); raf = 0; if(actx){ try{ actx.close(); }catch(e){} actx = null; } $("preLvl").style.width = "0"; }
+  function meter(st){
+    stopMeter(); if(!st.getAudioTracks().length || !window.AudioContext) return;
+    try{ actx = new AudioContext(); var an = actx.createAnalyser(); an.fftSize = 256; actx.createMediaStreamSource(st).connect(an); var d = new Uint8Array(an.frequencyBinCount);
+      (function tick(){ an.getByteTimeDomainData(d); var mx = 0; for(var i = 0; i < d.length; i++) mx = Math.max(mx, Math.abs(d[i] - 128)); $("preLvl").style.width = Math.min(100, mx * 1.6) + "%"; raf = requestAnimationFrame(tick); })();
+    }catch(e){}
+  }
+  function fail(msg){ window.__preMedia = null; window.__noMedia = true; $("preMsg").textContent = msg; $("prePh").hidden = false; $("prePh").textContent = "Geen camera"; $("preNoCam").textContent = "Deelnemen zonder camera en microfoon"; }
+  window.__klasPrecheck = function(){
+    $("preOv").hidden = false; $("prePh").hidden = false; $("prePh").textContent = "Camera wordt gestart…"; $("preNoCam").textContent = "Zonder camera deelnemen";
+    $("preMsg").textContent = "Je browser vraagt toestemming voor je camera en microfoon."; window.__noMedia = false;
+    var md = navigator.mediaDevices, note = "";
+    if(!md || !md.getUserMedia){ fail("Deze browser geeft geen toegang tot camera en microfoon. Je kunt wel deelnemen en meekijken."); return; }
+    var a = {echoCancellation:true, noiseSuppression:true};
+    var have = window.__preMedia && window.__preMedia.active ? Promise.resolve(window.__preMedia)
+      : md.getUserMedia({video:{width:{ideal:640}, height:{ideal:480}, facingMode:"user"}, audio:a})
+          .catch(function(){ return md.getUserMedia({audio:a}).then(function(st){ note = "Geen camera gevonden of geen toestemming: je neemt deel met alleen geluid."; return st; }); });
+    have.then(function(st){
+      window.__preMedia = st; $("preV").srcObject = st; var hasV = st.getVideoTracks().length > 0;
+      $("prePh").hidden = hasV; if(!hasV) $("prePh").textContent = "Geen camera";
+      $("preMsg").textContent = note || "Je camera en microfoon werken. Klik op Deelnemen."; meter(st);
+    }).catch(function(){ fail("Geen toegang tot camera en microfoon. Sta het toe via het slotje in de adresbalk en probeer het opnieuw, of neem deel zonder."); });
+  };
+  function go(){ stopMeter(); $("preOv").hidden = true; $("preV").srcObject = null; if(isT) startTeacher(); else startStudent(params.get("naam") || "Leerling"); }
+  $("preJoin").addEventListener("click", go);
+  $("preNoCam").addEventListener("click", function(){
+    var st = window.__preMedia;
+    if(st){ st.getVideoTracks().forEach(function(t){ t.stop(); st.removeTrack(t); }); if(!st.getAudioTracks().length){ window.__preMedia = null; window.__noMedia = true; } }
+    else window.__noMedia = true;
+    go();
+  });
+  /* "Ga naar les": open the check straight away (the call starts only after "Deelnemen") */
+  setTimeout(function(){ if(!$("joinBtn").hidden && $("preOv").hidden) window.__klasPrecheck(); }, 250);
+})();
+
 })();
 </script>
 </body>
