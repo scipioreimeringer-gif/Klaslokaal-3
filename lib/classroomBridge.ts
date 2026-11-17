@@ -21,6 +21,8 @@ export type TeachyBridge = {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
   token(): Promise<string>;
+  /** v38: TURN/ICE servers from the server (environment variable), only for logged-in users. [] = STUN only. */
+  iceServers?(): Promise<{urls: string | string[]; username?: string; credential?: string}[]>;
   switchStudent(id: string): void;
   uploadRecording(blob: Blob, meta: {durationSeconds: number; teacherConsentAt: string; studentConsentAt: string; aiTeacherAt?: string | null; aiStudentAt?: string | null}, tracks?: RecordingTracks): Promise<{ok: boolean; error?: string; analysis?: string}>;
   previewImport(backup: unknown): Promise<{oldName: string; newName: string | null}[]>;
@@ -66,6 +68,18 @@ declare global { interface Window { teachyBridge?: TeachyBridge } }
 
 const LESSON_COLS = 'student_id,lesson_date,notes,homework,words,sorted';
 
+/** TURN credentials are never in the classroom code: fetched once per page from /api/turn (logged-in users only). */
+let icePromise: Promise<{urls: string | string[]; username?: string; credential?: string}[]> | null = null;
+function fetchIceServers(db: SupabaseClient) {
+  if (!icePromise) icePromise = (async () => {
+    const {data} = await db.auth.getSession();
+    const r = await fetch('/api/turn', {headers: {Authorization: 'Bearer ' + (data.session?.access_token || '')}, cache: 'no-store'});
+    if (!r.ok) return [];
+    const j = await r.json().catch(() => ({})) as {iceServers?: unknown};
+    return Array.isArray(j.iceServers) ? j.iceServers as {urls: string | string[]; username?: string; credential?: string}[] : [];
+  })().catch(() => { icePromise = null; return []; });
+  return icePromise;
+}
 export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
   let snap: Record<string, string> = {};
   let allowed = new Set<string>();
@@ -130,6 +144,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       return putState(k.kind, k.studentId, value);
     },
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
+    iceServers: () => fetchIceServers(db),
     switchStudent(id) { if (allowed.has(id) && id !== opts.studentId) opts.onSwitch(id); },
     async uploadRecording(blob, meta, tracks) {
       const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
@@ -208,6 +223,7 @@ export function createStudentBridge(db: SupabaseClient, opts: {studentId: string
     liveUrl: window.location.origin + '/klaslokaal/live?student=' + encodeURIComponent(opts.studentId),
     get: async () => null, put: refuse,
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
+    iceServers: () => fetchIceServers(db),
     switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),
     previewImport: async () => [], importBackup: refuse,
     translate: translator(db),

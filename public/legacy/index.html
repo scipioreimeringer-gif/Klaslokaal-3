@@ -901,16 +901,11 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
    Geen account nodig: de video gaat rechtstreeks van browser naar browser.
    Docent:   learnwithscip.com/klas.html  ->  klik "Start de les", dan "Link voor leerling"
    Leerling: opent die link (met ?rol=leerling&kamer=...)
-   TURN_SERVERS: optioneel. Als een leerling op een streng netwerk zit en de video niet
-   verbindt, kun je hier later gratis TURN-gegevens plakken (bijvoorbeeld van metered.ca).
+   TURN: wordt in TeachyRooms door de server geleverd (Vercel-variabele TURN_ICE_SERVERS, alleen voor
+   ingelogde gebruikers). Zet hier nooit inloggegevens neer: dit bestand is openbaar.
    ========================================================================== */
 var TEACHER_NAME = "Scip";
-var TURN_SERVERS = [
-  // ExpressTURN (gratis tot 1000 GB per maand): de gewone route als een directe verbinding niet lukt
-  {urls:["turn:free.expressturn.com:3478?transport=udp", "turn:free.expressturn.com:3478?transport=tcp"], username:"000000002109324976", credential:"WInfYKuL0ru79Uz2lJfFYzmYHYw="},
-  // Metered (gratis 500 MB per maand): alleen als reserve via poort 443, voor netwerken die 3478 blokkeren
-  {urls:"turns:global.relay.metered.ca:443?transport=tcp", username:"484db6013e10bf56cafcea5b", credential:"9aX1xszJagXLyrep"}
-];
+var TURN_SERVERS = []; /* v38: TURN credentials are NOT stored here any more; in TeachyRooms they come from the server (env TURN_ICE_SERVERS via /api/turn, logged-in users only) */
 var TURN_URL     = "";   // of: de link van metered.ca, zoiets als "https://jouwnaam.metered.live/api/v1/turn/credentials?apiKey=..."
 /* ========================================================================== */
 
@@ -1196,7 +1191,7 @@ function removeRemote(id){
 function watchIce(c, id){
   var pc = c.peerConnection; if(!pc) return;
   pc.addEventListener("iceconnectionstatechange", function(){
-    if(pc.iceConnectionState === "failed") status("Geen directe verbinding", (TURN_SERVERS.length || TURN_URL) ? "Ook via de TURN-server lukt het niet. Probeer een ander netwerk." : "Dit netwerk laat geen directe verbinding toe. Een TURN-server lost dit op (zie instellingen bovenaan het bestand).");
+    if(pc.iceConnectionState === "failed") status("Geen directe verbinding", (turnCount || TURN_SERVERS.length) ? "Ook via de TURN-server lukt het niet. Probeer een ander netwerk." : "Dit netwerk laat geen directe verbinding toe. Een TURN-server lost dit op (zie instellingen bovenaan het bestand).");
   });
 }
 function afterJoin(){
@@ -1206,14 +1201,16 @@ function afterJoin(){
   else toast("Geen camera of microfoon gevonden. Je kunt wel meekijken.");
 }
 
-/* TURN ophalen (alleen als TURN_URL is ingevuld) */
-var turnLoaded = false;
+/* TURN ophalen: in TeachyRooms via de server (bridge.iceServers); anders alleen als TURN_URL is ingevuld.
+   TURN is alleen een terugval: de browser probeert eerst een directe verbinding (STUN). */
+var turnLoaded = false, turnCount = 0;
+function addIce(list){ if(!Array.isArray(list)) return; list.forEach(function(s){ if(s && s.urls){ ICE.iceServers.push(s); if([].concat(s.urls).some(function(u){ return /^turns?:/.test(u); })) turnCount++; } }); }
 function loadTurn(){
-  if(turnLoaded || !TURN_URL) return Promise.resolve();
-  return fetch(TURN_URL).then(function(r){ return r.json(); }).then(function(list){
-    if(Array.isArray(list) && list.length){ ICE.iceServers = ICE.iceServers.concat(list); }
-    turnLoaded = true;
-  }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
+  if(turnLoaded) return Promise.resolve();
+  var b = bridge(), p = Promise.resolve();
+  if(SB && b && b.iceServers) p = b.iceServers().then(addIce).catch(function(){});
+  if(TURN_URL) p = p.then(function(){ return fetch(TURN_URL).then(function(r){ return r.json(); }).then(addIce); });
+  return p.then(function(){ turnLoaded = true; }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
 }
 /* reserve: als de vaste versie niet laadt, probeer de nieuwste 1.x */
 function ensurePeer(cb){
