@@ -796,3 +796,8 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .infotip-btn{display:inline-grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:help;padding:0}
 .infotip-btn:hover,.infotip-btn[aria-expanded=true]{background:var(--panel-2);color:var(--ink-2)}
 .infotip-bubble{position:absolute;z-index:40;top:calc(100% + 4px);left:0;width:min(300px,80vw);background:var(--ink,#123);color:#fff;font-size:12.5px;line-height:1.45;padding:8px 10px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+
+/* v40: bilingual summary switch */
+.sum-switch{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:0 0 10px}
+.sum-switch button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;border-radius:7px;padding:4px 10px;min-height:30px;font-size:12.5px;font-weight:650;color:var(--ink-2);cursor:pointer;transition:background-color .15s}
+.sum-switch button[aria-pressed=true]{background:var(--teal-50,#e6f6f3);color:var(--teal-700,#0b6b63);box-shadow:inset 0 -2px 0 var(--teal-500)}

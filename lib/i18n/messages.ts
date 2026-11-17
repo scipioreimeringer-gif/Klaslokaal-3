@@ -1055,4 +1055,7 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "ingeleverd van gepubliceerd": ["submitted of published","entregues dos publicados","entregados de los publicados","rendus sur publiés","abgegeben von veröffentlicht"],
  "laatste les": ["last lesson","última aula","última clase","dernier cours","letzte Stunde"],
  "Aandachtspunten:": ["Points of attention:","Pontos de atenção:","Puntos de atención:","Points d’attention :","Schwerpunkte:"],
+ "Vertalen…": ["Translating…","Traduzindo…","Traduciendo…","Traduction…","Übersetzen…"],
+ "Vertalen lukte niet; je ziet de oorspronkelijke tekst.": ["Translation failed; you see the original text.","A tradução falhou; você vê o texto original.","La traducción falló; ves el texto original.","La traduction a échoué ; vous voyez le texte original.","Die Übersetzung ist fehlgeschlagen; du siehst den Originaltext."],
+ "Taal van de lessamenvatting": ["Language of the lesson summary","Idioma do resumo da aula","Idioma del resumen de la clase","Langue du résumé du cours","Sprache der Stundenzusammenfassung"],
 };
