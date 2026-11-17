@@ -44,6 +44,14 @@ export async function loadStudents(db: SupabaseClient, filter: {teacherId?: stri
   return {data: (old.data || []) as unknown as StudentRecord[], error: old.error?.message || null, v27: false, v28: false};
 }
 
+/** Only the newest approved analysis (the function sorts newest first). Never fails the bundle: no access,
+ *  an old database or a missing function simply gives no "Aandachtspunten". */
+async function latestSummary(db: SupabaseClient, studentId: string): Promise<{data: unknown[] | null; error: unknown}> {
+  try {
+    const q = db.rpc('student_lesson_summaries', {sid: studentId}) as unknown as PromiseLike<{data: unknown[] | null; error: unknown}> & {limit?: (n: number) => PromiseLike<{data: unknown[] | null; error: unknown}>};
+    return await (typeof q.limit === 'function' ? q.limit(1) : q);
+  } catch (e) { return {data: null, error: e}; }
+}
 export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
   const [lessons, recordings, assignments, state] = await Promise.all([
     db.from('lesson_entries').select('id,student_id,lesson_date,notes,homework,words,updated_at').eq('student_id', studentId).order('lesson_date', {ascending: false}),
@@ -51,6 +59,9 @@ export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
     db.from('assignments').select('id,published_at').eq('student_id', studentId),
     db.from('classroom_states').select('board,canvas,updated_at').eq('student_id', studentId).maybeSingle(),
   ]);
+  // v39: latest teacher-approved analysis (same access rule for teacher and student) → "Aandachtspunten" in the header.
+  // Separate call: a missing function on an older database must not affect the queries above.
+  const latest = await latestSummary(db, studentId);
   const ids = (assignments.data || []).map(a => a.id as string);
   const subs = ids.length ? await db.from('homework_submissions').select('assignment_id').in('assignment_id', ids) : {data: [] as {assignment_id: string}[], error: null};
   const missing = isMissingMigration(lessons.error) || isMissingMigration(recordings.error) || isMissingMigration(state.error);
@@ -62,6 +73,7 @@ export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
     recordings: (recordings.data || []) as Recording[],
     state: (state.data || null) as ClassroomState | null,
     progress: progressOf(L, (assignments.data || []) as {published_at: string | null}[], (subs.data || []) as {assignment_id: string}[]),
+    latestAnalysis: (latest.error ? null : ((latest.data || []) as {lesson_date: string; final: unknown}[])[0] || null),
   };
 }
 

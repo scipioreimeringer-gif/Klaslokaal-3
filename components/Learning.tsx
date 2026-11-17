@@ -7,6 +7,7 @@ import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} 
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
 import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
 import {PenLine,Repeat,Wrench} from 'lucide-react';
+import {InfoTip} from './InfoTip';
 import {t as tt, translated} from '../lib/i18n';
 
 /* ========================= Vocabulary ========================= */
@@ -101,7 +102,7 @@ export function VocabGames({studentId,subject,start}:{studentId:string;subject?:
  const due=items.filter(i=>new Date(i.due_at).getTime()<=Date.now()).length;
  return <div>
   {result&&<div className="game-result"><Trophy size={18}/> {result}</div>}
-  <p className="muted">{tt("{0} woorden staan klaar om te herhalen. Moeilijke woorden komen vaker terug (gespreide herhaling); na 5 keer achter elkaar goed is een woord “beheerst”.", due)}</p>
+  <p className="muted">{tt("{0} woorden staan klaar om te herhalen.", due)} <InfoTip text={tt("Moeilijke woorden komen vaker terug (gespreide herhaling); na 5 keer achter elkaar goed is een woord “beheerst”.")}/></p>
   <div className="game-grid">
    <button className="game-tile" disabled={items.length<2} onClick={()=>setGame('flashcards')}><Layers size={24}/><b>{tt("Flashcards")}</b><small>{tt("Omdraaien en zelf beoordelen")}</small></button>
    <button className="game-tile" disabled={items.length<4} onClick={()=>setGame('quiz')}><ListChecks size={24}/><b>{tt("Meerkeuzequiz")}</b><small>{items.length<4?tt("Minstens 4 woorden nodig"):tt("Kies de juiste vertaling")}</small></button>

@@ -12,6 +12,9 @@ import {subjectOf,authedPost} from '../lib/learning';
 import {Sparkles,Target,Gamepad2} from 'lucide-react';
 import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
 import {t, locale} from '../lib/i18n';
+import {compactAnalysis} from '../lib/analysis/compact';
+import {CATEGORY_LABEL,type CorrectionCategory} from '../lib/analysisTypes';
+import type {AnalysisV2} from '../lib/analysis/pipeline';
 
 type Bundle=Awaited<ReturnType<typeof loadStudentBundle>>;
 type Progress=Bundle['progress'];
@@ -22,6 +25,22 @@ export function ProgressCards({p}:{p:Progress}){
   <StatTile icon={Languages} tone="mint" value={p.words} label={t("Woorden")} hint={t("in de woordenlijst")}/>
   <StatTile icon={ClipboardList} tone="sky" value={`${p.homeworkDone}/${p.homeworkPublished}`} label={t("Huiswerk ingeleverd")} hint={t("van gepubliceerde opdrachten")}/>
   <StatTile icon={Clock3} tone="coral" value={p.lastLesson?new Date(p.lastLesson+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'}):'—'} label={t("Laatste les")} hint={p.lastLesson?t("opgeslagen"):t("nog geen les")}/>
+ </div>
+}
+
+/** v39: the key facts in one compact row (always visible above the tabs): 4 small stat cards + focus points. */
+export function FactsBar({p,focus}:{p:Progress;focus:string[]}){
+ const open=Math.max(0,p.homeworkPublished-p.homeworkDone);
+ const last=p.lastLesson?new Date(p.lastLesson+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'}):'—';
+ const facts:[typeof BookOpenCheck,React.ReactNode,string,string][]=[
+  [BookOpenCheck,p.lessons,t("lessen"),t("{0} deze maand",p.lessonsThisMonth)],
+  [Languages,p.words,t("woorden"),t("in de woordenlijst")],
+  [ClipboardList,`${p.homeworkDone}/${p.homeworkPublished}`,open?t("huiswerk · {0} open",open):t("huiswerk"),t("ingeleverd van gepubliceerd")],
+  [Clock3,last,t("laatste les"),p.lastLesson?t("opgeslagen"):t("nog geen les")],
+ ];
+ return <div className="facts">
+  <div className="facts-grid">{facts.map(([Icon,v,l,tip],i)=><div key={i} className="fact" title={tip}><Icon size={15} aria-hidden/><strong>{v}</strong><span>{l}</span></div>)}</div>
+  {!!focus.length&&<p className="facts-focus"><Target size={14} aria-hidden/> <b>{t("Aandachtspunten:")}</b> {focus.join(' · ')}</p>}
  </div>
 }
 
@@ -126,11 +145,13 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
  useEffect(()=>{setB(null);setTab((initialTab as Tab)||'overzicht');void load()},[load,initialTab]);
  const tabs:[Tab,string,typeof History][]=[['overzicht','Overzicht',LayoutGrid],['lessen','Lessen',History],['analyses',viewer==='teacher'?'Lesanalyses':'Samenvattingen',Sparkles],['woorden','Woordenlijst',Languages],['doelen','Leertraject',Target],['huiswerk','Huiswerk',ClipboardList],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2] as [Tab,string,typeof History]]:[]),['bord','Bord & canvas',PenLine],['opnames','Opnames',Mic],...(viewer==='teacher'?[['prive','Privé',Lock] as [Tab,string,typeof History]]:[])];
  const ws:WsStudent=student||{id:studentId,subject:'',level:null,lesson_language:null};
- return <div className="workspace">
-  <div className="tabs" role="tablist">{tabs.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/>{t(l)}</button>)}</div>
+ const focus=useMemo(()=>b?.latestAnalysis?.final?compactAnalysis(b.latestAnalysis.final as AnalysisV2,{max:3,label:k=>CATEGORY_LABEL[k as CorrectionCategory]||k}).points.map(x=>x.label):[],[b]);
+ return <div className="workspace compact-ws">
+  {b&&<FactsBar p={b.progress} focus={focus}/>}
+  <div className="tabs" role="tablist">{tabs.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={14}/>{t(l)}</button>)}</div>
   {!b?<div className="card"><div className="loader small"/></div>:<>
   {b.error&&<div className="notice">{b.error}</div>}
-  {tab==='overzicht'&&<><ProgressCards p={b.progress}/><StudentCharts lessons={b.lessons}/>{intro}<div className="grid2"><section className="card"><h3><History size={17}/> {t("Laatste les")}</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={17}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div></>}
+  {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
   {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonHistory lessons={b.lessons}/></section>}
   {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId}/>}</section>}
   {tab==='woorden'&&<section className="card"><h3>{t("Woordenlijst")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}

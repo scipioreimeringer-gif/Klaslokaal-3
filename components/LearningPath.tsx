@@ -5,6 +5,7 @@
 // Statuses are set by the teacher only; AI suggestions are accepted in the analysis (never automatic).
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {Plus,Search,Target,EyeOff,Eye,Pencil,X,CalendarDays,ListChecks} from 'lucide-react';
+import {InfoTip} from './InfoTip';
 import {supabase} from '../lib/supabase';
 import {GOAL_STATUS_LABEL,LEVELS,SKILLS,SKILL_LABEL,SUBJECTS,subjectOf,type Goal,type GoalProgress,type GoalStatus} from '../lib/learning';
 import {niceDate} from '../lib/data';
@@ -119,7 +120,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
    <button className="button small secondary" onClick={()=>void intake()}>{tt("Markeer als behandeld")}</button>
   </div>}
 
-  <p className="muted small-print">{tt("Standaardleerlijn op basis van het ERK/CEFR (A0 is een optionele voorbereidende fase). Niveaus zijn richtpunten. Alleen de docent stelt de status vast; AI-voorstellen uit lesanalyses moet de docent eerst accepteren.")}</p>
+  <p className="muted small-print">{tt("Leerlijn volgens ERK/CEFR")} <InfoTip text={tt("Standaardleerlijn op basis van het ERK/CEFR (A0 is een optionele voorbereidende fase). Niveaus zijn richtpunten. Alleen de docent stelt de status vast; AI-voorstellen uit lesanalyses moet de docent eerst accepteren.")}/></p>
   {!byLevel.length&&<p className="muted">{tt("Geen onderwerpen gevonden met deze filters.")}</p>}
   {byLevel.map(({l,items})=><section key={l} className="goal-level"><h4>{l}{l==='A0'&&<small className="muted"> {tt("(voorbereidend)")}</small>}{l===level&&<span className="tag">{tt("huidig niveau")}</span>}</h4>
    {[...SKILLS].map(sk=>{const its=items.filter(x=>x.g.skill===sk);if(!its.length)return null;return <div key={sk} className="goal-skill"><span className="tag">{SKILL_LABEL[sk]}</span><ul>{its.map(x=>{const {g,p,status}=x;return <li key={g.id} className={'goal st-'+status+(x.hidden?' hidden-topic':'')}>
