@@ -1,7 +1,17 @@
 // Central interface translation. Keys are the Dutch source texts (gettext style); every key has one
 // row with the five other languages in lib/i18n/messages.ts. The interface language is separate from
 // the language a user learns or teaches. User content (notes, documents, chat) is never passed through t().
-import {M} from './i18n/messages.ts';
+// v40: the translation table (~240 kB, 5 languages) is no longer part of every page. Dutch needs no table (the
+// keys are the Dutch texts); for another language it is loaded once, before that language is switched on.
+type Table = Record<string, [string, string, string, string, string]>;
+let M: Table | null = null;
+let loading: Promise<void> | null = null;
+export const messagesLoaded = () => !!M;
+export function loadMessages(): Promise<void> {
+  if (M) return Promise.resolve();
+  if (!loading) loading = import('./i18n/messages.ts').then(m => { M = m.M; }).catch(e => { loading = null; throw e; });
+  return loading;
+}
 
 export const LANGS = ['nl', 'en', 'pt', 'es', 'fr', 'de'] as const;
 export type Lang = typeof LANGS[number];
@@ -25,6 +35,6 @@ export function translated<T extends Record<string, string>>(table: T): T {
 /** Translate a Dutch UI text; {0}, {1}… are replaced by args. Unknown texts are returned unchanged. */
 export function t(nl: string, ...args: unknown[]): string {
   let s = nl;
-  if (current !== 'nl') { const row = M[nl]; if (row && row[ROW[current]]) s = row[ROW[current]]; }
+  if (current !== 'nl' && M) { const row = M[nl]; if (row && row[ROW[current]]) s = row[ROW[current]]; }
   return args.length ? s.replace(/\{(\d+)\}/g, (_, i) => String(args[+i] ?? '')) : s;
 }
