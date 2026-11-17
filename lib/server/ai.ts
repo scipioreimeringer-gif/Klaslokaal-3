@@ -58,7 +58,7 @@ export async function transcribe(audio: Blob, filename: string, languageHint?: s
 }
 
 /* ---------------- usage log, cost estimate and fair-use limits ---------------- */
-export type UsageKind = 'translate' | 'tidy' | 'analysis' | 'transcription' | 'exercises' | 'prepare' | 'assistant';
+export type UsageKind = 'translate' | 'tidy' | 'analysis' | 'transcription' | 'exercises' | 'prepare' | 'assistant' | 'vocab' | 'games';
 export type UsageCtx = {db: SupabaseClient; userId: string; kind: UsageKind; studentId?: string | null; cached?: boolean};
 /** Audio price per minute (OpenAI whisper-1; override via env). Token prices: see pricePerMTok in ./openai. */
 const AUDIO_USD_PER_MIN = () => Number(process.env.OPENAI_TRANSCRIBE_USD_PER_MIN || '0.006');
@@ -71,7 +71,7 @@ async function logUsage(ctx: UsageCtx, model: string, input: number, output: num
   await ctx.db.from('ai_usage').insert({user_id: ctx.userId, student_id: ctx.studentId || null, kind, model, input_tokens: input, output_tokens: output, audio_seconds: audioSeconds, cost_usd: Number(estimateCost(model, input, output, audioSeconds).toFixed(5)), cached: !!ctx.cached});
 }
 /** Daily limits per user (non-cached calls). Configurable via env AI_DAILY_LIMITS='{"translate":400}'. */
-const DEFAULT_LIMITS: Record<UsageKind, number> = {translate: 400, tidy: 30, analysis: 15, transcription: 40, exercises: 40, prepare: 30, assistant: 60};
+const DEFAULT_LIMITS: Record<UsageKind, number> = {translate: 400, tidy: 30, analysis: 15, transcription: 40, exercises: 40, prepare: 30, assistant: 60, vocab: 60, games: 60};
 export async function enforceLimit(db: SupabaseClient, userId: string, kind: UsageKind) {
   let limits = DEFAULT_LIMITS;
   try { limits = {...DEFAULT_LIMITS, ...JSON.parse(process.env.AI_DAILY_LIMITS || '{}')}; } catch { /* keep defaults */ }

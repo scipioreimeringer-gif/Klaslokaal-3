@@ -2,11 +2,18 @@
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Suspense,useEffect,useRef,useState} from 'react';
+
+/** App CSS for the games inside the classroom tab: copied into a shadow root, so it never touches the classroom page's own styles. */
+function appCss(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}
+ const b=getComputedStyle(document.body);
+ return css.replace(/:root\b/g,':host')+`\n[data-mount]{font-family:${b.fontFamily};color:${b.color};font-size:15px;line-height:1.45;height:100%}\n[data-mount] .games-panel{position:static;width:auto;max-height:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;max-width:720px;padding:16px}`}
+const frameCall=(fn:string,...a:unknown[])=>{try{const w=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentWindow as unknown as Record<string,(...x:unknown[])=>void>|null;w?.[fn]?.(...a)}catch{/* classroom not ready */}};
 import {ArrowLeft,Video,X} from 'lucide-react';
 import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 import {PrivateNotes} from '../../../components/StudentData';
 import {AssistantPanel} from '../../../components/Assistant';
+import {GamesPanel} from '../../../components/Games';
 import {usePhoto} from '../../../components/Avatar';
 import {supabase} from '../../../lib/supabase';
 import {useQueryParam} from '../../../lib/useQuery';
@@ -35,7 +42,7 @@ function Picker(){
 
 function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|null}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
- const [assistOpen,setAssistOpen]=useState(false);
+ const [assistOpen,setAssistOpen]=useState(false);const [gamesOpen,setGamesOpen]=useState(false);const [gamesHost,setGamesHost]=useState<Element|null>(null);const [frameLoads,setFrameLoads]=useState(0);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
   const db=supabase()!;const r=await db.from('students').select('id,teacher_id,user_id,name,email,subject,notes,goals,homework,history,level,lesson_language,about,room_code').eq('id',studentId).maybeSingle();
   if(cancelled)return;
@@ -50,10 +57,14 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
   window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
-  window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true)};
+  window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true),games:()=>frameCall('__klasTab','games','user')};
   setRoom({student:s,as});setReady(true);
  })();return()=>{cancelled=true}},[studentId,lessonParam,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
+ // v36: mount point for the games inside the classroom's work panel (re-attached after every classroom reload)
+ useEffect(()=>{if(!ready)return;let stop=false;setGamesHost(null);const attach=()=>{if(stop)return;const el=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentDocument?.getElementById('gamesHost');if(!el){setTimeout(attach,400);return}
+  const root=el.shadowRoot||el.attachShadow({mode:'open'});if(!root.querySelector('style[data-app]')){const st=document.createElement('style');st.setAttribute('data-app','');st.textContent=appCss();root.appendChild(st)}
+  let m=root.querySelector('div[data-mount]');if(!m){m=document.createElement('div');m.setAttribute('data-mount','');root.appendChild(m)}setGamesHost(m)};attach();return()=>{stop=true}},[ready,frameLoads,room?.student.id,room?.as]);
  // interface language: app → classroom (the classroom page is not reloaded, so a running lesson continues)
  const {lang,setLang}=useLanguage();const setLangRef=useRef(setLang);setLangRef.current=setLang;
  useEffect(()=>{if(window.teachyBridge)window.teachyBridge.uiLang=lang;const f=document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;try{(f?.contentWindow as unknown as {__klasSetLang?:(l:string)=>void}|null)?.__klasSetLang?.(lang)}catch{/* not loaded yet: it reads bridge.uiLang */}},[lang]);
@@ -65,14 +76,18 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
  const s=room.student;const myName=(user?.user_metadata?.full_name as string|undefined)||s.name;
  // b=<commit>: every deploy gets a new classroom URL, so no browser can keep showing an old cached copy
  const build=encodeURIComponent(process.env.NEXT_PUBLIC_BUILD_SHA||'');
+ // ?relay=1 on the classroom URL: TURN test mode (connection only via the TURN server)
+ const relay=typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('relay')==='1'?'&relay=1':'';
  const src=room.as==='teacher'
-  ?`/legacy/index.html?sb=1&b=${build}&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}`
-  :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}`;
+  ?`/legacy/index.html?sb=1&b=${build}&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}${relay}`
+  :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}${relay}`;
  return <main className="live-page bar-hidden">
   <div className="live-body">
-   <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame"/>
+   <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame" onLoad={()=>setFrameLoads(n=>n+1)}/>
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
+   {/* always mounted: receives the game state even while closed (the student's panel opens when a game starts) */}
+   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasTab','wb','user');else setGamesOpen(false)}}/>
   </div>
  </main>;
 }

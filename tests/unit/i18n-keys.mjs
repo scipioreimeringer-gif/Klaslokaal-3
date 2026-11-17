@@ -25,7 +25,14 @@ export const DYNAMIC = [
   // server messages shown through t(error) (app/api/ai/*, lib/server/*)
   'Log eerst in', 'Ongeldige sessie, log opnieuw in', 'Supabase-configuratie ontbreekt', 'Onbekende fout',
   'De leerling heeft nog geen toestemming gegeven voor AI-analyse van deze opname.', 'Geef eerst zelf toestemming voor AI-analyse van deze opname.',
-  'Alleen beheerders mogen testtranscripten importeren.', 'Kies een testleerling.', 'Het transcript is te lang (maximaal 60.000 tekens).', 'Kies een leerling aan wie jij lesgeeft.', 'Voer eerst supabase/v33.sql uit.',
+  'Alleen beheerders mogen testtranscripten importeren.', 'Kies een testleerling.', 'Het transcript is te lang (maximaal 400.000 tekens).', 'Kies een leerling aan wie jij lesgeeft.', 'Voer eerst supabase/v33.sql uit.',
+  // v34: analysis 2.0 (route messages, stage labels and relevance labels in components/AnalysisV2.tsx)
+  'Ongeldige analyse', 'Analyse niet gevonden', 'Voer eerst supabase/v34.sql uit.', 'Alleen de docent start een analyse',
+  'Bronnen verzamelen en transcriberen', 'Transcript in delen analyseren', 'Fouten samenvoegen en tellen', 'Verslag en uitleg schrijven', 'Huiswerkconcept maken', 'Klaar',
+  'Lesdoel van vandaag', 'Al behandeld', 'Vandaag uitgelegd', 'Relevant', 'Voor later', 'Leertraject',
+  // v35: word list and classroom games (components/Games.tsx labels, route messages)
+  'Woordenlijst', 'Flashcards', '30 Seconds', 'Taboe', 'Woorden uit de vorige les', 'Woorden uit de laatste vijf lessen', 'Alle woorden', 'Woorden die de leerling moeilijk vindt', 'Zelf kiezen',
+  'Alleen de docent kan woorden van het canvas laten herkennen.', 'Alleen de docent start een spelronde.', 'Ongeldige spelronde', 'De leerling heeft nog geen account gekoppeld en kan daarom niet uitleggen.', 'Voer eerst supabase/v35.sql uit.', 'Deze ronde is al gestart.',
 ];
 
 function sourceFiles() {

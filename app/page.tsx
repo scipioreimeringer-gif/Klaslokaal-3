@@ -12,6 +12,8 @@ import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
 import {MyLanguages} from '../components/Languages';
 import {NextLessonPanel} from '../components/Agenda';
+import {ReadyForYou} from '../components/ReadyForYou';
+import {readyFor} from '../lib/ready';
 import {Avatar} from '../components/Avatar';
 import {Flag} from '../components/Flag';
 import {subjectOf as langOf} from '../lib/learning';
@@ -20,8 +22,8 @@ import {CATEGORY_LABEL,type AnalysisDoc,type AnalysisStatus,type CorrectionCateg
 import {UsersRound,BookOpenCheck,Languages,ClipboardList,Video,Plus,ChevronRight,BookOpen,Presentation,Activity,Mic,CalendarCheck,Sparkles} from 'lucide-react';
 import {t, locale} from '../lib/i18n';
 
-type V28={vocab:{student_id:string;status:string}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[];summaries:{lesson_date:string;final:AnalysisDoc}[]};
-type Dash={students:StudentRecord[];lessons:LessonLike[];assignments:{id:string;published_at:string|null}[];submissions:{assignment_id:string}[];error:string;loaded:boolean}&V28;
+type V28={vocab:{student_id:string;status:string;due_at?:string|null;translation?:string|null}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[];summaries:{id:string;student_id:string;lesson_date:string;final:AnalysisDoc}[]};
+type Dash={students:StudentRecord[];lessons:LessonLike[];assignments:{id:string;student_id:string;title:string;published_at:string|null}[];submissions:{assignment_id:string}[];error:string;loaded:boolean}&V28;
 const EMPTY:Dash={students:[],lessons:[],assignments:[],submissions:[],error:'',loaded:false,vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
 
 /** Loads the real stored data for the dashboard (RLS limits it to what this user may see). */
@@ -31,13 +33,13 @@ function useDashboard(filter:{teacherId?:string;userId?:string}|null){
  useEffect(()=>{if(!filter)return;let cancelled=false;void(async()=>{
   const db=supabase()!;const r=await loadStudents(db,filter);let error=r.error||(!r.v27?t(MIGRATION_HINT):'');const ids=r.data.map(s=>s.id);
   if(!ids.length){if(!cancelled)setD({...EMPTY,students:r.data,error,loaded:true});return}
-  const [l,a]=await Promise.all([db.from('lesson_entries').select('student_id,lesson_date,words').in('student_id',ids),db.from('assignments').select('id,published_at').in('student_id',ids)]);
+  const [l,a]=await Promise.all([db.from('lesson_entries').select('student_id,lesson_date,words').in('student_id',ids),db.from('assignments').select('id,student_id,title,published_at').in('student_id',ids)]);
   if(l.error&&!isMissingMigration(l.error))error=l.error.message;
   const A=(a.data||[]) as Dash['assignments'];const pub=A.filter(x=>x.published_at).map(x=>x.id);
   const s=pub.length?await db.from('homework_submissions').select('assignment_id').in('assignment_id',pub):{data:[]};
   let v28:V28={vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
-  if(r.v28){const [vv,pp,pr,an]=await Promise.all([db.from('vocab_items').select('student_id,status').in('student_id',ids),db.from('student_goal_progress').select('student_id,status,goal_id,curriculum_goals(level)').in('student_id',ids),db.from('practice_sessions').select('student_id,kind,score,total,created_at').in('student_id',ids).order('created_at',{ascending:false}).limit(500),filter.teacherId?db.from('lesson_analyses').select('*').in('student_id',ids).in('status',['ready','processing','failed']).order('created_at',{ascending:false}):Promise.resolve({data:[]})]);
-   v28={vocab:(vv.data||[]) as V28['vocab'],progress:(pp.data||[]) as unknown as V28['progress'],practice:(pr.data||[]) as V28['practice'],analyses:(an.data||[]) as V28['analyses'],summaries:filter.userId?(await Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id})))).flatMap(x=>(x.data||[]) as V28['summaries']):[]};}
+  if(r.v28){const [vv,pp,pr,an]=await Promise.all([db.from('vocab_items').select('student_id,status,due_at,translation').in('student_id',ids),db.from('student_goal_progress').select('student_id,status,goal_id,curriculum_goals(level)').in('student_id',ids),db.from('practice_sessions').select('student_id,kind,score,total,created_at').in('student_id',ids).order('created_at',{ascending:false}).limit(500),filter.teacherId?db.from('lesson_analyses').select('*').in('student_id',ids).in('status',['ready','processing','failed']).order('created_at',{ascending:false}):Promise.resolve({data:[]})]);
+   v28={vocab:(vv.data||[]) as V28['vocab'],progress:(pp.data||[]) as unknown as V28['progress'],practice:(pr.data||[]) as V28['practice'],analyses:(an.data||[]) as V28['analyses'],summaries:filter.userId?(await Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id}).then(x=>((x.data||[]) as Omit<V28['summaries'][number],'student_id'>[]).map(s=>({...s,student_id:id})))))).flat():[]};}
   if(!cancelled)setD({students:r.data,lessons:(l.data||[]) as LessonLike[],assignments:A,submissions:(s.data||[]) as Dash['submissions'],error,loaded:true,...v28});
  })();return()=>{cancelled=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
  return d;
@@ -96,6 +98,7 @@ function StudentHome(){
  const speaking=d.summaries.filter(s=>s.final?.student_speaking_seconds!=null).sort((a,b)=>a.lesson_date<b.lesson_date?-1:1).slice(-8).map(s=>({key:s.lesson_date,label:new Date(s.lesson_date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'}),value:Math.round((s.final.student_speaking_seconds||0)/60)}));
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
  return <><PendingLinks/><NextLessonPanel mode="student"/>
+  <ReadyForYou items={d.loaded?readyFor(d):null} relations={studentLinks.map(s=>({id:s.id,label:[s.subject||t("Les"),s.teacher_name].filter(Boolean).join(' · ')}))}/>
   <div className="hero mint"><div><div className="eyebrow">{t("LEERLINGDASHBOARD")}</div><h1>{t("Mijn lessen")}</h1><p>{t("Je voortgang, woorden en huiswerk bij al je docenten op één plek.")}</p><div className="heroactions"><Link className="button light" href="/mijn-profiel"><BookOpen size={17}/> {t("Mijn lessen")}</Link><Link className="button ghost-light" href="/portugees"><Languages size={17}/> {t("Portugees voorbereiden")}</Link></div></div><div className="hero-art" aria-hidden><BookOpen size={76}/></div></div>
   {d.error&&<div className="notice">{d.error}</div>}
   <MyLanguages students={d.students} lessons={d.lessons as {student_id:string}[]} vocab={d.vocab} loaded={d.loaded} teacherName={id=>studentLinks.find(l=>l.id===id)?.teacher_name||''}/>

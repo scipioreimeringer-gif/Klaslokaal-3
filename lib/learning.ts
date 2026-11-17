@@ -4,17 +4,21 @@ import type {AnalysisDoc, AnalysisStatus} from './analysisTypes';
 import {relationLanguage} from './languages';
 import {t, translated, getLang} from './i18n';
 
-export type VocabItem = {id: string; student_id: string; term: string; translation: string; example: string; kind: 'word' | 'expression'; status: 'new' | 'practicing' | 'mastered'; source: 'teacher' | 'lesson' | 'ai' | 'student'; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
+export type VocabItem = {id: string; student_id: string; term: string; translation: string; example: string; kind: 'word' | 'expression'; status: 'new' | 'practicing' | 'mastered'; source: 'teacher' | 'lesson' | 'ai' | 'student' | 'canvas';
+  /* v35 */ lang?: string | null; pos?: string | null; lesson_id?: string | null; source_page?: string | null; difficult?: boolean; created_at: string; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
 export type Goal = {id: string; code: string | null; subject: string; level: string; skill: string; title: string; description: string; sort: number; owner_teacher: string | null};
 export type GoalStatus = 'not_started' | 'in_progress' | 'covered' | 'mastered';
-export type GoalProgress = {student_id: string; goal_id: string; status: GoalStatus; basis: 'teacher' | 'ai_confirmed' | 'practice'; note: string; lesson_date: string | null; updated_at: string};
+export type GoalProgress = {student_id: string; goal_id: string; status: GoalStatus; basis: 'teacher' | 'ai_confirmed' | 'practice' | 'intake'; note: string; lesson_date: string | null; updated_at: string;
+  /* v34 */ hidden?: boolean; title_override?: string | null; level_override?: string | null; lesson_refs?: string[]};
 export type AnalysisRow = {id: string; student_id: string; recording_id: string | null; lesson_date: string; status: AnalysisStatus; transcript: string | null; source_quality: string; draft: AnalysisDoc | null; final: AnalysisDoc | null; error: string | null; approved_at: string | null; created_at: string; is_test?: boolean};
 export type PracticeSession = {id: string; kind: string; score: number; total: number; duration_seconds: number; assignment_id: string | null; created_at: string};
 
-export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = translated({not_started: 'Nog niet behandeld', in_progress: 'Mee bezig', covered: 'Behandeld', mastered: 'Beheerst'});
-export const SKILLS = ['woordenschat', 'grammatica', 'spreken', 'luisteren', 'lezen', 'schrijven', 'overig'] as const;
+/** Exactly four statuses, in this order (in_progress is shown as "Nog oefenen"). */
+export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = translated({not_started: 'Niet behandeld', covered: 'Behandeld', in_progress: 'Nog oefenen', mastered: 'Beheerst'});
+export const SKILLS = ['grammatica', 'woordenschat', 'zinsbouw', 'communicatie', 'uitspraak', 'spreken', 'luisteren', 'lezen', 'schrijven', 'overig'] as const;
+export const SKILL_LABEL: Record<string, string> = translated({grammatica: 'Grammatica', woordenschat: 'Woordenschat', zinsbouw: 'Zinsbouw', communicatie: 'Communicatie', uitspraak: 'Uitspraak', spreken: 'Spreken', luisteren: 'Luisteren', lezen: 'Lezen', schrijven: 'Schrijven', overig: 'Overig'});
 export const LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
-export const SUBJECTS: Record<string, string> = translated({nl: 'Nederlands', pt: 'Portugees'});
+export const SUBJECTS: Record<string, string> = translated({nl: 'Nederlands', en: 'Engels', es: 'Spaans', pt: 'Portugees', fr: 'Frans', de: 'Duits'});
 export const VOCAB_STATUS_LABEL = translated({new: 'Nieuw', practicing: 'Aan het oefenen', mastered: 'Beheerst'} as const);
 
 /** Same rule as the server (lib/server/context.ts). */

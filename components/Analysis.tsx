@@ -8,6 +8,9 @@ import {approveAnalysis,authedPost,type AnalysisRow} from '../lib/learning';
 import {CATEGORY_LABEL,STATUS_LABEL,type AnalysisDoc,type AnalysisStatus,type Correction,type CorrectionCategory} from '../lib/analysisTypes';
 import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
+import {AnalysisV2View,StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
+import type {AnalysisV2} from '../lib/analysis/pipeline';
+import {CompactAnalysis} from './CompactAnalysis';
 
 const lines=(a:string[]|undefined)=>(a||[]).join('\n');
 const unlines=(s:string)=>s.split('\n').map(x=>x.trim()).filter(Boolean);
@@ -91,7 +94,7 @@ function TestTranscriptImport({defaultStudent,onClose,onStarted}:{defaultStudent
  const [text,setText]=useState('');const [busy,setBusy]=useState(false);const [msg,setMsg]=useState('');const [fileName,setFileName]=useState('');
  useEffect(()=>{if(!user)return;void loadStudents(supabase()!,{teacherId:user.id}).then(r=>setStudents(r.data))},[user?.id]);
  useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[onClose]);
- async function pick(f?:File){setMsg('');if(!f)return;if(!/\.txt$/i.test(f.name)&&f.type!=='text/plain'){setMsg(tt('Kies een .txt-bestand.'));return}if(f.size>200*1024){setMsg(tt('Het bestand is groter dan 200 kB.'));return}setText(await f.text());setFileName(f.name)}
+ async function pick(f?:File){setMsg('');if(!f)return;if(!/\.txt$/i.test(f.name)&&f.type!=='text/plain'){setMsg(tt('Kies een .txt-bestand.'));return}if(f.size>1024*1024){setMsg(tt('Het bestand is groter dan 1 MB.'));return}setText(await f.text());setFileName(f.name)}
  async function start(){if(!sid||text.trim().length<40){setMsg(tt('Het transcript is te kort (minimaal een paar zinnen).'));return}setBusy(true);setMsg('');
   try{await authedPost(supabase()!,'/api/ai/analyze',{test:true,studentId:sid,transcript:text});onStarted(sid)}catch(e){setMsg(e instanceof Error?e.message:String(e))}setBusy(false)}
  return <div className="modal-scrim" onClick={onClose}><div className="modal card test-import" role="dialog" aria-modal="true" aria-label={tt('Testtranscript importeren')} onClick={e=>e.stopPropagation()}>
@@ -100,7 +103,7 @@ function TestTranscriptImport({defaultStudent,onClose,onStarted}:{defaultStudent
   <label className="stack"><span className="label">{tt('Testleerling')}</span><select className="field" value={sid} onChange={e=>setSid(e.target.value)}>{students.map(s=><option key={s.id} value={s.id}>{s.name} — {s.subject||s.email}</option>)}</select></label>
   <label className="stack"><span className="label">{tt('Transcript (.txt uploaden of hieronder plakken)')}</span><input type="file" accept=".txt,text/plain" onChange={e=>void pick(e.target.files?.[0])}/>{fileName&&<small className="muted">{fileName}</small>}</label>
   <textarea className="field" rows={10} value={text} onChange={e=>setText(e.target.value)} placeholder={tt('Bijvoorbeeld:\nDocent: Wat heb je gisteren gedaan?\nLeerling: Ik heb naar de markt gegaan en ik kocht drie appel.')}/>
-  <small className="muted">{tt('Tip: zet "Docent:" en "Leerling:" voor de zinnen, zodat de AI alleen fouten van de leerling citeert.')} {text.length.toLocaleString()} / 60.000</small>
+  <small className="muted">{tt('Tip: zet "Docent:" en "Leerling:" voor de zinnen, zodat de AI alleen fouten van de leerling citeert.')} {text.length.toLocaleString()} / 400.000</small>
   {msg&&<p className="notice" role="alert">{msg}</p>}
   <div className="row"><button className="button" disabled={busy||!sid} onClick={()=>void start()}><Sparkles size={15}/> {busy?tt('Starten…'):tt('Test-analyse starten')}</button><button className="button secondary" onClick={onClose}>{tt('Annuleren')}</button></div>
  </div></div>
@@ -111,11 +114,12 @@ export function TeacherAnalyses({studentId}:{studentId:string}){
  const [rows,setRows]=useState<AnalysisRow[]>([]);const [recs,setRecs]=useState<{id:string;created_at:string;ai:boolean}[]>([]);const [err,setErr]=useState('');const [open,setOpen]=useState<string|null>(null);const [busy,setBusy]=useState(false);
  const load=useCallback(async()=>{const db=supabase()!;
   const cols='id,student_id,recording_id,lesson_date,status,transcript,source_quality,draft,final,error,approved_at,created_at';
-  const analyses=async()=>{const x=await db.from('lesson_analyses').select(cols+',is_test').eq('student_id',studentId).order('created_at',{ascending:false});return x.error&&/is_test/.test(x.error.message)?await db.from('lesson_analyses').select(cols).eq('student_id',studentId).order('created_at',{ascending:false}):x}; // v33 optional
+  const q=(c:string)=>db.from('lesson_analyses').select(c).eq('student_id',studentId).order('created_at',{ascending:false});
+  const analyses=async()=>{let x=await q(cols+',is_test,stage,stage_detail,pipeline_version,published_at,updated_at');if(x.error&&/stage|pipeline_version|published_at/.test(x.error.message))x=await q(cols+',is_test');if(x.error&&/is_test/.test(x.error.message))x=await q(cols);return x}; // v33/v34 optional
   const [a,r]=await Promise.all([analyses(),
    db.from('lesson_recordings').select('id,created_at,ai_consent_teacher_at,ai_consent_student_at').eq('student_id',studentId).order('created_at',{ascending:false})]);
   if(a.error){setErr(a.error.message.includes('lesson_analyses')||a.error.code==='42P01'||a.error.code==='PGRST205'?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):a.error.message);return}
-  setRows((a.data||[]) as AnalysisRow[]);setRecs(((r.data||[]) as {id:string;created_at:string;ai_consent_teacher_at:string|null;ai_consent_student_at:string|null}[]).map(x=>({id:x.id,created_at:x.created_at,ai:!!(x.ai_consent_teacher_at&&x.ai_consent_student_at)})))},[studentId]);
+  setRows((a.data||[]) as unknown as AnalysisRow[]);setRecs(((r.data||[]) as {id:string;created_at:string;ai_consent_teacher_at:string|null;ai_consent_student_at:string|null}[]).map(x=>({id:x.id,created_at:x.created_at,ai:!!(x.ai_consent_teacher_at&&x.ai_consent_student_at)})))},[studentId]);
  useEffect(()=>{void load()},[load]);
  useEffect(()=>{if(!rows.some(r=>r.status==='processing'||r.status==='queued'))return;const t=setInterval(()=>void load(),8000);return()=>clearInterval(t)},[rows,load]);
  async function start(recordingId:string){setBusy(true);setErr('');try{await authedPost(supabase()!,'/api/ai/analyze',{recordingId});await load()}catch(e){setErr(e instanceof Error?e.message:String(e))}setBusy(false)}
@@ -130,11 +134,17 @@ export function TeacherAnalyses({studentId}:{studentId:string}){
   {!rows.length&&!pendingRecs.length&&<p className="muted">{tt("Nog geen lesanalyses. Start een opname in het live klaslokaal en vink “AI-lesanalyse” aan; als je leerling ook toestemming geeft, verschijnt de analyse hier automatisch ter controle.")}</p>}
   {rows.map(a=><div className="analysis-card" key={a.id}>
    <div className="row between"><button className="analysis-head" onClick={()=>setOpen(open===a.id?null:a.id)}>{a.is_test&&<span className="test-badge">{'TEST'}</span>}<b>{niceDate(a.lesson_date)}</b><StatusChip status={a.status}/></button>
-    <div className="row">{a.status==='failed'&&a.recording_id&&<button className="button small secondary" disabled={busy} onClick={()=>void start(a.recording_id!)}><RotateCcw size={14}/> {tt("Opnieuw")}</button>}<button className="iconbtn danger" title={tt("Analyse verwijderen")} onClick={()=>void remove(a)}><Trash2 size={15}/></button></div></div>
+    <div className="row">{a.status==='failed'&&a.recording_id&&!isV2(a as V2Row)&&<button className="button small secondary" disabled={busy} onClick={()=>void start(a.recording_id!)}><RotateCcw size={14}/> {tt("Opnieuw")}</button>}<button className="iconbtn danger" title={tt("Analyse verwijderen")} onClick={()=>void remove(a)}><Trash2 size={15}/></button></div></div>
+   {isV2(a as V2Row)?<>
+    {(a.status==='processing'||a.status==='queued'||a.status==='failed')&&<StageProgress a={a as V2Row} onChange={()=>void load()}/>}
+    {open===a.id&&(a.status==='approved'||a.status==='ready'||(a.status==='failed'&&(a.draft as {steps?:{synthesis?:boolean}}|null)?.steps?.synthesis))&&(a.final||a.draft)&&<TeacherAnalysisV2 key={a.id} a={a as V2Row} onChange={()=>void load()}/>}
+    {open!==a.id&&(a.status==='approved'||a.status==='ready')&&<p className="muted small-print">{a.is_test?tt('TEST-analyse: klik om het resultaat te bekijken. Wordt nooit gedeeld.'):tt('Klik om het verslag, de foutenanalyse en de voorstellen te bekijken en aan te passen.')}</p>}
+   </>:<>
    {a.status==='failed'&&<p className="muted">{a.error}</p>}
    {open===a.id&&a.status==='ready'&&a.draft&&<Editor a={a} onDone={()=>void load()}/>}
    {open===a.id&&a.status==='approved'&&a.final&&<AnalysisView doc={a.final}/>}
    {open!==a.id&&(a.status==='ready')&&<p className="muted small-print">{a.is_test?tt('TEST-analyse: klik om het resultaat te bekijken. Wordt nooit gedeeld.'):tt("Klik om het concept te controleren en goed te keuren. De leerling ziet nog niets.")}</p>}
+   </>}
   </div>)}
  </div>
 }
@@ -144,6 +154,6 @@ export function StudentSummaries({studentId}:{studentId:string}){
  useEffect(()=>{void supabase()!.rpc('student_lesson_summaries',{sid:studentId}).then(({data,error})=>{if(error)setErr(error.message.includes('student_lesson_summaries')?tt("Nog niet beschikbaar (database-update v28 ontbreekt)."):error.message);setRows((data||[]) as {id:string;lesson_date:string;final:AnalysisDoc}[])})},[studentId]);
  if(err)return <p className="muted">{err}</p>;
  if(!rows)return <div className="loader small"/>;
- if(!rows.length)return <p className="muted">{tt("Nog geen lessamenvattingen. Na een opgenomen les (met jouw toestemming voor AI-analyse) maakt AI een concept; je docent controleert het en deelt het daarna met jou.")}</p>;
- return <div className="analyses">{rows.map(r=><details className="analysis-card" key={r.id} open={r===rows[0]}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b><span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span></summary><AnalysisView doc={r.final}/></details>)}</div>
+ if(!rows.length)return <p className="muted">{tt("Nog geen lessamenvattingen. Na een opgenomen les (met jouw toestemming voor AI-analyse) verschijnt hier een kort lesverslag met je foutenanalyse. Je docent kan het aanpassen.")}</p>;
+ return <div className="analyses">{rows.map(r=><details className="analysis-card" key={r.id} open={r===rows[0]}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{(r.final as unknown as {version?:number}).version===2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}</summary><CompactAnalysis doc={r.final as unknown as AnalysisV2|AnalysisDoc} details={(r.final as unknown as {version?:number}).version===2?<AnalysisV2View doc={r.final as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}/></details>)}</div>
 }
