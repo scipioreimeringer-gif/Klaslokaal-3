@@ -62,3 +62,38 @@ test('camera ~480p, max 24 fps, capped bitrate; screen sharing not capped; relay
   assert.match(html, /if\(RELAY_TEST\) ICE\.iceTransportPolicy = "relay"/);
   assert.match(html, /netRoute = relay \? "via TURN" : "direct"/);
 });
+
+test('the JavaScript notation from the Metered dashboard is accepted too (no eval)', async () => {
+  const {readIceServers} = await import('../../lib/turn.ts');
+  const js = `[
+      {
+        urls: "stun:stun.relay.example.test:80",
+      },
+      {
+        urls: "turn:global.relay.example.test:80",
+        username: "user-example",
+        credential: "pass:with:colons",
+      },
+      {
+        urls: 'turns:global.relay.example.test:443?transport=tcp',
+        username: 'user-example',
+        credential: 'pass-example',
+      },
+  ]`;
+  for (const raw of [js, 'const iceServers = ' + js + ';', 'iceServers: ' + js, js.replace(/\n/g, ' ')]) {
+    const r = readIceServers(raw);
+    assert.equal(r.status, 'ok', raw.slice(0, 30));
+    assert.equal(r.servers.length, 3);
+    assert.equal(r.servers[1].credential, 'pass:with:colons', 'string contents untouched');
+    assert.equal(r.servers[2].urls, 'turns:global.relay.example.test:443?transport=tcp');
+  }
+});
+test('status says why there is no TURN (never the value itself)', async () => {
+  const {readIceServers} = await import('../../lib/turn.ts');
+  assert.equal(readIceServers('').status, 'missing');
+  assert.equal(readIceServers(undefined).status, 'missing');
+  assert.equal(readIceServers('hallo').status, 'invalid');
+  assert.equal(readIceServers('[{urls:"turn:x.example.test:3478"}]').status, 'invalid', 'TURN without credentials');
+  assert.equal(readIceServers('[{"urls":"stun:s.example.test:3478"}]').status, 'no_turn');
+  assert.equal(readIceServers('{"iceServers":[{"urls":"turn:t.example.test:3478","username":"u","credential":"c"}]}').status, 'ok');
+});

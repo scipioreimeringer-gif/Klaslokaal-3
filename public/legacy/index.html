@@ -1227,12 +1227,17 @@ function afterJoin(){
 
 /* TURN ophalen: in TeachyRooms via de server (bridge.iceServers); anders alleen als TURN_URL is ingevuld.
    TURN is alleen een terugval: de browser probeert eerst een directe verbinding (STUN). */
-var turnLoaded = false, turnCount = 0;
+var turnLoaded = false, turnCount = 0, turnReason = "";
+function turnText(){
+  if(!turnLoaded) return "nog niet geladen";
+  if(turnCount) return "beschikbaar";
+  return ({missing:"niet ingesteld (TURN_ICE_SERVERS ontbreekt in deze deployment)", invalid:"ongeldige waarde in TURN_ICE_SERVERS", no_turn:"TURN_ICE_SERVERS bevat geen turn-adressen", http_401:"niet geladen (niet ingelogd)", http_403:"niet geladen (geen toegang tot dit klaslokaal)", http_404:"niet geladen (deze versie heeft nog geen /api/turn)", http_500:"niet geladen (serverfout)", error:"niet geladen (netwerkfout)"})[turnReason] || "niet ingesteld";
+}
 function addIce(list){ if(!Array.isArray(list)) return; list.forEach(function(s){ if(s && s.urls){ ICE.iceServers.push(s); if([].concat(s.urls).some(function(u){ return /^turns?:/.test(u); })) turnCount++; } }); }
 function loadTurn(){
   if(turnLoaded) return Promise.resolve();
   var b = bridge(), p = Promise.resolve();
-  if(SB && b && b.iceServers) p = b.iceServers().then(addIce).catch(function(){});
+  if(SB && b && b.iceServers) p = b.iceServers().then(addIce).catch(function(){}).then(function(){ turnReason = b.iceStatus ? b.iceStatus() : ""; });
   if(TURN_URL) p = p.then(function(){ return fetch(TURN_URL).then(function(r){ return r.json(); }).then(addIce); });
   return p.then(function(){ turnLoaded = true; if(RELAY_TEST) toast(turnCount ? "TURN-testmodus: verbinding alleen via TURN" : "TURN-testmodus: er zijn geen TURN-servers geladen"); }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
 }
@@ -1360,7 +1365,7 @@ setInterval(function(){
   var c = $("conn");
   var srv = peer && !peer.destroyed && !peer.disconnected && peer.open !== false;
   c.textContent = isT ? (peer ? (srv ? (n === 1 ? "1 leerling verbonden" : n + " leerlingen verbonden") : "server niet bereikt") : "niet gestart") : (n ? "verbonden met docent" : "niet verbonden");
-  c.title = "Lescode: " + (ROOM || "-") + " · TURN: " + (turnLoaded ? (turnCount ? "beschikbaar" : "niet ingesteld") : "nog niet geladen") + (netRoute ? " · verbinding: " + netRoute : "") + (RELAY_TEST ? " · TURN-testmodus" : "");
+  c.title = "Lescode: " + (ROOM || "-") + " · TURN: " + turnText() + (netRoute ? " · verbinding: " + netRoute : "") + (RELAY_TEST ? " · TURN-testmodus" : "");
   c.classList.toggle("ok", n > 0);
   if(!joinedAt){ $("timer").textContent = "00:00"; return; }
   var s = Math.floor((Date.now() - joinedAt) / 1000);
