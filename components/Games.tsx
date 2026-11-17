@@ -11,13 +11,19 @@ import {newGame,reduce,remaining,wire,fromWire,flashSummary,type Action,type Gam
 import {selectWords,type Selection,type Word} from '../lib/vocab/core';
 import {t as tt} from '../lib/i18n';
 
-type Card={vocab_id:string;term:string;hint:string;forbidden:string[]};
+type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidden:string[]};
 type Msg={t:'game';k:'state';s:GameState}|{t:'game';k:'act';a:Action|{a:'newround'}};
 const frame=()=>document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;
 function send(m:unknown){try{(frame()?.contentWindow as unknown as {__klasGameSend?:(m:unknown)=>void}|null)?.__klasGameSend?.(m)}catch{/* classroom not ready */}}
 const bridge=()=>(window as unknown as {teachyBridge?:{onGame?:(m:unknown)=>void;onPeerHello?:()=>void}}).teachyBridge;
 const KIND_LABEL:Record<Kind,string>={flash:'Flashcards',thirty:'30 Seconds',taboo:'Taboe'};
 const SEL_LABEL:Record<Selection['mode'],string>={last_lesson:'Woorden uit de vorige les',last5:'Woorden uit de laatste vijf lessen',all:'Alle woorden',difficult:'Woorden die de leerling moeilijk vindt',manual:'Zelf kiezen'};
+type Source='list'|'bank';
+type BankMod=typeof import('../lib/wordbank');
+type BankLevelSel=import('../lib/wordbank').BankLevel|'mix';type BankCatSel=import('../lib/wordbank').BankCat|'all';
+/** v38: every setting the same way: a label above a full-width dropdown */
+function Pick<T extends string|number>({label,value,options,onChange}:{label:string;value:T;options:[T,string][];onChange:(v:T)=>void}){
+ return <label className="stack games-field"><span className="label">{label}</span><select className="field" value={String(value)} onChange={e=>{const o=options.find(x=>String(x[0])===e.target.value);if(o)onChange(o[0])}}>{options.map(([v,l])=><option key={String(v)} value={String(v)}>{l}</option>)}</select></label>}
 
 type Props={studentId:string;role:Role;open:boolean;onOpen:()=>void;onClose:()=>void;mount?:Element|null};
 /** v36: rendered inside the classroom's "Spelletjes" tab (host = a shadow-DOM mount in the work panel); without a host it floats over the classroom. */
@@ -32,6 +38,10 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  const [duration,setDuration]=useState<30|60|90>(30);const [taboo,setTaboo]=useState<1|2|3>(3);const [first,setFirst]=useState<Role>('teacher');
  const [count,setCount]=useState(5);const [msg,setMsg]=useState('');const [busy,setBusy]=useState(false);const [few,setFew]=useState<number|null>(null);
  const [cards,setCards]=useState<{roundId:string;cards:Card[]}|null>(null);
+ // v38: built-in word bank (no personal words or AI needed); loaded only when chosen
+ const [source,setSource]=useState<Source>('list');const [bank,setBank]=useState<BankMod|null>(null);const [bankLang,setBankLang]=useState('');
+ const [level,setLevel]=useState<BankLevelSel>('mix');const [cat,setCat]=useState<BankCatSel>('all');const [aiTaboo,setAiTaboo]=useState(true);
+ const [widen,setWiden]=useState(false);const [notice,setNotice]=useState('');
 
  /* ---------- host: apply + broadcast ---------- */
  const apply=useCallback((a:Action,actor:Role)=>{const s=ref.current;if(!s)return;const n=reduce(s,a,actor,Date.now());if(n===s)return;
@@ -42,7 +52,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  useEffect(()=>{if(host&&state)sessionStorage.setItem(store,JSON.stringify(state))},[host,state,store]);
 
  /* ---------- messages from the other player ---------- */
- const newRound=useRef<(c?:number)=>Promise<void>>(async()=>{});
+ const newRound=useRef<(c?:number,f?:{level:BankLevelSel;cat:BankCatSel})=>Promise<void>>(async()=>{});
  useEffect(()=>{const b=bridge();if(!b)return;
   b.onGame=(raw:unknown)=>{const m=raw as Msg;if(!m||m.t!=='game')return;
    if(host&&m.k==='act'){if((m.a as {a:string}).a==='newround')void newRound.current();else apply(m.a as Action,'student')}
@@ -60,17 +70,28 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
   setWords((rows||[]) as Word[]);
   const p=await db.from('vocab_suggestions').select('id',{count:'exact',head:true}).eq('student_id',studentId).eq('status','pending');setPending(p.count||0)},[studentId]);
  useEffect(()=>{if(host&&open)void loadWords()},[host,open,loadWords]);
+ // target language + level of this student → which bank, which default level
+ useEffect(()=>{if(!host||!open||bank)return;let c=false;void(async()=>{const m=await import('../lib/wordbank');
+  const r=await supabase()!.from('students').select('curriculum_subject,subject,lesson_language,level').eq('id',studentId).maybeSingle();
+  const row=(r.error?(await supabase()!.from('students').select('subject,lesson_language,level').eq('id',studentId).maybeSingle()).data:r.data) as {curriculum_subject?:string|null;subject?:string|null;lesson_language?:string|null;level?:string|null}|null;
+  if(c)return;const lang=m.bankLangFor(row||{});setBank(m);setBankLang(lang);if(m.isLevel(row?.level))setLevel(row!.level as BankLevelSel)})();return()=>{c=true}},[host,open,bank,studentId]);
+ const bankOk=!!bank&&bank.hasBank(bankLang);
+ const src:Source=kind==='flash'||!bankOk?'list':source;
+ const bankCount=bankOk?bank!.bankPool(bankLang,{level,cat,minTaboo:kind==='taboo'?taboo:0}).length:0;
  async function scan(){setBusy(true);setMsg('');try{const r=await authedPost<{added:number;scannedPages:number}>(supabase()!,'/api/vocab/detect',{studentId});setMsg(r.added?tt('{0} nieuwe woorden gevonden. Controleer ze hieronder.',r.added):r.scannedPages?tt('Geen nieuwe woorden gevonden op het canvas.'):tt('Het canvas is niet veranderd sinds de vorige keer.'));await loadWords()}catch(e){setMsg(e instanceof Error?e.message:String(e))}setBusy(false)}
  const selection:Selection=sel.mode==='manual'?{mode:'manual',ids:[...manual]}:sel;
  const pool=useMemo(()=>selectWords(words,selection),[words,sel,manual]);
+ const avail=src==='bank'?bankCount:pool.length;
 
  async function start(){setMsg('');setFew(null);const id=crypto.randomUUID();
   if(kind==='flash'){if(!pool.length){setMsg(tt('Er zijn nog geen woorden in deze selectie. Voeg woorden toe in de Woordenlijst.'));return}
    const cards=pool.slice(0,30).map(w=>({id:w.id,term:w.term,back:w.translation,example:w.example}));const s=newGame(id,'flash',{cards});ref.current=s;setState(s);broadcast(s);return}
   const s=newGame(id,kind,{explainer:first,duration,taboo});ref.current=s;setState(s);broadcast(s);await newRound.current(count)}
- newRound.current=async(c?:number)=>{const s=ref.current;if(!s||!host||s.kind==='flash'||s.phase!=='between')return;setBusy(true);setFew(null);
-  try{const r=await authedPost<{tooFew?:boolean;available?:number;roundId?:string;cardCount?:number}>(supabase()!,'/api/games/round',{studentId,sessionId:s.id,roundId:crypto.randomUUID(),round:s.round+1,kind:s.kind,explainer:s.explainer,selection,count:c||count,taboo:s.taboo||taboo});
-   if(r.tooFew){setFew(r.available||0);apply({a:'error',message:tt('Te weinig woorden voor een ronde ({0} beschikbaar).',r.available||0)},'teacher')}else apply({a:'round',roundId:r.roundId!,cardCount:r.cardCount!},'teacher')}
+ newRound.current=async(c?:number,f?:{level:BankLevelSel;cat:BankCatSel})=>{const s=ref.current;if(!s||!host||s.kind==='flash'||s.phase!=='between')return;setBusy(true);setFew(null);setWiden(false);setNotice('');
+  const lv=f?.level||level,ct=f?.cat||cat;
+  try{const r=await authedPost<{tooFew?:boolean;available?:number;canWiden?:boolean;roundId?:string;cardCount?:number;notice?:string|null}>(supabase()!,'/api/games/round',{studentId,sessionId:s.id,roundId:crypto.randomUUID(),round:s.round+1,kind:s.kind,explainer:s.explainer,count:c||count,taboo:s.taboo||taboo,
+    ...(src==='bank'?{source:'bank',level:lv,category:ct}:{source:'list',selection,aiTaboo})});
+   if(r.tooFew){setFew(r.available||0);setWiden(!!r.canWiden);apply({a:'error',message:tt('Te weinig woorden voor een ronde ({0} beschikbaar).',r.available||0)},'teacher')}else{if(r.notice)setNotice(tt(r.notice));apply({a:'round',roundId:r.roundId!,cardCount:r.cardCount!},'teacher')}}
   catch(e){apply({a:'error',message:e instanceof Error?e.message:String(e)},'teacher')}setBusy(false)};
 
  /* ---------- actions (host applies directly, student asks the host) ---------- */
@@ -80,7 +101,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  /* ---------- explainer: load the round's cards (RLS: only the explainer can read them) ---------- */
  useEffect(()=>{const rid=state?.roundId;if(!explaining||!rid||cards?.roundId===rid)return;let c=false;
   void supabase()!.from('game_rounds').select('cards').eq('id',rid).maybeSingle().then(({data})=>{if(!c&&data)setCards({roundId:rid,cards:(data as {cards:Card[]}).cards})});return()=>{c=true}},[explaining,state?.roundId,cards?.roundId]);
- function guessed(i:number){const c=cards?.cards[i];act({a:'guessed',index:i});if(c&&state?.roundId)void supabase()!.rpc('game_mark_guessed',{p_round:state.roundId,p_vocab:c.vocab_id})}
+ function guessed(i:number){const c=cards?.cards[i];act({a:'guessed',index:i});if(c?.vocab_id&&state?.roundId)void supabase()!.rpc('game_mark_guessed',{p_round:state.roundId,p_vocab:c.vocab_id})}
 
  if(!open&&!mount)return null;
  const left=state?Math.ceil(remaining(state,now)/1000):0;
@@ -93,17 +114,24 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  if(host&&(!state||state.phase==='ended'))return <aside className="games-panel">{head}
   {state?.phase==='ended'&&<div className="game-result">{state.kind==='flash'?tt('Flashcards klaar: {0} goed, {1} nog oefenen.',flashSummary(state).good,flashSummary(state).bad):<Score s={state}/>}</div>}
   <div className="chipbar">{(['flash','thirty','taboo'] as Kind[]).map(k=><button key={k} aria-pressed={kind===k} onClick={()=>setKind(k)}>{tt(KIND_LABEL[k])}</button>)}</div>
-  <label className="stack"><span className="label">{tt('Welke woorden?')}</span><select className="field" value={sel.mode} onChange={e=>setSel({mode:e.target.value as Selection['mode']})}>{(Object.keys(SEL_LABEL) as Selection['mode'][]).map(k=><option key={k} value={k}>{tt(SEL_LABEL[k])}</option>)}</select></label>
-  {sel.mode==='manual'&&<div className="games-pick">{words.map(w=><label key={w.id} className="row small"><input type="checkbox" checked={manual.has(w.id)} onChange={()=>setManual(m=>{const n=new Set(m);if(n.has(w.id))n.delete(w.id);else n.add(w.id);return n})}/> {w.term}</label>)}</div>}
-  <p className="muted small-print">{tt('{0} woorden in deze selectie.',pool.length)} {pending>0&&tt('{0} voorgestelde woorden wachten op controle in de Woordenlijst.',pending)}</p>
-  {kind!=='flash'&&<div className="row wrap">
-   <label className="row"><span className="label">{tt('Tijd')}</span><select className="field" value={duration} onChange={e=>setDuration(+e.target.value as 30|60|90)}>{[30,60,90].map(d=><option key={d} value={d}>{tt('{0} seconden',d)}</option>)}</select></label>
-   {kind==='taboo'&&<label className="row"><span className="label">{tt('Verboden woorden')}</span><select className="field" value={taboo} onChange={e=>setTaboo(+e.target.value as 1|2|3)}>{[1,2,3].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
-   <label className="row"><span className="label">{tt('Eerst uitleggen')}</span><select className="field" value={first} onChange={e=>setFirst(e.target.value as Role)}><option value="teacher">{tt('Docent')}</option><option value="student">{tt('Leerling')}</option></select></label></div>}
-  {kind!=='flash'&&pool.length<5&&<p className="notice">{tt('Er zijn maar {0} geschikte woorden; een ronde heeft er normaal vijf. Voeg woorden toe in de Woordenlijst of speel een kleinere ronde.',pool.length)}</p>}
-  {kind!=='flash'&&pool.length<5&&pool.length>0&&<label className="row"><span className="label">{tt('Woorden per ronde')}</span><select className="field" value={Math.min(count,pool.length)} onChange={e=>setCount(+e.target.value)}>{Array.from({length:pool.length},(_,i)=>i+1).map(n=><option key={n}>{n}</option>)}</select></label>}
-  <div className="row wrap"><button className="button" disabled={busy||!pool.length} onClick={()=>{if(kind!=='flash'&&pool.length<5)setCount(Math.min(count,pool.length));void start()}}><Play size={15}/> {tt('Spel starten')}</button>
-   <button className="button secondary" disabled={busy} onClick={()=>void scan()}><Sparkles size={15}/> {tt('Woorden van het canvas ophalen')}</button></div>
+  <div className="games-settings">
+   {kind!=='flash'&&bankOk&&<Pick<Source> label={tt('Bron van de woorden')} value={src} onChange={setSource} options={[['list',tt('Woordenlijst van de leerling')],['bank',tt('Woordenbank (willekeurige woorden)')]]}/>}
+   {src==='list'&&<Pick<Selection['mode']> label={tt('Welke woorden?')} value={sel.mode} onChange={m=>setSel({mode:m})} options={(Object.keys(SEL_LABEL) as Selection['mode'][]).map(k=>[k,tt(SEL_LABEL[k])])}/>}
+   {src==='bank'&&bank&&<>
+    <Pick<BankLevelSel> label={tt('Niveau')} value={level} onChange={setLevel} options={(['mix',...bank.BANK_LEVELS] as BankLevelSel[]).map(l=>[l,tt(bank.LEVEL_LABEL[l])])}/>
+    <Pick<BankCatSel> label={tt('Categorie')} value={cat} onChange={setCat} options={(['all',...bank.BANK_CATS] as BankCatSel[]).map(c=>[c,tt(bank.CAT_LABEL[c])])}/></>}
+   {kind!=='flash'&&<>
+    <Pick<30|60|90> label={tt('Tijd')} value={duration} onChange={setDuration} options={([30,60,90] as const).map(d=>[d,tt('{0} seconden',d)])}/>
+    {kind==='taboo'&&<Pick<1|2|3> label={tt('Verboden woorden')} value={taboo} onChange={setTaboo} options={([1,2,3] as const).map(n=>[n,String(n)])}/>}
+    <Pick<Role> label={tt('Eerst uitleggen')} value={first} onChange={setFirst} options={[['teacher',tt('Docent')],['student',tt('Leerling')]]}/></>}
+  </div>
+  {src==='list'&&sel.mode==='manual'&&<div className="games-pick">{words.map(w=><label key={w.id} className="row small"><input type="checkbox" checked={manual.has(w.id)} onChange={()=>setManual(m=>{const n=new Set(m);if(n.has(w.id))n.delete(w.id);else n.add(w.id);return n})}/> {w.term}</label>)}</div>}
+  {kind==='taboo'&&src==='list'&&<label className="row small"><input type="checkbox" checked={aiTaboo} onChange={e=>setAiTaboo(e.target.checked)}/> {tt('Ontbrekende verboden woorden met AI aanvullen')}</label>}
+  <p className="muted small-print">{tt('{0} woorden in deze selectie.',avail)} {src==='list'&&pending>0&&tt('{0} voorgestelde woorden wachten op controle in de Woordenlijst.',pending)} {kind==='flash'&&bankOk&&tt('Flashcards gebruiken de woordenlijst van de leerling.')} {src==='bank'&&kind==='taboo'&&tt('Taboe met de woordenbank werkt zonder AI.')}</p>
+  {kind!=='flash'&&avail<5&&<p className="notice">{src==='bank'?tt('Er zijn maar {0} woorden met deze keuze. Kies een ander niveau of een andere categorie, of speel een kleinere ronde.',avail):tt('Er zijn maar {0} geschikte woorden; een ronde heeft er normaal vijf. Voeg woorden toe in de Woordenlijst of speel een kleinere ronde.',avail)}</p>}
+  {kind!=='flash'&&avail<5&&avail>0&&<div className="games-settings"><Pick<number> label={tt('Woorden per ronde')} value={Math.min(count,avail)} onChange={setCount} options={Array.from({length:avail},(_,i)=>[i+1,String(i+1)])}/></div>}
+  <div className="row wrap"><button className="button" disabled={busy||!avail} onClick={()=>{if(kind!=='flash'&&avail<5)setCount(Math.min(count,avail));void start()}}><Play size={15}/> {tt('Spel starten')}</button>
+   {src==='list'&&<button className="button secondary" disabled={busy} onClick={()=>void scan()}><Sparkles size={15}/> {tt('Woorden van het canvas ophalen')}</button>}</div>
   {msg&&<p className="muted" role="status">{msg}</p>}
  </aside>;
  const s=state!;
@@ -126,9 +154,12 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
    <span className="tag">{tt('Ronde {0}',s.round||1)}</span><span className="tag">{s.explainer===me?tt('Jij legt uit'):tt('Jij raadt')}</span></div>
   <Score s={s}/>
   {s.error&&<p className="notice">{s.error}</p>}
-  {host&&few!==null&&<div className="row wrap">{few>0&&<button className="button small" onClick={()=>void newRound.current(few)}>{tt('Kleinere ronde met {0} woorden',few)}</button>}<span className="muted small-print">{tt('Of voeg woorden toe in de Woordenlijst.')}</span></div>}
+  {host&&few!==null&&<div className="row wrap">{few>0&&<button className="button small" onClick={()=>void newRound.current(few)}>{tt('Kleinere ronde met {0} woorden',few)}</button>}
+   {src==='bank'&&widen&&bank&&<button className="button small secondary" onClick={()=>{const w=bank.widen({level,cat});if(!w)return;setLevel(w.level);setCat(w.cat);void newRound.current(undefined,{level:w.level,cat:w.cat})}}>{cat!=='all'?tt('Alle categorieën gebruiken'):tt('Alle niveaus gebruiken')}</button>}
+   {src==='list'&&<span className="muted small-print">{tt('Of voeg woorden toe in de Woordenlijst.')}</span>}</div>}
+  {host&&notice&&<p className="muted small-print">{notice}</p>}
   {(s.phase==='ready'||s.phase==='running'||s.phase==='paused')&&(explaining?
-   <div className="game-cards">{!cards||cards.roundId!==s.roundId?<div className="loader small"/>:cards.cards.map((c,i)=><div key={c.vocab_id} className={'game-card'+(s.guessed.includes(i)?' done':'')}>
+   <div className="game-cards">{!cards||cards.roundId!==s.roundId?<div className="loader small"/>:cards.cards.map((c,i)=><div key={c.vocab_id||c.bank_id||i} className={'game-card'+(s.guessed.includes(i)?' done':'')}>
      <div className="grow"><b>{c.term}</b>{c.hint&&<small className="muted block">{c.hint}</small>}{!!c.forbidden.length&&<small className="forbidden block"><Ban size={12}/> {c.forbidden.join(' · ')}</small>}</div>
      {s.phase==='running'&&(s.guessed.includes(i)?<button className="iconbtn" title={tt('Ongedaan maken')} onClick={()=>act({a:'undo',index:i})}><RotateCcw size={14}/></button>:<button className="button small" onClick={()=>guessed(i)}><Check size={14}/> {tt('Geraden')}</button>)}</div>)}
     <p className="muted small-print">{s.kind==='taboo'?tt('Leg uit zonder het woord zelf en zonder de verboden woorden te gebruiken.'):tt('Leg uit zonder het woord zelf te noemen.')}</p></div>

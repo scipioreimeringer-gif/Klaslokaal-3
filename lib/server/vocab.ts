@@ -37,13 +37,13 @@ export async function detectCanvasVocab(db: SupabaseClient, student: StudentCtx,
 }
 
 const TabooSchema = z.object({cards: z.array(z.object({index: z.number(), forbidden: z.array(z.string()).describe('exactly 3 common words a player would naturally use to explain the target word')}))});
-/** Forbidden words per word for the student's level: read from the cache, generate only the missing ones (one call). */
-export async function tabooFor(db: SupabaseClient, words: {id: string; term: string}[], opts: {level: string; targetName: string; log: UsageCtx}) {
+/** Forbidden words per word for the student's level: read from the cache, generate only the missing ones (one call, optional: noAi skips it). */
+export async function tabooFor(db: SupabaseClient, words: {id: string; term: string}[], opts: {level: string; targetName: string; log: UsageCtx; noAi?: boolean}) {
   const level = /^(A0|A1|A2|B1|B2|C1|C2)$/.test(opts.level) ? opts.level : 'A1';
   const {data} = await db.from('vocab_taboo').select('vocab_id,words').eq('level', level).in('vocab_id', words.map(w => w.id));
   const have = new Map(((data || []) as {vocab_id: string; words: string[]}[]).map(x => [x.vocab_id, x.words]));
   const missing = words.filter(w => !have.has(w.id));
-  if (missing.length) {
+  if (missing.length && !opts.noAi) {
     const r = await askFast(TabooSchema, [
       `Taboo game in ${opts.targetName} for a learner at level ${level}. For each target word give 3 forbidden words in ${opts.targetName}:`,
       'the most obvious words someone would use to explain it. Simple, frequent words that fit the level; never the target word itself, a form of it or a word that contains it.',
