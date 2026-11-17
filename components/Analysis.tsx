@@ -10,6 +10,7 @@ import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
 import {AnalysisV2View,StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
+import {CompactAnalysis} from './CompactAnalysis';
 
 const lines=(a:string[]|undefined)=>(a||[]).join('\n');
 const unlines=(s:string)=>s.split('\n').map(x=>x.trim()).filter(Boolean);
@@ -154,5 +155,5 @@ export function StudentSummaries({studentId}:{studentId:string}){
  if(err)return <p className="muted">{err}</p>;
  if(!rows)return <div className="loader small"/>;
  if(!rows.length)return <p className="muted">{tt("Nog geen lessamenvattingen. Na een opgenomen les (met jouw toestemming voor AI-analyse) verschijnt hier een kort lesverslag met je foutenanalyse. Je docent kan het aanpassen.")}</p>;
- return <div className="analyses">{rows.map(r=><details className="analysis-card" key={r.id} open={r===rows[0]}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{(r.final as unknown as {version?:number}).version===2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}</summary>{(r.final as unknown as {version?:number}).version===2?<AnalysisV2View doc={r.final as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}</details>)}</div>
+ return <div className="analyses">{rows.map(r=><details className="analysis-card" key={r.id} open={r===rows[0]}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{(r.final as unknown as {version?:number}).version===2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}</summary><CompactAnalysis doc={r.final as unknown as AnalysisV2|AnalysisDoc} details={(r.final as unknown as {version?:number}).version===2?<AnalysisV2View doc={r.final as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}/></details>)}</div>
 }

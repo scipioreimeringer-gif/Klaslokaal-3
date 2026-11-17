@@ -77,8 +77,11 @@ async function saveSession(studentId:string,kind:string,score:number,total:numbe
 }
 const record=(id:string,ok:boolean)=>supabase()!.rpc('record_vocab_practice',{item:id,correct:ok});
 
-export function VocabGames({studentId,subject}:{studentId:string;subject?:string}){
- const [items,setItems]=useState<VocabItem[]|null>(null);const [game,setGame]=useState<GameKind|null>(null);const [result,setResult]=useState<string>('');const [corr,setCorr]=useState<TypeItem[]>([]);
+export function VocabGames({studentId,subject,start}:{studentId:string;subject?:string;start?:string|null}){
+ const [items,setItems]=useState<VocabItem[]|null>(null);const [game,setGame]=useState<GameKind|null>(null);
+ // v38: "Flashcards oefenen" on the dashboard opens the game directly (once, only with enough words)
+ const autoStarted=useRef(false);
+ useEffect(()=>{if(start==='flashcards'&&items&&items.length>=2&&!autoStarted.current){autoStarted.current=true;setGame('flashcards')}},[start,items]);const [result,setResult]=useState<string>('');const [corr,setCorr]=useState<TypeItem[]>([]);
  const load=useCallback(async()=>{const r=await loadVocab(supabase()!,studentId);setItems(practiceOrder(r.items.filter(i=>i.translation)));
   const s=await supabase()!.rpc('student_lesson_summaries',{sid:studentId});const list=((s.data||[]) as {final:{corrections?:{original:string;corrected:string;explanation:string;certainty?:string}[]}}[]).flatMap(x=>x.final?.corrections||[]).filter(c=>c.original&&c.corrected&&c.certainty!=='uncertain');setCorr(list.slice(0,12).map(c=>({prompt:c.original,hint:c.explanation,answers:[c.corrected]})))},[studentId]);
  useEffect(()=>{void load()},[load]);

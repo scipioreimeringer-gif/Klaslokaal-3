@@ -8,6 +8,7 @@ import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import type {Category,Suggestion} from '../lib/analysis/core';
+import {CompactAnalysis} from './CompactAnalysis';
 
 export type V2Row={id:string;student_id:string;lesson_date:string;status:string;transcript:string|null;error:string|null;is_test?:boolean;
  draft:unknown;final:unknown;stage?:string|null;stage_detail?:Record<string,unknown>|null;pipeline_version?:number|null;published_at?:string|null;updated_at?:string|null};
@@ -102,6 +103,8 @@ export function TeacherAnalysisV2({a,onChange}:{a:V2Row;onChange:()=>void}){
    <small className="muted block">{tt("{0} transcriptdelen · {1} leerlingzinnen · {2} niet-verifieerbare fouten weggelaten · taal van de uitleg: {3}",doc.chunks,doc.student_utterances,doc.dropped_unverified,doc.explanation_language)}</small></div>
   {a.is_test?<p className="notice test-note"><span className="test-badge">{'TEST'}</span> {tt('TEST-analyse: nooit gedeeld met de leerling; geen huiswerk, geen voorstellen voor het leertraject.')}</p>
    :published&&<p className="muted"><CheckCircle2 size={14}/> {tt("Verslag en foutenanalyse zijn automatisch gedeeld met de leerling{0}. Je kunt ze hier aanpassen.",a.published_at?' ('+niceDate(a.published_at)+')':'')}</p>}
+
+  {!a.is_test&&<details className="compact-preview"><summary><b>{tt("Zo ziet de leerling het (kort, max. 3 punten)")}</b></summary><CompactAnalysis doc={doc}/></details>}
 
   <h4>{tt("Kort lesverslag")}</h4>
   <label className="stack"><span className="label">{tt("Samenvatting")}</span><textarea className="field" rows={4} value={rep?.summary||''} onChange={e=>setReport({summary:e.target.value})}/></label>

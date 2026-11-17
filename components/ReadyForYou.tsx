@@ -1,0 +1,50 @@
+'use client';
+// v38: "Voor jou klaar" — what the student can do now: published homework, words to review with flashcards,
+// and the latest teacher-approved lesson report (short: max. 3 points). Everything is read with the student's
+// own session, so RLS decides what is visible; nothing here is generated or estimated.
+import {useEffect,useState} from 'react';
+import Link from 'next/link';
+import {ClipboardList,Layers,Sparkles,CheckCircle2} from 'lucide-react';
+import {supabase} from '../lib/supabase';
+import {niceDate} from '../lib/data';
+import {readyFor,hasReady,type ReadyInput,type ReadyItem} from '../lib/ready';
+import {CompactAnalysis} from './CompactAnalysis';
+import type {AnalysisDoc} from '../lib/analysisTypes';
+import type {AnalysisV2} from '../lib/analysis/pipeline';
+import {t as tt} from '../lib/i18n';
+
+type Rel={id:string;label:string};
+async function load(ids:string[]):Promise<ReadyItem[]>{
+ const db=supabase()!;
+ const [a,v,sums]=await Promise.all([
+  db.from('assignments').select('id,student_id,title,published_at').in('student_id',ids).not('published_at','is',null),
+  db.from('vocab_items').select('student_id,status,due_at,translation').in('student_id',ids),
+  Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id}).then(r=>((r.data||[]) as {id:string;lesson_date:string;final:unknown}[]).map(x=>({...x,student_id:id}))))),
+ ]);
+ const A=(a.data||[]) as ReadyInput['assignments'];
+ const s=A.length?await db.from('homework_submissions').select('assignment_id').in('assignment_id',A.map(x=>x.id)):{data:[]};
+ return readyFor({students:ids.map(id=>({id})),assignments:A,submissions:(s.data||[]) as ReadyInput['submissions'],vocab:(v.error?[]:(v.data||[])) as ReadyInput['vocab'],summaries:sums.flat()});
+}
+
+export function ReadyForYou({relations}:{relations:Rel[]}){
+ const [items,setItems]=useState<ReadyItem[]|null>(null);const key=relations.map(r=>r.id).join();
+ useEffect(()=>{if(!relations.length){setItems([]);return}let c=false;void load(relations.map(r=>r.id)).then(x=>{if(!c)setItems(x)}).catch(()=>{if(!c)setItems([])});return()=>{c=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
+ if(!relations.length)return null;
+ const list=(items||[]).filter(hasReady);const multi=relations.length>1;
+ return <section className="panel ready-panel" aria-labelledby="ready-h"><div className="panelheader"><div><h2 id="ready-h"><Sparkles size={18}/> {tt("Voor jou klaar")}</h2><p>{tt("Huiswerk, woorden om te herhalen en je laatste lesverslag")}</p></div></div>
+  {!items?<div className="loader small"/>:!list.length?<p className="muted"><CheckCircle2 size={15}/> {tt("Alles is bij. Er staat nu niets voor je klaar.")}</p>:
+  list.map(r=>{const label=relations.find(x=>x.id===r.studentId)?.label||'';return <div key={r.studentId} className="ready-rel">
+   {multi&&<h3 className="muted">{label}</h3>}
+   <div className="ready-grid">
+    {r.homework.length>0&&<div className="ready-card"><h3><ClipboardList size={16}/> {tt("Huiswerk ({0})",r.homework.length)}</h3>
+     <ul>{r.homework.slice(0,3).map(h=><li key={h.id}>{h.title}</li>)}</ul>{r.homework.length>3&&<small className="muted">{tt("en nog {0}",r.homework.length-3)}</small>}
+     <Link className="button small" href={`/mijn-profiel?student=${r.studentId}&tab=huiswerk`}>{tt("Huiswerk maken")}</Link></div>}
+    {r.dueWords>0&&<div className="ready-card"><h3><Layers size={16}/> {tt("Flashcards")}</h3>
+     <p>{tt("{0} woorden staan klaar om te herhalen.",r.dueWords)}</p>
+     <Link className="button small" href={`/oefenen?student=${r.studentId}&spel=flashcards`}>{tt("Flashcards oefenen")}</Link></div>}
+    {r.latest&&<div className="ready-card ready-report"><h3><Sparkles size={16}/> {tt("Lesverslag van {0}",niceDate(r.latest.lesson_date))}</h3>
+     <CompactAnalysis doc={r.latest.final as AnalysisV2|AnalysisDoc}/>
+     <Link className="textlink" href={`/mijn-profiel?student=${r.studentId}&tab=analyses`}>{tt("Meer details")}</Link></div>}
+   </div></div>})}
+ </section>
+}
