@@ -1231,7 +1231,7 @@ var turnLoaded = false, turnCount = 0, turnReason = "";
 function turnText(){
   if(!turnLoaded) return "nog niet geladen";
   if(turnCount) return "beschikbaar";
-  return ({missing:"niet ingesteld (TURN_ICE_SERVERS ontbreekt in deze deployment)", invalid:"ongeldige waarde in TURN_ICE_SERVERS", no_turn:"TURN_ICE_SERVERS bevat geen turn-adressen", http_401:"niet geladen (niet ingelogd)", http_403:"niet geladen (geen toegang tot dit klaslokaal)", http_404:"niet geladen (deze versie heeft nog geen /api/turn)", http_500:"niet geladen (serverfout)", error:"niet geladen (netwerkfout)"})[turnReason] || "niet ingesteld";
+  return ({missing:"niet ingesteld (TURN_ICE_SERVERS ontbreekt in deze deployment)", invalid:"ongeldige waarde in TURN_ICE_SERVERS", invalid_parse:"TURN_ICE_SERVERS is niet te lezen (geen lijst gevonden)", invalid_entries:"TURN_ICE_SERVERS bevat geen geldige adressen", turn_without_credentials:"turn-adressen zonder gebruikersnaam of wachtwoord in TURN_ICE_SERVERS", no_turn:"TURN_ICE_SERVERS bevat geen turn-adressen", http_401:"niet geladen (niet ingelogd)", http_403:"niet geladen (geen toegang tot dit klaslokaal)", http_404:"niet geladen (deze versie heeft nog geen /api/turn)", http_500:"niet geladen (serverfout)", error:"niet geladen (netwerkfout)"})[turnReason] || "niet ingesteld";
 }
 function addIce(list){ if(!Array.isArray(list)) return; list.forEach(function(s){ if(s && s.urls){ ICE.iceServers.push(s); if([].concat(s.urls).some(function(u){ return /^turns?:/.test(u); })) turnCount++; } }); }
 function loadTurn(){

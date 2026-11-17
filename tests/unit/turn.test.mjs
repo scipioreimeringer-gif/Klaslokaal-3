@@ -92,8 +92,34 @@ test('status says why there is no TURN (never the value itself)', async () => {
   const {readIceServers} = await import('../../lib/turn.ts');
   assert.equal(readIceServers('').status, 'missing');
   assert.equal(readIceServers(undefined).status, 'missing');
-  assert.equal(readIceServers('hallo').status, 'invalid');
-  assert.equal(readIceServers('[{urls:"turn:x.example.test:3478"}]').status, 'invalid', 'TURN without credentials');
+  assert.equal(readIceServers('hallo').status, 'invalid_parse');
+  assert.equal(readIceServers('[{urls:"turn:x.example.test:3478"}]').status, 'turn_without_credentials', 'TURN without credentials');
   assert.equal(readIceServers('[{"urls":"stun:s.example.test:3478"}]').status, 'no_turn');
   assert.equal(readIceServers('{"iceServers":[{"urls":"turn:t.example.test:3478","username":"u","credential":"c"}]}').status, 'ok');
+});
+
+test('the array is found inside a code snippet (RTCPeerConnection, comments, quoted value)', async () => {
+  const {readIceServers} = await import('../../lib/turn.ts');
+  const arr = `[
+        { urls: "stun:stun.relay.example.test:80" },
+        { urls: "turn:global.relay.example.test:80", username: "user-example", credential: "pass//not-a-comment" },
+        { urls: "turns:global.relay.example.test:443?transport=tcp", username: "user-example", credential: "pass-example" },
+      ]`;
+  const snippets = [
+    `var myPeerConnection = new RTCPeerConnection({\n  // Metered TURN servers\n  iceServers: ${arr},\n});`,
+    `const peerConfiguration = {\n  /* free tier */\n  iceServers: ${arr}\n};`,
+    JSON.stringify(JSON.stringify([{urls: 'turn:q.example.test:3478', username: 'u', credential: 'c'}])), // value wrapped in quotes
+  ];
+  for (const raw of snippets) {
+    const r = readIceServers(raw);
+    assert.equal(r.status, 'ok', raw.slice(0, 40));
+  }
+  const r = readIceServers(snippets[0]);
+  assert.equal(r.servers.length, 3); assert.equal(r.servers[1].credential, 'pass//not-a-comment', '// inside a string is not a comment');
+});
+test('specific reasons when the value cannot be used', async () => {
+  const {readIceServers} = await import('../../lib/turn.ts');
+  assert.equal(readIceServers('just some text').status, 'invalid_parse');
+  assert.equal(readIceServers('[{"urls":"https://x.example.test"}]').status, 'invalid_entries');
+  assert.equal(readIceServers('[{urls:"turn:x.example.test:3478"}]').status, 'turn_without_credentials');
 });
