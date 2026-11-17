@@ -1011,6 +1011,9 @@ var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(
 var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
 var TEACHER_ID = "learnwithscip-klas-" + ROOM;
 var ICE = {iceServers:[{urls:"stun:stun.l.google.com:19302"}, {urls:"stun:stun1.l.google.com:19302"}].concat(TURN_SERVERS)};
+/* v38: ?relay=1 = TURN test mode: only relayed connections (proves that the TURN server works) */
+var RELAY_TEST = params.get("relay") === "1"; if(RELAY_TEST) ICE.iceTransportPolicy = "relay";
+var netRoute = "";
 
 function online(){ return isT ? Object.keys(conns).some(function(id){ return conns[id].open; }) : !!(tConn && tConn.open); }
 function send(m){ if(!online()) return; queue.push(m); if(!sending) pump(); }
@@ -1172,7 +1175,7 @@ function getMedia(){
   if(window.__noMedia) return Promise.resolve(null);
   if(window.__preMedia && window.__preMedia.active) return Promise.resolve(window.__preMedia);
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve(null);
-  var v = {width:{ideal:640}, height:{ideal:480}, facingMode:"user"}, a = {echoCancellation:true, noiseSuppression:true};
+  var v = {width:{ideal:640, max:640}, height:{ideal:480, max:480}, frameRate:{ideal:24, max:24}, facingMode:"user"}, a = {echoCancellation:true, noiseSuppression:true};
   return navigator.mediaDevices.getUserMedia({video:v, audio:a})
     .catch(function(){ return navigator.mediaDevices.getUserMedia({audio:a}); })
     .catch(function(){ return null; });
@@ -1188,9 +1191,30 @@ function removeRemote(id){
   var v = $("remotes").querySelector('[data-p="' + String(id).replace(/[^a-z0-9-]/gi, "") + '"]'); if(v) v.remove();
   if(!$("remotes").children.length){ $("vTitle").textContent = "Video"; status(isT ? "Wachten op je leerling" : "Verbinding weg", isT ? "Je leerling is weg. Zodra die terugkomt, gaat het vanzelf verder." : "We proberen opnieuw te verbinden..."); }
 }
+/* v38: which route is used (direct / via TURN), and a modest camera bitrate (~480p). Screen sharing is not
+   capped here (it has its own call), so slides, PDF and whiteboard stay sharp: they are not sent as video at all. */
+function capVideo(pc){
+  try{ pc.getSenders().forEach(function(s){ if(!s.track || s.track.kind !== "video" || !s.getParameters) return;
+    var p = s.getParameters(); if(!p.encodings || !p.encodings.length) p.encodings = [{}];
+    p.encodings[0].maxBitrate = 600000; p.encodings[0].maxFramerate = 24;
+    var r = s.setParameters(p); if(r && r.catch) r.catch(function(){}); }); }catch(e){}
+}
+function detectRoute(pc){
+  if(!pc.getStats) return;
+  pc.getStats().then(function(st){
+    var pair = null, cand = {};
+    st.forEach(function(r){ if(r.type === "local-candidate" || r.type === "remote-candidate") cand[r.id] = r; if(r.type === "candidate-pair" && (r.nominated || r.selected) && r.state === "succeeded") pair = r; });
+    if(!pair) return;
+    var l = cand[pair.localCandidateId] || {}, rm = cand[pair.remoteCandidateId] || {};
+    var relay = l.candidateType === "relay" || rm.candidateType === "relay";
+    netRoute = relay ? "via TURN" : "direct";
+    if(RELAY_TEST) toast(relay ? "TURN-test geslaagd: verbonden via de TURN-server" : "Let op: verbinding is direct, niet via TURN");
+  }).catch(function(){});
+}
 function watchIce(c, id){
   var pc = c.peerConnection; if(!pc) return;
   pc.addEventListener("iceconnectionstatechange", function(){
+    if(pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed"){ capVideo(pc); setTimeout(function(){ detectRoute(pc); }, 800); }
     if(pc.iceConnectionState === "failed") status("Geen directe verbinding", (turnCount || TURN_SERVERS.length) ? "Ook via de TURN-server lukt het niet. Probeer een ander netwerk." : "Dit netwerk laat geen directe verbinding toe. Een TURN-server lost dit op (zie instellingen bovenaan het bestand).");
   });
 }
@@ -1210,7 +1234,7 @@ function loadTurn(){
   var b = bridge(), p = Promise.resolve();
   if(SB && b && b.iceServers) p = b.iceServers().then(addIce).catch(function(){});
   if(TURN_URL) p = p.then(function(){ return fetch(TURN_URL).then(function(r){ return r.json(); }).then(addIce); });
-  return p.then(function(){ turnLoaded = true; }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
+  return p.then(function(){ turnLoaded = true; if(RELAY_TEST) toast(turnCount ? "TURN-testmodus: verbinding alleen via TURN" : "TURN-testmodus: er zijn geen TURN-servers geladen"); }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
 }
 /* reserve: als de vaste versie niet laadt, probeer de nieuwste 1.x */
 function ensurePeer(cb){
@@ -1336,7 +1360,7 @@ setInterval(function(){
   var c = $("conn");
   var srv = peer && !peer.destroyed && !peer.disconnected && peer.open !== false;
   c.textContent = isT ? (peer ? (srv ? (n === 1 ? "1 leerling verbonden" : n + " leerlingen verbonden") : "server niet bereikt") : "niet gestart") : (n ? "verbonden met docent" : "niet verbonden");
-  c.title = "Lescode: " + (ROOM || "-");
+  c.title = "Lescode: " + (ROOM || "-") + " · TURN: " + (turnLoaded ? (turnCount ? "beschikbaar" : "niet ingesteld") : "nog niet geladen") + (netRoute ? " · verbinding: " + netRoute : "") + (RELAY_TEST ? " · TURN-testmodus" : "");
   c.classList.toggle("ok", n > 0);
   if(!joinedAt){ $("timer").textContent = "00:00"; return; }
   var s = Math.floor((Date.now() - joinedAt) / 1000);
@@ -2938,7 +2962,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     if(!md || !md.getUserMedia){ fail("Deze browser geeft geen toegang tot camera en microfoon. Je kunt wel deelnemen en meekijken."); return; }
     var a = {echoCancellation:true, noiseSuppression:true};
     var have = window.__preMedia && window.__preMedia.active ? Promise.resolve(window.__preMedia)
-      : md.getUserMedia({video:{width:{ideal:640}, height:{ideal:480}, facingMode:"user"}, audio:a})
+      : md.getUserMedia({video:{width:{ideal:640, max:640}, height:{ideal:480, max:480}, frameRate:{ideal:24, max:24}, facingMode:"user"}, audio:a})
           .catch(function(){ return md.getUserMedia({audio:a}).then(function(st){ note = "Geen camera gevonden of geen toestemming: je neemt deel met alleen geluid."; return st; }); });
     have.then(function(st){
       window.__preMedia = st; $("preV").srcObject = st; var hasV = st.getVideoTracks().length > 0;

@@ -70,10 +70,10 @@ const LESSON_COLS = 'student_id,lesson_date,notes,homework,words,sorted';
 
 /** TURN credentials are never in the classroom code: fetched once per page from /api/turn (logged-in users only). */
 let icePromise: Promise<{urls: string | string[]; username?: string; credential?: string}[]> | null = null;
-function fetchIceServers(db: SupabaseClient) {
+function fetchIceServers(db: SupabaseClient, studentId: string) {
   if (!icePromise) icePromise = (async () => {
     const {data} = await db.auth.getSession();
-    const r = await fetch('/api/turn', {headers: {Authorization: 'Bearer ' + (data.session?.access_token || '')}, cache: 'no-store'});
+    const r = await fetch('/api/turn?student=' + encodeURIComponent(studentId), {headers: {Authorization: 'Bearer ' + (data.session?.access_token || '')}, cache: 'no-store'});
     if (!r.ok) return [];
     const j = await r.json().catch(() => ({})) as {iceServers?: unknown};
     return Array.isArray(j.iceServers) ? j.iceServers as {urls: string | string[]; username?: string; credential?: string}[] : [];
@@ -144,7 +144,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       return putState(k.kind, k.studentId, value);
     },
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
-    iceServers: () => fetchIceServers(db),
+    iceServers: () => fetchIceServers(db, opts.studentId),
     switchStudent(id) { if (allowed.has(id) && id !== opts.studentId) opts.onSwitch(id); },
     async uploadRecording(blob, meta, tracks) {
       const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
@@ -223,7 +223,7 @@ export function createStudentBridge(db: SupabaseClient, opts: {studentId: string
     liveUrl: window.location.origin + '/klaslokaal/live?student=' + encodeURIComponent(opts.studentId),
     get: async () => null, put: refuse,
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
-    iceServers: () => fetchIceServers(db),
+    iceServers: () => fetchIceServers(db, opts.studentId),
     switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),
     previewImport: async () => [], importBackup: refuse,
     translate: translator(db),

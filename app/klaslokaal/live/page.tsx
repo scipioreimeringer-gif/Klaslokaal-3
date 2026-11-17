@@ -76,9 +76,11 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
  const s=room.student;const myName=(user?.user_metadata?.full_name as string|undefined)||s.name;
  // b=<commit>: every deploy gets a new classroom URL, so no browser can keep showing an old cached copy
  const build=encodeURIComponent(process.env.NEXT_PUBLIC_BUILD_SHA||'');
+ // ?relay=1 on the classroom URL: TURN test mode (connection only via the TURN server)
+ const relay=typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('relay')==='1'?'&relay=1':'';
  const src=room.as==='teacher'
-  ?`/legacy/index.html?sb=1&b=${build}&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}`
-  :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}`;
+  ?`/legacy/index.html?sb=1&b=${build}&kamer=${encodeURIComponent(s.room_code!)}&student=${encodeURIComponent(s.id)}${relay}`
+  :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}${relay}`;
  return <main className="live-page bar-hidden">
   <div className="live-body">
    <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame" onLoad={()=>setFrameLoads(n=>n+1)}/>

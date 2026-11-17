@@ -45,3 +45,20 @@ test('the public classroom file contains no TURN credentials any more', () => {
   assert.match(html, /var TURN_SERVERS = \[\];/);
   assert.match(html, /b\.iceServers\(\)/, 'TURN comes from the server via the bridge');
 });
+
+test('TURN is only given to the teacher or student of this classroom (route checks access)', () => {
+  const route = readFileSync(path.join(root, 'app/api/turn/route.ts'), 'utf8');
+  assert.match(route, /await authUser\(req\)/, 'logged in');
+  assert.match(route, /await studentAccess\(db, user\.id, studentId\)/, 'teacher or linked student of this classroom');
+  assert.match(route, /no-store/, 'never cached');
+  assert.match(readFileSync(path.join(root, 'lib/classroomBridge.ts'), 'utf8'), /\/api\/turn\?student=/);
+});
+test('camera ~480p, max 24 fps, capped bitrate; screen sharing not capped; relay test mode and route info', () => {
+  const html = readFileSync(path.join(root, 'public/legacy/index.html'), 'utf8');
+  assert.equal((html.match(/width:\{ideal:640, max:640\}, height:\{ideal:480, max:480\}, frameRate:\{ideal:24, max:24\}/g) || []).length, 2, 'call and pre-join check');
+  assert.match(html, /maxBitrate = 600000/);
+  assert.match(html, /s\.track\.kind !== "video"/, 'only the camera video sender of the call');
+  assert.ok(!/shareTo[\s\S]{0,400}capVideo/.test(html), 'screen-share call is not capped');
+  assert.match(html, /if\(RELAY_TEST\) ICE\.iceTransportPolicy = "relay"/);
+  assert.match(html, /netRoute = relay \? "via TURN" : "direct"/);
+});
