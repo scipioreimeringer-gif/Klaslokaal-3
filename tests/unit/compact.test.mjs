@@ -105,12 +105,14 @@ test('Voor jou klaar: the latest approved lesson report; empty when there is not
 
 test('wiring: dashboard section, student data via RLS only, compact report everywhere the student reads it', () => {
   const home = read('app/page.tsx');
-  assert.match(home, /<ReadyForYou relations=\{studentLinks\.map/);
+  assert.match(home, /<ReadyForYou items=\{d\.loaded\?readyFor\(d\):null\} relations=\{studentLinks\.map/);
   assert.ok(home.indexOf('<ReadyForYou') < home.indexOf('className="statgrid"', home.indexOf('function StudentHome')), 'near the top of the student dashboard');
+  // phase 5: no extra queries — the dashboard's own (RLS-limited) data is reused
+  assert.match(home, /select\('id,student_id,title,published_at'\)/);
+  assert.match(home, /select\('student_id,status,due_at,translation'\)/);
+  assert.match(home, /rpc\('student_lesson_summaries',\{sid:id\}\)\.then/, 'reports via the existing approved-only function, tagged per relation');
   const r = read('components/ReadyForYou.tsx');
-  assert.match(r, /\.not\('published_at','is',null\)/, 'only published homework is asked for');
-  assert.match(r, /rpc\('student_lesson_summaries'/, 'reports via the existing approved-only function');
-  assert.ok(!/authedPost|\/api\/ai/.test(r), 'no AI calls on the dashboard');
+  assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');
   assert.match(r, /\/oefenen\?student=\$\{r\.studentId\}&spel=flashcards/);
   assert.match(read('components/Learning.tsx'), /if\(start==='flashcards'&&items&&items\.length>=2&&!autoStarted\.current\)/);
   assert.match(read('components/Analysis.tsx'), /<CompactAnalysis doc=\{r\.final/, 'Mijn lessen → lesverslagen: compact, full version behind "Meer details"');

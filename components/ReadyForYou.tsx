@@ -1,34 +1,19 @@
 'use client';
 // v38: "Voor jou klaar" — what the student can do now: published homework, words to review with flashcards,
 // and the latest teacher-approved lesson report (short: max. 3 points). Everything is read with the student's
-// own session, so RLS decides what is visible; nothing here is generated or estimated.
-import {useEffect,useState} from 'react';
+// own session (dashboard queries), so RLS decides what is visible; nothing here is generated or estimated.
 import Link from 'next/link';
 import {ClipboardList,Layers,Sparkles,CheckCircle2} from 'lucide-react';
-import {supabase} from '../lib/supabase';
 import {niceDate} from '../lib/data';
-import {readyFor,hasReady,type ReadyInput,type ReadyItem} from '../lib/ready';
+import {hasReady,type ReadyItem} from '../lib/ready';
 import {CompactAnalysis} from './CompactAnalysis';
 import type {AnalysisDoc} from '../lib/analysisTypes';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import {t as tt} from '../lib/i18n';
 
 type Rel={id:string;label:string};
-async function load(ids:string[]):Promise<ReadyItem[]>{
- const db=supabase()!;
- const [a,v,sums]=await Promise.all([
-  db.from('assignments').select('id,student_id,title,published_at').in('student_id',ids).not('published_at','is',null),
-  db.from('vocab_items').select('student_id,status,due_at,translation').in('student_id',ids),
-  Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id}).then(r=>((r.data||[]) as {id:string;lesson_date:string;final:unknown}[]).map(x=>({...x,student_id:id}))))),
- ]);
- const A=(a.data||[]) as ReadyInput['assignments'];
- const s=A.length?await db.from('homework_submissions').select('assignment_id').in('assignment_id',A.map(x=>x.id)):{data:[]};
- return readyFor({students:ids.map(id=>({id})),assignments:A,submissions:(s.data||[]) as ReadyInput['submissions'],vocab:(v.error?[]:(v.data||[])) as ReadyInput['vocab'],summaries:sums.flat()});
-}
-
-export function ReadyForYou({relations}:{relations:Rel[]}){
- const [items,setItems]=useState<ReadyItem[]|null>(null);const key=relations.map(r=>r.id).join();
- useEffect(()=>{if(!relations.length){setItems([]);return}let c=false;void load(relations.map(r=>r.id)).then(x=>{if(!c)setItems(x)}).catch(()=>{if(!c)setItems([])});return()=>{c=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
+/** items: computed by the dashboard from the data it already loaded (no extra queries); null while loading. */
+export function ReadyForYou({relations,items}:{relations:Rel[];items:ReadyItem[]|null}){
  if(!relations.length)return null;
  const list=(items||[]).filter(hasReady);const multi=relations.length>1;
  return <section className="panel ready-panel" aria-labelledby="ready-h"><div className="panelheader"><div><h2 id="ready-h"><Sparkles size={18}/> {tt("Voor jou klaar")}</h2><p>{tt("Huiswerk, woorden om te herhalen en je laatste lesverslag")}</p></div></div>

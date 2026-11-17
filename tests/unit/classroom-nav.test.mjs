@@ -55,6 +55,14 @@ test('leaving says bye first (button and closing the tab); the student hears whe
   assert.match(html, /window\.addEventListener\("pagehide", function\(\)\{ if\(peer\) sayBye\(\); \}\)/);
   assert.match(html, /case "bye": if\(!isT\)\{ removeRemote\("docent"\)/);
 });
+test('phase 5: pdf.js and PeerJS no longer block the classroom from showing', () => {
+  assert.ok(!/<script src="https:\/\/[^"]*(pdf\.min|peerjs)/.test(html), 'no render-blocking third-party script tags');
+  assert.match(html, /function ensurePdf\(\)\{[\s\S]{0,200}loadScript\(PDF_URL\)\.then\(function\(\)\{ pdfjsLib\.GlobalWorkerOptions\.workerSrc = PDF_WORKER;/);
+  assert.match(html, /ensurePdf\(\)\.then\(function\(\)\{ readPdf\(f\); \}/, 'loaded when a PDF is opened');
+  assert.match(html, /window\.addEventListener\("load", function\(\)\{ setTimeout\(function\(\)\{ loadPeerLib\(\)/, 'PeerJS prefetched after the page is shown');
+  assert.match(html, /return loadScript\(PEER_URL\)\.catch\(function\(\)\{ return loadScript\(PEER_URL_RESERVE\); \}\)/, 'reserve CDN kept');
+  assert.match(html, /delete scriptLoads\[src\]; fail/, 'a failed load can be retried');
+});
 test('a student sees the right start hint', () => {
   assert.match(html, /else if\(!isT\) status\(undefined, 'Klik bovenaan op "Naar de les"\.'\);/);
 });

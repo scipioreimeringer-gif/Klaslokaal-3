@@ -902,8 +902,8 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
 <div class="trtip" id="trTip" hidden role="tooltip"></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- v38: pdf.js and PeerJS are no longer render-blocking: PeerJS is fetched in the background after the page
+     has loaded (and on "Start/Naar de les"), pdf.js only when a PDF is opened. See loadScript(). -->
 <script src="/legacy/i18n.js"></script>
 <script>
 /* ==========================================================================
@@ -1259,12 +1259,31 @@ function loadTurn(){
   if(TURN_URL) p = p.then(function(){ return fetch(TURN_URL).then(function(r){ return r.json(); }).then(addIce); });
   return p.then(function(){ turnLoaded = true; if(RELAY_TEST) toast(turnCount ? "TURN-testmodus: verbinding alleen via TURN" : "TURN-testmodus: er zijn geen TURN-servers geladen"); }).catch(function(){ toast("TURN-server kon niet laden, we proberen het zonder"); });
 }
-/* reserve: als de vaste versie niet laadt, probeer de nieuwste 1.x */
+/* v38: external libraries load on demand (once per URL), so the classroom shows immediately */
+var scriptLoads = {};
+function loadScript(src){
+  if(!scriptLoads[src]) scriptLoads[src] = new Promise(function(ok, fail){
+    var s = document.createElement("script"); s.src = src; s.async = true;
+    s.onload = function(){ ok(); }; s.onerror = function(){ delete scriptLoads[src]; fail(new Error("load " + src)); };
+    document.head.appendChild(s);
+  });
+  return scriptLoads[src];
+}
+var PEER_URL = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js", PEER_URL_RESERVE = "https://cdn.jsdelivr.net/npm/peerjs@1/dist/peerjs.min.js";
+var PDF_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", PDF_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function loadPeerLib(){
+  if(window.Peer) return Promise.resolve();
+  /* reserve: als de vaste versie niet laadt, probeer de nieuwste 1.x */
+  return loadScript(PEER_URL).catch(function(){ return loadScript(PEER_URL_RESERVE); });
+}
+function ensurePdf(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return loadScript(PDF_URL).then(function(){ pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER; return pdfjsLib; });
+}
+/* fetch PeerJS in the background once the page is shown, so joining stays instant */
+window.addEventListener("load", function(){ setTimeout(function(){ loadPeerLib().catch(function(){}); }, 600); });
 function ensurePeer(cb){
-  if(window.Peer) return loadTurn().then(function(){ cb(true); });
-  var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/peerjs@1/dist/peerjs.min.js";
-  s.onload = function(){ loadTurn().then(function(){ cb(!!window.Peer); }); }; s.onerror = function(){ cb(false); };
-  document.head.appendChild(s);
+  loadPeerLib().then(function(){ return loadTurn(); }).then(function(){ cb(!!window.Peer); }, function(){ cb(false); });
 }
 function startTeacher(){
   ensurePeer(function(ok){ if(ok) startTeacher2(); else status("Video kan niet laden", "Check je internet en ververs de pagina."); });
@@ -1646,10 +1665,13 @@ function slInfo(){
   var i = slides.indexOf(SL.key);
   $("slPrev").disabled = i <= 0; $("slNext").disabled = i < 0 || i >= slides.length - 1;
 }
-if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 $("pdfIn").addEventListener("change", function(e){
   var f = e.target.files && e.target.files[0]; if(!f) return;
-  if(!window.pdfjsLib){ toast("De pdf-lezer kon niet laden"); return; }
+  e.target.value = "";
+  if(!window.pdfjsLib){ toast("Pdf-lezer laden..."); ensurePdf().then(function(){ readPdf(f); }, function(){ toast("De pdf-lezer kon niet laden"); }); return; }
+  readPdf(f);
+});
+function readPdf(f){
   var rd = new FileReader();
   rd.onload = function(){
     pdfjsLib.getDocument({data:new Uint8Array(rd.result)}).promise.then(function(doc){
@@ -1659,8 +1681,8 @@ $("pdfIn").addEventListener("change", function(e){
       toast(doc.numPages + " slides geladen"); goSlide(slides[0]);
     }).catch(function(){ toast("Deze pdf kan ik niet openen"); });
   };
-  rd.readAsArrayBuffer(f); e.target.value = "";
-});
+  rd.readAsArrayBuffer(f);
+}
 function renderSlide(k){
   if(images[k]) return Promise.resolve();
   var n = +k.split(":")[2]; $("loading").hidden = false;
