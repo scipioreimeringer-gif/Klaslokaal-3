@@ -600,8 +600,18 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
 .conn.conn-dot{font-size:0;width:10px;height:10px;min-width:10px;padding:0;border-radius:50%;background:#c3ccd0;border:2px solid #fff;box-shadow:0 0 0 1px #c3ccd0;cursor:help}
 .conn.conn-dot.ok{background:#2fa77c;box-shadow:0 0 0 1px #2fa77c}
 .tb-left .timer{margin-left:8px;font-variant-numeric:tabular-nums;font-size:.8rem;opacity:.85}
-.btn.leave40,#leaveBtn.leave40{background:#fff;color:#c2412d;border:1px solid #f0c9c0;border-radius:9px;min-height:32px;padding:4px 12px;font-weight:700}
-.btn.leave40:hover,#leaveBtn.leave40:hover{background:#fdf0ec}
+/* v41: leave = compact red button with a white phone-off icon, clear spacing from the status dot and the ⋯ menu */
+#leaveBtn.leave40{display:inline-flex;align-items:center;justify-content:center;width:36px;height:32px;min-width:36px;padding:0;margin:0 4px 0 10px;border:0;border-radius:10px;background:#d64534;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12);cursor:pointer;flex:none;transition:background-color .15s,transform .15s,box-shadow .15s}
+#leaveBtn.leave40[hidden]{display:none}
+#leaveBtn.leave40 svg{width:17px;height:17px}
+#leaveBtn.leave40:hover{background:#bf3626;transform:translateY(-1px);box-shadow:0 4px 10px rgba(214,69,52,.35)}
+#leaveBtn.leave40:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.tb-right{gap:8px}
+/* v41: the dot never shows its text (screen readers still read it); beats the older .conn rules incl. !important ones */
+body .top .conn.conn-dot,body.v28 .top .conn.conn-dot{display:inline-block!important;flex:none;font-size:0!important;line-height:0;color:transparent!important;overflow:hidden;white-space:nowrap;width:12px!important;height:12px!important;min-width:12px;padding:0!important;margin:0 2px 0 6px;border-radius:50%;background:#c3ccd0!important;border:2px solid rgba(255,255,255,.85)!important;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+body .top .conn.conn-dot.ok,body.v28 .top .conn.conn-dot.ok{background:#2fd08f!important}
+body .top .conn.conn-dot:before{display:none}
+@media(prefers-reduced-motion:reduce){#leaveBtn.leave40{transition:none}#leaveBtn.leave40:hover{transform:none}}
 #morePop .menuitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left}
 #morePop .menuitem svg{width:16px;height:16px;flex:none}
 /* v40: new canvas toolbar — compact, floating, Lucide icons, turquoise active state, 150–200 ms */
@@ -796,7 +806,7 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
     <button class="db" id="notesBtn" data-teacher aria-pressed="false" title="Notities per leerling"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg><span class="lbl">Notities</span></button>
     <button class="db rec" id="recBtn" data-teacher type="button" title="Les opnemen (audio, met toestemming van je leerling)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg><span class="lbl">Opnemen</span></button>
     <button class="barbtn" id="dockHide" type="button" title="Werkbalk inklappen" aria-label="Werkbalk inklappen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
-    <button class="db leave" id="leaveBtn" type="button" title="Les verlaten" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0V16l-3 1.5z"/></svg></button>
+    <button class="db leave" id="leaveBtn" type="button" title="Les verlaten" aria-label="Les verlaten" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.1 13.9a14 14 0 0 0 3.732 2.668 1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 .244.473"/><path d="m2 2 20 20"/></svg></button>
   </div>
 </nav>
 
@@ -3056,6 +3066,8 @@ window.addEventListener("resize", function(){ WB.fit(); SL.fit(); placeVideo(sto
   window.__camShow = function(v){ if(v){ if(mode === "hidden") setMode(beforeHidden || P.last || "full", "user"); } else setMode("hidden", "user"); };
   /* a work tab was chosen (or content arrived): leave the full video, unless the layout is locked */
   window.__camWork = function(){ if(mode === "full") setMode(P.last || "right", "auto"); };
+  /* v41: the last work panel was closed → the video becomes full again (not when the layout is locked; the call is never touched) */
+  window.__camAutoFull = function(){ if(mode !== "full" && mode !== "hidden") setMode("full", "auto"); };
 
   /* menu */
   function closeMenu(){ menu.hidden = true; }
@@ -3175,7 +3187,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   $("wbBody").hidden = false; $("wbNav").hidden = false; mode = "wb"; var wbTools = $("wbTools"); if(wbTools) wbTools.hidden = false;
   $("pScr").hidden = true; var gb = $("gamesBtn"); if(gb) gb.hidden = true;
 
-  var ORDER = ["cv", "wb", "scr", "games"], PANEL = {cv:pCv, wb:pWb, scr:pSl, games:pGames};
+  var ORDER = ["cv", "wb", "scr", "games"], PANEL = {cv:pCv, wb:pWb, scr:pSl, games:pGames}, lastVis = -1;
   var OPEN = store("klas-open");
   if(!OPEN || typeof OPEN !== "object"){ var mv = store("klas-tab"); OPEN = {cv:false, wb:true, scr:mv === "sl" || mv === "both" || mv === "scr", games:false}; }
   OPEN.games = false; /* games open when a game starts or on a click */
@@ -3206,6 +3218,10 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   layout = function(){
     if(!gamesOn()) OPEN.games = false;
     var vis = ORDER.filter(function(k){ return OPEN[k]; });
+    /* v41: the LAST open work panel was closed → video full again (existing camera layout; the call itself is untouched).
+       With other panels still open nothing changes; opening a panel shrinks the video again via __camWork. */
+    if(vis.length === 0 && lastVis > 0 && window.__camAutoFull) window.__camAutoFull();
+    lastVis = vis.length;
     var stackIt = mqPhone.matches || mqPortrait.matches;
     ORDER.forEach(function(k, i){ PANEL[k].hidden = vis.indexOf(k) < 0; PANEL[k].style.order = String(vis.indexOf(k) * 2); });
     $("pScr").hidden = true; $("wsEmpty").hidden = vis.length > 0;
@@ -3255,6 +3271,8 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     }
   }
   function toggle(k){
+    /* v41: while the video is full, an "open" panel is not visible: the first click shows it (it does not close it) */
+    if(OPEN[k] && document.body.classList.contains("cam-full")){ if(window.__camWork) window.__camWork("user"); sync(); return; }
     if(k === "scr"){
       if(OPEN.scr){ setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: ⋯ → Scherm delen stoppen."); return; }
       setOpen("scr", true, "user");

@@ -7,6 +7,8 @@ import {Suspense,useEffect,useRef,useState} from 'react';
 function appCss(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}
  const b=getComputedStyle(document.body);
  return css.replace(/:root\b/g,':host')+`\n[data-mount]{font-family:${b.fontFamily};color:${b.color};font-size:15px;line-height:1.45;height:100%}\n[data-mount] .games-panel{position:static;width:auto;max-height:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;max-width:720px;padding:16px}`}
+/** v41: @font-face rules are ignored inside a shadow root, so the app font (Plus Jakarta Sans, self-hosted by next/font) is also registered in the classroom document once. */
+function fontFaces(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).filter(r=>r instanceof CSSFontFaceRule).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}return css}
 const frameCall=(fn:string,...a:unknown[])=>{try{const w=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentWindow as unknown as Record<string,(...x:unknown[])=>void>|null;w?.[fn]?.(...a)}catch{/* classroom not ready */}};
 import {ArrowLeft,Video,X} from 'lucide-react';
 import {useAuth} from '../../../components/Auth';
@@ -63,6 +65,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
  useEffect(()=>()=>{delete window.teachyBridge},[]);
  // v36: mount point for the games inside the classroom's work panel (re-attached after every classroom reload)
  useEffect(()=>{if(!ready)return;let stop=false;setGamesHost(null);const attach=()=>{if(stop)return;const el=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentDocument?.getElementById('gamesHost');if(!el){setTimeout(attach,400);return}
+  const fd=el.ownerDocument;if(!fd.querySelector('style[data-app-fonts]')){const fs=fd.createElement('style');fs.setAttribute('data-app-fonts','');fs.textContent=fontFaces();fd.head.appendChild(fs)}
   const root=el.shadowRoot||el.attachShadow({mode:'open'});if(!root.querySelector('style[data-app]')){const st=document.createElement('style');st.setAttribute('data-app','');st.textContent=appCss();root.appendChild(st)}
   let m=root.querySelector('div[data-mount]');if(!m){m=document.createElement('div');m.setAttribute('data-mount','');root.appendChild(m)}setGamesHost(m)};attach();return()=>{stop=true}},[ready,frameLoads,room?.student.id,room?.as]);
  // interface language: app → classroom (the classroom page is not reloaded, so a running lesson continues)

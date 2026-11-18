@@ -6,11 +6,11 @@ export type {BankCat, BankItem, BankLevel} from './types.ts';
 
 export const BANK_LEVELS: BankLevel[] = ['A1', 'A2', 'B1', 'B2'];
 /** In the order shown in the menu. */
-export const BANK_CATS: BankCat[] = ['life', 'food', 'work', 'travel', 'hobby', 'family', 'verb', 'adjective', 'abstract', 'expression', 'saying', 'proverb'];
+export const BANK_CATS: BankCat[] = ['life', 'food', 'work', 'travel', 'hobby', 'family', 'animals', 'nature', 'feelings', 'verb', 'adjective', 'abstract', 'expression', 'saying', 'proverb'];
 /** Dutch labels (translated in the interface). */
 export const CAT_LABEL: Record<BankCat | 'all', string> = {
   all: 'Alles', life: 'Dagelijks leven', food: 'Eten en drinken', work: 'Werk en studie', travel: 'Reizen', hobby: "Sport en hobby's",
-  family: 'Familie en relaties', verb: 'Werkwoorden', adjective: 'Bijvoeglijke naamwoorden', abstract: 'Abstracte begrippen',
+  family: 'Familie en relaties', animals: 'Dieren', nature: 'Natuur', feelings: 'Gevoelens', verb: 'Werkwoorden', adjective: 'Bijvoeglijke naamwoorden', abstract: 'Abstracte begrippen',
   expression: 'Uitdrukkingen', saying: 'Gezegdes', proverb: 'Spreekwoorden',
 };
 export const LEVEL_LABEL: Record<BankLevel | 'mix', string> = {mix: 'Gemengd', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2'};
@@ -38,7 +38,10 @@ export function bankLangFor(s: {curriculum_subject?: string | null; subject?: st
   return s.lesson_language || 'nl';
 }
 
-export type BankFilter = {level: BankLevel | 'mix'; cat: BankCat | 'all'; minTaboo?: number};
+/** v41: compare a personal word with a bank word ("De fiets" = "fiets" = "de fiets"). */
+export const termKey = (s: string) => String(s || '').toLowerCase().trim().replace(/^(de|het|een|the|a|an|o|a|os|as|el|la|los|las|le|les|l'|der|die|das)\s+/, '').replace(/\s+/g, ' ');
+
+export type BankFilter ={level: BankLevel | 'mix'; cat: BankCat | 'all'; minTaboo?: number};
 export const isLevel = (x: unknown): x is BankLevel | 'mix' => x === 'mix' || (BANK_LEVELS as unknown[]).includes(x);
 export const isCat = (x: unknown): x is BankCat | 'all' => x === 'all' || (BANK_CATS as unknown[]).includes(x);
 export function bankPool(lang: string, f: BankFilter): BankItem[] {

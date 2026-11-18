@@ -15,7 +15,7 @@ test('at least 400 Dutch items, every id unique (one entry per word)', () => {
   assert.equal(new Set(nl.map(w => w.term.toLowerCase())).size, nl.length);
 });
 test('the thematic categories of the assignment, each with words', () => {
-  assert.deepEqual(['all', ...BANK_CATS].map(c => CAT_LABEL[c]), ['Alles', 'Dagelijks leven', 'Eten en drinken', 'Werk en studie', 'Reizen', "Sport en hobby's", 'Familie en relaties', 'Werkwoorden', 'Bijvoeglijke naamwoorden', 'Abstracte begrippen', 'Uitdrukkingen', 'Gezegdes', 'Spreekwoorden']);
+  assert.deepEqual(['all', ...BANK_CATS].map(c => CAT_LABEL[c]), ['Alles', 'Dagelijks leven', 'Eten en drinken', 'Werk en studie', 'Reizen', "Sport en hobby's", 'Familie en relaties', 'Dieren', 'Natuur', 'Gevoelens', 'Werkwoorden', 'Bijvoeglijke naamwoorden', 'Abstracte begrippen', 'Uitdrukkingen', 'Gezegdes', 'Spreekwoorden']);
   for (const c of BANK_CATS) assert.ok(bankPool('nl', {level: 'mix', cat: c}).length >= 15, c);
 });
 test('every level A1–B2 has enough words for many rounds; Gemengd = all', () => {
@@ -64,14 +64,14 @@ test('round route: bank source validated, no AI for bank cards, AI optional for 
   assert.match(r, /tooFew: true, available: pool\.length, canWiden: !!widen\(f\)/);
   const bankPart = r.slice(r.indexOf("if (b.source === 'bank')"), r.indexOf('} else {'));
   assert.ok(!/tabooFor|enforceLimit|askFast/.test(bankPart), 'bank rounds never call AI or count against the AI limit');
-  assert.match(r, /const ai = b\.aiTaboo !== false;/);
+  assert.match(r, /const ai = b\.aiTaboo === true;/, 'v41: AI for forbidden words only when the teacher switches it on');
   assert.match(r, /\.\.\.\(explainer === 'teacher' \? \{cards\} : \{\}\)/, 'cards never sent to a guessing teacher');
 });
-test('games panel: one dropdown style, bank only for 30 Seconds/Taboo, loaded on demand', () => {
+test('games panel: TeachyRooms dropdowns, random bank words by default (also for Flashcards), loaded on demand', () => {
   const g = readFileSync(path.join(root, 'components/Games.tsx'), 'utf8');
-  assert.match(g, /function Pick</);
-  assert.ok(!/<label className="row"><span className="label">/.test(g), 'no inline label+select variants left');
-  assert.match(g, /const src:Source=kind==='flash'\|\|!bankOk\?'list':source;/);
+  assert.match(g, /import \{Select\} from '\.\/Select';/);
+  assert.ok(!/<select className="field"/.test(g), 'no native selects left in the games panel');
+  assert.match(g, /const src:Source=source\|\|\(bankOk\?'bank':'list'\);/);
   assert.match(g, /await import\('\.\.\/lib\/wordbank'\)/, 'word bank not in the initial bundle');
   assert.match(g, /if\(c\?\.vocab_id&&state\?\.roundId\)/, 'bank cards are not counted as personal word practice');
 });

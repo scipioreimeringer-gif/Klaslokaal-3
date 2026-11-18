@@ -103,6 +103,29 @@ de zus | broer, familie, meisje
 de vriend | samen, kennen, maatje
 de baby | klein, huilen, luier
 de familie | ouders, kinderen, verwanten`,
+    animals: `
+de koe | melk, boer, gras
+de vogel | vliegen, veren, nest
+het paard | rijden, manege, hoef
+de vis | water, zwemmen, aquarium
+het varken | roze, boerderij, knorren
+de muis | klein, kaas, kat
+het konijn | oren, wortel, hok
+de eend | water, kwaken, vijver`,
+    nature: `
+de boom | blad, hout, takken
+de bloem | roos, tuin, ruiken
+het bos | bomen, wandelen, dieren
+de lucht | blauw, wolken, hemel
+de maan | nacht, ster, rond
+de sneeuw | wit, winter, koud
+de wind | waaien, storm, buiten
+het gras | groen, maaien, tuin`,
+    feelings: `
+de knuffel | omhelzen, armen, lief
+de lach | grappig, mond, vrolijk
+de traan | huilen, oog, verdriet
+het hart | liefde, kloppen, borst`,
     verb: `
 eten | honger, mond, voedsel
 drinken | dorst, glas, water
@@ -261,6 +284,32 @@ de bruiloft | trouwen, bruid, feest
 de buren | naast, huis, straat
 de vriendin | meisje, samen, liefde
 getrouwd | bruiloft, man, vrouw`,
+    animals: `
+de olifant | slurf, groot, Afrika
+de leeuw | koning, manen, brullen
+de aap | banaan, klimmen, dierentuin
+de schildpad | traag, oud, pantser
+het schaap | wol, wit, wei
+de kip | ei, boerderij, tokken
+de spin | web, acht, poten
+de slang | sissen, gif, kruipen`,
+    nature: `
+het meer | water, zwemmen, groot
+de wolk | lucht, regen, grijs
+de storm | wind, hard, onweer
+het eiland | zee, water, rondom
+de zonsondergang | avond, rood, horizon
+het blad | boom, herfst, groen
+de herfst | bladeren, regen, seizoen
+de lente | bloemen, voorjaar, maart`,
+    feelings: `
+het verdriet | huilen, tranen, verlies
+de schrik | bang, plotseling, hart
+jaloers | afgunst, willen, ander
+trots | blij, prestatie, borst
+eenzaam | alleen, vrienden, stil
+verrast | onverwacht, cadeau, verbaasd
+de woede | boos, kwaad, ontploffen`,
     verb: `
 verhuizen | dozen, nieuw, huis
 solliciteren | baan, brief, werkgever
@@ -387,6 +436,28 @@ de opvoeding | ouders, kinderen, regels
 de schoonmoeder | partner, familie, aangetrouwd
 de generatie | leeftijd, ouders, jong
 het gezin | ouders, kinderen, thuis`,
+    animals: `
+de dierentuin | kooi, leeuw, bezoeken
+het huisdier | hond, kat, verzorgen
+de vlinder | rups, vleugels, kleurig
+de bij | honing, steken, bloem
+de wolf | huilen, roedel, bos
+het hert | gewei, bos, Bambi
+de kudde | groep, schapen, herder`,
+    nature: `
+het landschap | uitzicht, natuur, schilderij
+de woestijn | zand, heet, droog
+de vulkaan | lava, uitbarsting, berg
+het klimaat | weer, temperatuur, opwarming
+de overstroming | water, dijk, regen
+het onweer | bliksem, donder, storm`,
+    feelings: `
+de stress | druk, spanning, werk
+het heimwee | thuis, missen, verlangen
+de schaamte | rood, gênant, fout
+dankbaar | bedanken, blij, waarderen
+gefrustreerd | boos, mislukken, irritatie
+ontroerd | tranen, raken, mooi`,
     verb: `
 overleggen | bespreken, samen, vergadering
 beslissen | kiezen, besluit, knoop
@@ -507,6 +578,24 @@ de podcast | luisteren, aflevering, praten`,
 de mantelzorg | zorgen, familie, ziek
 het samengestelde gezin | stiefvader, kinderen, nieuw
 het ouderschapsverlof | baby, vrij, werk`,
+    animals: `
+de natuurbescherming | milieu, dieren, bedreigd
+de diersoort | uitsterven, natuur, biologie
+het roofdier | jagen, prooi, tanden
+de trekvogel | zuiden, winter, vliegen
+het insect | zes, poten, kever`,
+    nature: `
+de klimaatverandering | opwarming, aarde, uitstoot
+de biodiversiteit | soorten, natuur, variatie
+de droogte | regen, dorst, zomer
+de ecologie | natuur, milieu, wetenschap
+het natuurgebied | beschermd, wandelen, park`,
+    feelings: `
+de empathie | inleven, begrip, gevoel
+de wrok | boosheid, vergeven, lang
+de euforie | uitgelaten, blij, extase
+ambivalent | twijfel, tegenstrijdig, gevoelens
+de melancholie | somber, weemoed, verdriet`,
     verb: `
 relativeren | overdrijven, minder, perspectief
 benadrukken | belangrijk, herhalen, duidelijk
