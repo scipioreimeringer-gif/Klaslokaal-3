@@ -116,12 +116,14 @@ export function BoardPreview({board}:{board:BoardData|null}){
 
 function sanitizeCanvas(html:string){
  if(typeof window==='undefined')return '';
- const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');const allowed=new Set(['DIV','P','B','STRONG','I','EM','U','SPAN','MARK','BR','UL','OL','LI']);
+ const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');const allowed=new Set(['DIV','P','B','STRONG','I','EM','U','S','STRIKE','SPAN','MARK','BR','UL','OL','LI']);
  const walk=(el:Element)=>{for(const c of Array.from(el.children)){if(!allowed.has(c.tagName)){c.replaceWith(...Array.from(c.childNodes).filter(n=>n.nodeType===3||n.nodeType===1));continue}
   const color=(c as HTMLElement).style?.color,bg=(c as HTMLElement).style?.backgroundColor;const dt=c.getAttribute('data-t');
+  // v40: font size, underline/strikethrough, bold, italic from the new canvas toolbar (read BEFORE attributes are removed)
+  const el=c as HTMLElement;const fs=el.style?.fontSize,td=el.style?.textDecorationLine,fw=el.style?.fontWeight,fi=el.style?.fontStyle;
   for(const a of Array.from(c.attributes))c.removeAttribute(a.name);
-  if(dt&&/^[a-z]{1,4}$/.test(dt)){c.setAttribute('data-t',dt);c.setAttribute('class','b')}
-  const st=[color&&/^[#a-z0-9(),.\s%]+$/i.test(color)?`color:${color}`:'',bg&&/^[#a-z0-9(),.\s%]+$/i.test(bg)?`background-color:${bg}`:''].filter(Boolean).join(';');if(st)c.setAttribute('style',st);walk(c)}};
+  if(dt&&/^[a-z][a-z0-9]{0,3}$/.test(dt)){c.setAttribute('data-t',dt);c.setAttribute('class','b')}
+  const st=[color&&/^[#a-z0-9(),.\s%]+$/i.test(color)?`color:${color}`:'',bg&&/^[#a-z0-9(),.\s%]+$/i.test(bg)?`background-color:${bg}`:'',fs&&/^(1[0-9]|[2-5][0-9]|6[0-4])px$/.test(fs)?`font-size:${fs}`:'',td&&/^(underline|line-through|underline line-through)$/.test(td)?`text-decoration:${td}`:'',fw&&/^(bold|[6-9]00)$/.test(fw)?`font-weight:${fw}`:'',fi==='italic'?'font-style:italic':''].filter(Boolean).join(';');if(st)c.setAttribute('style',st);walk(c)}};
  const root=doc.body.firstElementChild!;walk(root);return root.innerHTML;
 }
 export function CanvasPreview({state}:{state:ClassroomState|null}){

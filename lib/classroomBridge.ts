@@ -30,7 +30,7 @@ export type TeachyBridge = {
   previewImport(backup: unknown): Promise<{oldName: string; newName: string | null}[]>;
   importBackup(backup: unknown): Promise<string>;
   /** Personal hover translation (never written to the shared canvas). */
-  translate(term: string, context: string): Promise<TranslateResult>;
+  translate(term: string, context: string, target?: string): Promise<TranslateResult>;
   /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
@@ -55,10 +55,12 @@ async function postJson<T>(db: SupabaseClient, path: string, body: unknown): Pro
 }
 const translateCache = new Map<string, Promise<TranslateResult>>();
 function translator(db: SupabaseClient) {
-  return (term: string, context: string) => {
-    const k = term.toLowerCase() + '\u0000' + context.toLowerCase();
+  // v40: optional target language (canvas "Vertalen" with a chosen language); same server cache per term+sentence+language
+  return (term: string, context: string, target?: string) => {
+    const tg = target && /^[a-z]{2}$/.test(target) ? target : '';
+    const k = term.toLowerCase() + '\u0000' + context.toLowerCase() + '\u0000' + tg;
     if (!translateCache.has(k)) {
-      const p = postJson<TranslateResult>(db, '/api/ai/translate', {term, context});
+      const p = postJson<TranslateResult>(db, '/api/ai/translate', tg ? {term, context, target: tg} : {term, context});
       p.catch(() => translateCache.delete(k));
       translateCache.set(k, p);
     }

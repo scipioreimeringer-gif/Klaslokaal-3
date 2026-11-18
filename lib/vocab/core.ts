@@ -11,7 +11,8 @@ export function canvasBlocks(html: string): Block[] {
   let m: RegExpExecArray | null; let any = false;
   while ((m = re.exec(String(html || '')))) {
     any = true;
-    const t = /data-t="(h|li|p)"/.exec(m[2])?.[1] || (/^h/i.test(m[1]) ? 'h' : m[1].toLowerCase() === 'li' ? 'li' : 'p');
+    // v40: Kop 2 / Kop 3 (data-t="h2" / "h3") are headings too
+    const t = (/data-t="(h[23]?|li|p)"/.exec(m[2])?.[1]?.replace(/^h[23]$/, 'h') as Block['type'] | undefined) || (/^h/i.test(m[1]) ? 'h' : m[1].toLowerCase() === 'li' ? 'li' : 'p');
     for (const line of decode(m[3].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).split('\n')) { const s = line.replace(/\s+/g, ' ').trim(); if (s) out.push({type: t as Block['type'], text: s}); }
   }
   if (!any) for (const line of decode(String(html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '\n')).split('\n')) { const s = line.replace(/\s+/g, ' ').trim(); if (s) out.push({type: 'p', text: s}); }

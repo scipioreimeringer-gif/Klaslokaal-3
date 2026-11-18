@@ -603,7 +603,47 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
 .btn.leave40,#leaveBtn.leave40{background:#fff;color:#c2412d;border:1px solid #f0c9c0;border-radius:9px;min-height:32px;padding:4px 12px;font-weight:700}
 .btn.leave40:hover,#leaveBtn.leave40:hover{background:#fdf0ec}
 #morePop .menuitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left}
-#morePop .menuitem svg{width:16px;height:16px;flex:none}</style>
+#morePop .menuitem svg{width:16px;height:16px;flex:none}
+/* v40: new canvas toolbar — compact, floating, Lucide icons, turquoise active state, 150–200 ms */
+#pCv .cvhead{display:flex;align-items:center;padding:6px 8px;border-bottom:0;background:transparent}
+.cvtb{flex:1;min-width:0;display:flex;align-items:center;gap:2px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:4px;border:1px solid var(--line,#d6e6e3);border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(12,72,83,.08);font-family:'Plus Jakarta Sans',var(--font,system-ui),sans-serif}
+.cvtb .tbb{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:32px;height:32px;padding:0 6px;border:0;border-radius:8px;background:transparent;color:#2a4a52;font:inherit;font-size:13px;font-weight:600;cursor:pointer;flex:none;transition:background-color .15s,color .15s}
+.cvtb .tbb:hover{background:#eef6f5}
+.cvtb .tbb:focus-visible{outline:2px solid #14968c;outline-offset:1px}
+.cvtb .tbb[aria-pressed="true"],.cvtb .tbb[aria-expanded="true"]{background:#e3f5f2;color:#0b6b63}
+.cvtb .tbb.wide-btn{min-width:118px;justify-content:space-between}
+.cvtb .tbtxt{white-space:nowrap}
+.cvtb .ai-btn{color:#6a4fd0}.cvtb .ai-btn:hover{background:#f1edfc}
+.cvtb .tbsep{width:1px;height:20px;background:#dbe8e5;margin:0 4px;flex:none}
+.cvtb::-webkit-scrollbar{display:none}.cvtb .tbpage{display:inline-flex;align-items:center;flex:none}
+.cvtb .tbselect,.cvtb .pgsel{height:32px;max-width:150px;border:1px solid #dbe8e5;border-radius:8px;padding:0 6px;font:inherit;font-size:13px;background:#fff;color:#2a4a52}
+.cvtb #cvPageLbl{font-size:12.5px;color:#5b7076;padding:0 6px;white-space:nowrap}
+.cvtb.narrow .ovf{display:none}
+.cvpop{position:fixed;z-index:9999;min-width:200px;max-width:min(320px,calc(100vw - 16px));max-height:min(70vh,420px);overflow:auto;padding:6px;background:#fff;border:1px solid #dbe8e5;border-radius:12px;box-shadow:0 12px 32px rgba(12,72,83,.16),0 2px 6px rgba(12,72,83,.06);font-family:'Plus Jakarta Sans',var(--font,system-ui),sans-serif;animation:cvpop-in .16s ease-out}
+.cvpop.wide{min-width:260px}
+@keyframes cvpop-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.cvpop-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#7a8d92;padding:8px 8px 4px;border-top:1px solid #edf3f2;margin-top:4px}
+.cvpop-group:first-child{border-top:0;margin-top:0}
+.cvpop-item{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:6px 8px;border:0;border-radius:8px;background:transparent;color:#21424a;font:inherit;font-size:13.5px;text-align:left;cursor:pointer;flex-wrap:wrap;transition:background-color .15s}
+.cvpop-item:hover,.cvpop-item:focus-visible{background:#eef6f5;outline:none}
+.cvpop-item small{flex-basis:100%;margin-left:24px;font-size:11.5px;color:#7a8d92}
+.cvpop-item.danger{color:#c2412d}.cvpop-item.danger:hover{background:#fdf0ec}
+.cvpop-item:disabled{opacity:.5;cursor:not-allowed}
+.cvpop-item.st-h span{font-size:17px;font-weight:800}.cvpop-item.st-h2 span{font-size:15.5px;font-weight:750}.cvpop-item.st-h3 span{font-size:14.5px;font-weight:700}
+.cvpop-input,.cvpop-select{width:100%;height:32px;border:1px solid #dbe8e5;border-radius:8px;padding:0 8px;font:inherit;font-size:13px;margin-bottom:4px}
+.cvpop-row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.cvpop-row .cvpop-select{flex:1;margin:0}
+.cvpop-go{height:32px;border:0;border-radius:8px;padding:0 12px;background:#14968c;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.cvpop-go.ghost{background:#eef6f5;color:#0b6b63}
+.cvpop-go:disabled{opacity:.6}
+.cvpop-out{font-size:13px;color:#21424a;padding:6px 4px;line-height:1.45}
+.cvpop-swatches{display:grid;grid-template-columns:repeat(6,28px);gap:6px;padding:4px}
+.cvpop-swatches .sw{width:28px;height:28px;border-radius:8px;border:1px solid #dbe8e5;cursor:pointer;transition:transform .15s}
+.cvpop-swatches .sw:hover{transform:scale(1.08)}
+.cvpop-swatches .sw.none{background:linear-gradient(135deg,#fff 45%,#d0523a 46%,#d0523a 54%,#fff 55%)!important}
+.cv .b[data-t="h2"]{font-weight:750;font-size:1.22em;line-height:1.3;margin:.4em 0 .15em}
+.cv .b[data-t="h3"]{font-weight:700;font-size:1.08em;line-height:1.3;margin:.35em 0 .1em}
+@media(prefers-reduced-motion:reduce){.cvpop{animation:none}.cvtb .tbb,.cvpop-item,.cvpop-swatches .sw{transition:none}}</style>
 </head>
 <body>
 
@@ -1981,7 +2021,14 @@ function incomingBig(m){
 }
 
 /* alleen veilige opmaak toelaten */
-var OK_TAGS = {B:1, STRONG:1, I:1, EM:1, U:1, SPAN:1, BR:1, MARK:1, FONT:1};
+var OK_TAGS = {B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, SPAN:1, BR:1, MARK:1, FONT:1};
+/* v40: a few more safe inline styles so underline, strikethrough, font size, bold and italic survive sync and saving */
+var OK_STYLE = {
+  "text-decoration-line": /^(underline|line-through|underline line-through|line-through underline|none)$/,
+  "font-size": /^(1[0-9]|[2-5][0-9]|6[0-4])px$/,
+  "font-weight": /^(bold|bolder|normal|[4-9]00)$/,
+  "font-style": /^(italic|normal)$/
+};
 function safeHTML(html){
   var t = document.createElement("template"); t.innerHTML = String(html || "");
   (function walk(node){
@@ -1995,6 +2042,7 @@ function safeHTML(html){
       if(st && st.color && /^(rgb\([\d ,]+\)|#[0-9a-f]{3,6}|[a-z]+)$/i.test(st.color)) keep.push("color:" + st.color);
       if(st && st.backgroundColor && /^(rgb\([\d ,]+\)|#[0-9a-f]{3,6}|[a-z]+)$/i.test(st.backgroundColor)) keep.push("background-color:" + st.backgroundColor);
       if(c.tagName === "FONT" && col && /^#[0-9a-f]{3,6}$/i.test(col)) keep.push("color:" + col);
+      if(st) Object.keys(OK_STYLE).forEach(function(p){ var v = String(st.getPropertyValue(p) || "").trim(); if(v && OK_STYLE[p].test(v)) keep.push((p === "text-decoration-line" ? "text-decoration" : p) + ":" + v); });
       Array.prototype.slice.call(c.attributes).forEach(function(a){ c.removeAttribute(a.name); });
       if(keep.length) c.setAttribute("style", keep.join(";"));
       walk(c);
@@ -2073,7 +2121,7 @@ function cvApplyBlock(m){
   var b = CV.querySelector('[data-id="' + String(m.id).replace(/[^a-z0-9]/gi, "") + '"]');
   if(!b){ b = newBlock(String(m.id).replace(/[^a-z0-9]/gi, ""), m.bt); CV.appendChild(b); }
   var off = caretIn(b);
-  b.setAttribute("data-t", m.bt === "h" || m.bt === "li" ? m.bt : "p");
+  b.setAttribute("data-t", /^(h|h2|h3|li)$/.test(m.bt) ? m.bt : "p"); /* v40: h = Kop 1, h2, h3 */
   b.innerHTML = safeHTML(m.h) || "<br>";
   if(off >= 0) setCaret(b, off);
   cvLast[m.id] = b.getAttribute("data-t") + "|" + b.innerHTML;
@@ -3249,6 +3297,217 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   Object.defineProperty(P, "pSl", {enumerable:true, get:function(){ return !!OPEN.scr; }, set:function(v){ OPEN.scr = !!v; save(); }});
   panels = P;
   layout();
+})();
+
+/* =================================================================== v40: NEW CANVAS TOOLBAR
+   One compact floating toolbar: style (Normale tekst, Kop 1–3, Opsomming) · font size · B I U S · text colour ·
+   highlight · ✨ AI (teacher) · 🌐 Vertalen · page · new page · undo/redo · ⋯. It reuses the existing editor,
+   its commands, sync (cvSync), pages and AI/translate handlers (the old buttons stay in the DOM, hidden).
+   The text selection is remembered and restored, so choosing from a menu never loses it. */
+(function(){
+  var pCv = $("pCv"), head = pCv && pCv.querySelector(".cvhead"), old = $("cvBar");
+  if(!pCv || !head || !old) return;
+  old.hidden = true; old.classList.add("v40-old");
+  var P = {
+    chev:'<path d="m6 9 6 6 6-6"/>', bold:'<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>',
+    italic:'<path d="M19 4h-9M14 20H5M15 4 9 20"/>', underline:'<path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/>',
+    strike:'<path d="M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16"/>', color:'<path d="m4 20 6-16h4l6 16M7 13h10"/>',
+    mark:'<path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>', spark:'<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+    globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>', plus:'<path d="M12 5v14M5 12h14"/>',
+    undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>', redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', copy:'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16V4a2 2 0 0 1 2-2h12"/>',
+    eraser:'<path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L13 21M22 21H7M5 11l9 9"/>', pen:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', restore:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'
+  };
+  function svg(p){ return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+  var tb = document.createElement("div"); tb.className = "cvtb"; tb.setAttribute("role", "toolbar"); tb.setAttribute("aria-label", "Tekstopmaak");
+  head.appendChild(tb);
+
+  /* ---- selection memory: menus and popovers never lose the selection ---- */
+  var saved = null, pendingSize = 0;
+  function inCv(r){ return !!r && CV.contains(r.commonAncestorContainer); }
+  document.addEventListener("selectionchange", function(){ var s = window.getSelection(); if(s.rangeCount && inCv(s.getRangeAt(0))){ var r = s.getRangeAt(0); if(pendingSize && saved && (r.startContainer !== saved.startContainer || r.startOffset !== saved.startOffset)) pendingSize = 0; saved = r.cloneRange(); state(); } });
+  function restore(){ if(!saved){ var r = document.createRange(); r.selectNodeContents(CV.lastElementChild || CV); r.collapse(false); saved = r; } CV.focus({preventScroll:true}); var s = window.getSelection(); s.removeAllRanges(); s.addRange(saved); return true; }
+  function canEdit(){ if(!allowed()){ toast("Je docent heeft typen voor jou uitgezet"); return false; } return true; }
+  function exec(cmd, val){ if(!canEdit()) return; restore(); try{ document.execCommand("styleWithCSS", false, true); }catch(e){} document.execCommand(cmd, false, val); cvSync(); state(); }
+  function blocksNow(){ restore(); return curBlocks(); }
+
+  /* ---- building blocks ---- */
+  function btn(icon, label, fn, cls){ var b = document.createElement("button"); b.type = "button"; b.className = "tbb" + (cls ? " " + cls : ""); b.innerHTML = icon; b.title = label; b.setAttribute("aria-label", label);
+    b.addEventListener("mousedown", function(e){ e.preventDefault(); }); b.addEventListener("click", function(e){ fn(b, e); }); tb.appendChild(b); return b; }
+  function sep(cls){ var s = document.createElement("span"); s.className = "tbsep" + (cls ? " " + cls : ""); s.setAttribute("aria-hidden", "true"); tb.appendChild(s); return s; }
+  /* popover: fixed position (never behind the canvas or clipped), below the button, kept inside the window; Esc/outside closes */
+  var openPop = null;
+  function closePop(){ if(openPop){ var o = openPop; openPop = null; o.el.remove(); o.btn.setAttribute("aria-expanded", "false"); } }
+  function popover(anchor, build, wide){
+    if(openPop && openPop.btn === anchor){ closePop(); return; }
+    closePop();
+    var el = document.createElement("div"); el.className = "cvpop" + (wide ? " wide" : ""); el.setAttribute("role", "menu"); build(el);
+    document.body.appendChild(el); anchor.setAttribute("aria-expanded", "true"); openPop = {el:el, btn:anchor};
+    var r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+    var left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)), top = r.bottom + 6; if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    el.style.left = left + "px"; el.style.top = top + "px";
+    var first = el.querySelector("button,input,select"); if(first) first.focus({preventScroll:true});
+  }
+  function item(pop, icon, label, fn, opts){ opts = opts || {}; var b = document.createElement("button"); b.type = "button"; b.className = "cvpop-item" + (opts.danger ? " danger" : "") + (opts.cls ? " " + opts.cls : "");
+    b.setAttribute("role", "menuitem"); b.innerHTML = (icon ? svg(icon) : "") + '<span>' + label + '</span>' + (opts.hint ? '<small>' + opts.hint + '</small>' : "");
+    b.addEventListener("mousedown", function(e){ e.preventDefault(); }); b.addEventListener("click", function(){ closePop(); fn(); }); pop.appendChild(b); return b; }
+  function group(pop, title){ var g = document.createElement("div"); g.className = "cvpop-group"; g.textContent = title; pop.appendChild(g); }
+  document.addEventListener("mousedown", function(e){ if(openPop && !openPop.el.contains(e.target) && e.target !== openPop.btn && !openPop.btn.contains(e.target)) closePop(); });
+  document.addEventListener("keydown", function(e){
+    if(!openPop) return;
+    if(e.key === "Escape"){ var b = openPop.btn; closePop(); b.focus(); e.preventDefault(); return; }
+    if(e.key === "ArrowDown" || e.key === "ArrowUp"){ var items = Array.prototype.slice.call(openPop.el.querySelectorAll("button:not([hidden])")); var i = items.indexOf(document.activeElement); if(items.length){ e.preventDefault(); items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); } }
+  });
+  window.addEventListener("resize", closePop); CV.addEventListener("scroll", closePop);
+
+  /* ---- 1. style: Normale tekst / Kop 1–3 / Opsomming ---- */
+  var STYLES = [["p", "Normale tekst"], ["h", "Kop 1"], ["h2", "Kop 2"], ["h3", "Kop 3"], ["li", "Opsomming"]];
+  var styleBtn = btn('<span class="tbtxt">Normale tekst</span>' + svg(P.chev), "Tekststijl", function(b){
+    popover(b, function(pop){ STYLES.forEach(function(s){ var it = item(pop, "", s[1], function(){ if(!canEdit()) return; var bs = blocksNow(); if(!bs.length) return; bs.forEach(function(x){ x.setAttribute("data-t", s[0]); }); cvSync(); state(); }, {cls:"st-" + s[0]}); }); });
+  }, "wide-btn");
+  styleBtn.setAttribute("aria-haspopup", "menu");
+  /* ---- 2. font size ---- */
+  var SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40];
+  function applySize(px){
+    px = Math.max(10, Math.min(64, Math.round(+px || 0))); if(!px || !canEdit()) return;
+    restore(); var s = window.getSelection(); if(!s.rangeCount) return;
+    if(s.getRangeAt(0).collapsed){ pendingSize = px; saved = s.getRangeAt(0).cloneRange(); sizeLbl.textContent = px; toast("Nieuwe tekst wordt " + px + " px"); return; } /* applies to what you type next */
+    try{ document.execCommand("styleWithCSS", false, false); }catch(e){}
+    document.execCommand("fontSize", false, "7");
+    Array.prototype.slice.call(CV.querySelectorAll('font[size="7"]')).forEach(function(f){ var sp = document.createElement("span"); sp.style.fontSize = px + "px"; while(f.firstChild) sp.appendChild(f.firstChild); f.parentNode.replaceChild(sp, f); });
+    try{ document.execCommand("styleWithCSS", false, true); }catch(e){}
+    cvSync(); state();
+  }
+  var sizeBtn = btn('<span class="tbtxt" id="cvSizeLbl">16</span>' + svg(P.chev), "Lettergrootte", function(b){
+    popover(b, function(pop){
+      var inp = document.createElement("input"); inp.type = "number"; inp.min = "10"; inp.max = "64"; inp.className = "cvpop-input"; inp.placeholder = "px"; inp.setAttribute("aria-label", "Lettergrootte in pixels");
+      inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); var v = inp.value; closePop(); applySize(v); } }); pop.appendChild(inp);
+      SIZES.forEach(function(px){ item(pop, "", px + " px", function(){ applySize(px); }); });
+    });
+  });
+  sizeBtn.setAttribute("aria-haspopup", "menu"); var sizeLbl = sizeBtn.querySelector("#cvSizeLbl");
+  sep();
+  /* ---- 3. B I U S ---- */
+  var fmt = {};
+  [["bold", P.bold, "Vet (Ctrl+B)"], ["italic", P.italic, "Cursief (Ctrl+I)"], ["underline", P.underline, "Onderstrepen (Ctrl+U)"], ["strikeThrough", P.strike, "Doorhalen"]].forEach(function(f){
+    fmt[f[0]] = btn(svg(f[1]), f[2], function(){ exec(f[0]); }, f[0] === "strikeThrough" ? "ovf" : ""); fmt[f[0]].setAttribute("aria-pressed", "false");
+  });
+  /* ---- 4. colours ---- */
+  var COLORS = [["", "Standaard"], ["#d0523a", "Rood"], ["#0f8f86", "Turquoise"], ["#2f6fd6", "Blauw"], ["#6a61cc", "Paars"], ["#d9822b", "Oranje"]];
+  var MARKS = [["#ffe98a", "Geel"], ["#c8f2dc", "Groen"], ["#d6e8ff", "Blauw"], ["#ffd6e0", "Roze"], ["transparent", "Geen"]];
+  function swatches(pop, list, apply){ var g = document.createElement("div"); g.className = "cvpop-swatches"; list.forEach(function(c){ var s = document.createElement("button"); s.type = "button"; s.className = "sw"; s.title = c[1]; s.setAttribute("aria-label", c[1]);
+    s.style.background = c[0] && c[0] !== "transparent" ? c[0] : "#fff"; if(!c[0] || c[0] === "transparent") s.classList.add("none");
+    s.addEventListener("mousedown", function(e){ e.preventDefault(); }); s.addEventListener("click", function(){ closePop(); apply(c[0]); }); g.appendChild(s); }); pop.appendChild(g); }
+  btn(svg(P.color), "Tekstkleur", function(b){ popover(b, function(pop){ swatches(pop, COLORS, function(c){ exec("foreColor", c || "#16313a"); }); }); }, "ovf").setAttribute("aria-haspopup", "menu");
+  btn(svg(P.mark), "Markeerkleur", function(b){ popover(b, function(pop){ swatches(pop, MARKS, function(c){ exec("hiliteColor", c); }); }); }, "ovf").setAttribute("aria-haspopup", "menu");
+  sep();
+  /* ---- 5. ✨ AI (teacher only; the server checks the role as well) and 🌐 Vertalen ---- */
+  if(isT){
+    var ai = btn(svg(P.spark) + '<span class="tbtxt">AI</span>', "AI: tekst verwerken, ordenen en woorden halen (alleen docent)", function(b){
+      popover(b, function(pop){
+        item(pop, P.file, "Woorden uit deze pagina", function(){ $("aiCanvasWords").click(); }, {hint:"nieuwe pagina met een gesorteerde woordenlijst"});
+        if(SB) item(pop, P.spark, "Pagina ordenen en corrigeren", function(){ $("tidyBtn").click(); }, {hint:"eerst een voorbeeld; niets wordt zomaar vervangen"});
+      });
+    }, "ai-btn");
+    ai.setAttribute("aria-haspopup", "menu");
+  }
+  var LANGS = [["nl", "Nederlands"], ["en", "English"], ["pt", "Português (BR)"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"]];
+  var trTarget = store("klas-tr-target") || (typeof uiLang === "string" ? uiLang : "nl");
+  var tr = btn(svg(P.globe) + '<span class="tbtxt">Vertalen</span>', "Vertalen", function(b){
+    var selText = saved && !saved.collapsed ? saved.toString().trim() : "";
+    popover(b, function(pop){
+      var hv = $("trBtn"), hoverOn = hv && hv.getAttribute("aria-pressed") === "true";
+      item(pop, P.globe, hoverOn ? "Woord aanwijzen: uit" : "Woord aanwijzen om te vertalen", function(){ if(hv) hv.click(); }, {hint:"alleen jij ziet de vertaling"});
+      group(pop, "Selectie vertalen");
+      var row = document.createElement("div"); row.className = "cvpop-row";
+      var sel = document.createElement("select"); sel.className = "cvpop-select"; sel.setAttribute("aria-label", "Doeltaal");
+      LANGS.forEach(function(l){ var o = document.createElement("option"); o.value = l[0]; o.textContent = l[1]; if(l[0] === trTarget) o.selected = true; sel.appendChild(o); });
+      var go = document.createElement("button"); go.type = "button"; go.className = "cvpop-go"; go.textContent = "Vertaal"; row.appendChild(sel); row.appendChild(go); pop.appendChild(row);
+      var out = document.createElement("div"); out.className = "cvpop-out"; out.setAttribute("aria-live", "polite");
+      out.textContent = selText ? "“" + selText.slice(0, 80) + (selText.length > 80 ? "…" : "") + "”" : "Selecteer eerst een woord of zin in het canvas."; pop.appendChild(out);
+      go.addEventListener("click", function(){
+        if(!selText){ out.textContent = "Selecteer eerst een woord of zin in het canvas."; return; }
+        if(selText.length > 200){ out.textContent = "Selecteer maximaal 200 tekens om te vertalen."; return; }
+        var br = bridge(); if(!SB || !br || !br.translate){ out.textContent = "Vertalen is alleen beschikbaar in TeachyRooms."; return; }
+        trTarget = sel.value; store("klas-tr-target", trTarget); out.textContent = "Vertalen…"; go.disabled = true;
+        var blk = saved && (saved.startContainer.nodeType === 1 ? saved.startContainer : saved.startContainer.parentNode).closest(".b");
+        br.translate(selText, blk ? blk.textContent.slice(0, 600) : "", trTarget).then(function(r){
+          var t = r.expression && r.expression_translation ? r.expression + " = " + r.expression_translation : r.translation;
+          out.innerHTML = ""; var res = document.createElement("b"); res.textContent = t; out.appendChild(res); if(r.note){ var n = document.createElement("small"); n.textContent = " " + r.note; out.appendChild(n); }
+          var acts = document.createElement("div"); acts.className = "cvpop-row";
+          var cp = document.createElement("button"); cp.type = "button"; cp.className = "cvpop-go ghost"; cp.textContent = "Kopiëren"; cp.addEventListener("click", function(){ copy(t, "Vertaling gekopieerd"); });
+          acts.appendChild(cp);
+          if(allowed()){ var ins = document.createElement("button"); ins.type = "button"; ins.className = "cvpop-go ghost"; ins.textContent = "Onder de tekst zetten";
+            ins.addEventListener("click", function(){ closePop(); if(!blk) return; var nb = newBlock(); nb.setAttribute("data-t", "p"); nb.textContent = "→ " + t; blk.parentNode.insertBefore(nb, blk.nextSibling); cvSync(); toast("Vertaling toegevoegd; de oorspronkelijke tekst blijft staan"); });
+            acts.appendChild(ins); }
+          out.appendChild(acts);
+        }).catch(function(e){ out.textContent = (e && e.message) || "Vertalen lukte niet"; }).then(function(){ go.disabled = false; });
+      });
+    }, true);
+  }, "tr-btn");
+  tr.setAttribute("aria-haspopup", "menu");
+  sep();
+  /* ---- 6. page selector, new page ---- */
+  var pageWrap = document.createElement("span"); pageWrap.className = "tbpage"; tb.appendChild(pageWrap);
+  if($("cvPageSel")){ pageWrap.appendChild($("cvPageSel")); $("cvPageSel").classList.add("tbselect"); }
+  if($("cvPageLbl")) pageWrap.appendChild($("cvPageLbl"));
+  if(isT) btn(svg(P.plus), "Nieuwe pagina", function(){ $("cvPageAdd").click(); });
+  sep("ovf");
+  /* ---- 7. undo / redo ---- */
+  btn(svg(P.undo), "Ongedaan maken (Ctrl+Z)", function(){ if(!canEdit()) return; restore(); document.execCommand("undo"); cvSync(); state(); });
+  btn(svg(P.redo), "Opnieuw uitvoeren (Ctrl+Y)", function(){ if(!canEdit()) return; restore(); document.execCommand("redo"); cvSync(); state(); }, "ovf");
+  /* ---- 8. ⋯ more: Tekst · Pagina · Herstellen (+ the formatting that does not fit on a narrow screen) ---- */
+  var moreBtn = btn(svg(P.more), "Meer opties", function(b){
+    popover(b, function(pop){
+      if(tb.classList.contains("narrow")){
+        group(pop, "Opmaak");
+        item(pop, P.strike, "Doorhalen", function(){ exec("strikeThrough"); });
+        item(pop, P.color, "Tekstkleur rood", function(){ exec("foreColor", "#d0523a"); });
+        item(pop, P.mark, "Geel markeren", function(){ exec("hiliteColor", "#ffe98a"); });
+        item(pop, P.redo, "Opnieuw uitvoeren", function(){ if(!canEdit()) return; restore(); document.execCommand("redo"); cvSync(); });
+      }
+      group(pop, "Tekst");
+      item(pop, P.copy, "Tekst kopiëren", function(){ copy(CV.innerText.trim(), "Tekst van het canvas gekopieerd"); });
+      item(pop, P.eraser, "Opmaak verwijderen", function(){ exec("removeFormat"); });
+      if(isT){
+        group(pop, "Pagina");
+        item(pop, P.pen, "Pagina hernoemen", function(){ $("cvPageRen").click(); });
+        item(pop, P.trash, "Pagina verwijderen", function(){ $("cvPageDel").click(); }, {danger:true});
+        group(pop, "Herstellen");
+        var tu = $("tidyUndo"); if(SB && tu) item(pop, P.restore, "Versie van vóór AI-ordenen herstellen", function(){ tu.click(); }, {hint:tu.hidden ? "er is nog niets geordend" : ""}).disabled = !!tu.hidden;
+        item(pop, P.trash, "Canvas leegmaken", function(){ var w = old.querySelector('[data-cmd="wipe"]') || document.querySelector('[data-cmd="wipe"]'); if(w) w.click(); }, {danger:true});
+      }
+    });
+  });
+  moreBtn.setAttribute("aria-haspopup", "menu");
+
+  /* ---- font size for the next typed text (no selection) ---- */
+  CV.addEventListener("beforeinput", function(e){
+    if(!pendingSize || e.inputType !== "insertText" || !e.data) return;
+    var s = window.getSelection(); if(!s.rangeCount || !inCv(s.getRangeAt(0))) return;
+    e.preventDefault(); var r = s.getRangeAt(0); r.deleteContents();
+    var sp = document.createElement("span"); sp.style.fontSize = pendingSize + "px"; var tn = document.createTextNode(e.data); sp.appendChild(tn); r.insertNode(sp);
+    var nr = document.createRange(); nr.setStart(tn, tn.length); nr.collapse(true); s.removeAllRanges(); s.addRange(nr);
+    pendingSize = 0; clearTimeout(cvT); cvT = setTimeout(cvSync, 120);
+  });
+  /* ---- keyboard shortcuts for the two new styles ---- */
+  CV.addEventListener("keydown", function(e){ if((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "u" || e.key === "U")){ e.preventDefault(); exec("underline"); } });
+
+  /* ---- active state: shows which formatting is on ---- */
+  function state(){
+    try{ ["bold", "italic", "underline", "strikeThrough"].forEach(function(c){ if(fmt[c]) fmt[c].setAttribute("aria-pressed", document.queryCommandState(c) ? "true" : "false"); }); }catch(e){}
+    var s = window.getSelection(); if(!s.rangeCount || !inCv(s.getRangeAt(0))) return;
+    var n = s.anchorNode, elx = n && (n.nodeType === 1 ? n : n.parentNode), blk = elx && elx.closest && elx.closest(".b");
+    var t = blk ? blk.getAttribute("data-t") : "p", lab = STYLES.filter(function(x){ return x[0] === t; })[0];
+    styleBtn.querySelector(".tbtxt").textContent = lab ? lab[1] : "Normale tekst";
+    if(!pendingSize && elx){ var fs = Math.round(parseFloat(getComputedStyle(elx).fontSize) || 16); sizeLbl.textContent = fs; }
+  }
+  /* ---- narrow screens: less-used buttons move into ⋯ ---- */
+  function fit(){ tb.classList.remove("narrow"); if(tb.scrollWidth > tb.clientWidth + 1) tb.classList.add("narrow"); }
+  if(window.ResizeObserver) new ResizeObserver(fit).observe(tb); setTimeout(fit, 0);
+  window.cvPerm && window.cvPerm();
 })();
 
 })();
