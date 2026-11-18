@@ -36,7 +36,8 @@ test('compact header: name, level, link status, quick start button; every action
 });
 test('key facts above the tabs: 4 small stat cards + focus points from the latest approved analysis', () => {
   assert.match(ws, /export function FactsBar\(/);
-  assert.match(ws, /\{b&&<FactsBar p=\{b\.progress\} focus=\{focus\}\/>\}\s*<div className="tabs"/);
+  assert.match(ws, /\{b&&<FactsBar p=\{b\.progress\} focus=\{\[\]\}\/>\}\s*<nav className="tabs"/, 'v40: focus points became the counter on AI-verslag');
+  assert.match(ws, /k==='analyses'&&focus\.length>0&&<span className="tab-badge"/);
   assert.match(ws, /compactAnalysis\(b\.latestAnalysis\.final/);
   assert.match(read('lib/data.ts'), /async function latestSummary[\s\S]{0,400}catch \(e\) \{ return \{data: null, error: e\}; \}/, 'never breaks the profile');
   assert.match(css, /\.facts-grid\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);

@@ -113,7 +113,7 @@ test('wiring: dashboard section, student data via RLS only, compact report every
   assert.match(home, /rpc\('student_lesson_summaries',\{sid:id\}\)\.then/, 'reports via the existing approved-only function, tagged per relation');
   const r = read('components/ReadyForYou.tsx');
   assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');
-  assert.match(r, /\/oefenen\?student=\$\{r\.studentId\}&spel=flashcards/);
+  assert.match(r, /\/oefenen\?student=\$\{rel\.id\}&spel=flashcards/);
   assert.match(read('components/Learning.tsx'), /if\(start==='flashcards'&&items&&items\.length>=2&&!autoStarted\.current\)/);
   assert.match(read('components/Analysis.tsx'), /<CompactAnalysis doc=\{shownDoc/, 'Mijn lessen → lesverslagen: compact, full version behind "Meer details"');
   assert.match(read('components/CompactAnalysis.tsx'), /<details className="compact-more"><summary>\{detailsLabel\|\|tt\("Meer details"\)\}/);
