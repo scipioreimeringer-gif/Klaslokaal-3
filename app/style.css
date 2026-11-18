@@ -15,7 +15,7 @@
   --ink:#0C4853;--ink-2:#2f5960;--muted:#587479;  --radius:16px;--radius-sm:11px;--radius-lg:22px;
   --shadow:0 1px 2px rgba(6,47,58,.04),0 8px 24px rgba(6,47,58,.06);
   --shadow-pop:0 18px 50px rgba(6,47,58,.18);
-  font-family:var(--font-inter),Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);background:var(--bg);
+  font-family:var(--font-sans),'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);background:var(--bg);
   -webkit-font-smoothing:antialiased;
 }
 *{box-sizing:border-box}
@@ -801,3 +801,45 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .sum-switch{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:0 0 10px}
 .sum-switch button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;border-radius:7px;padding:4px 10px;min-height:30px;font-size:12.5px;font-weight:650;color:var(--ink-2);cursor:pointer;transition:background-color .15s}
 .sum-switch button[aria-pressed=true]{background:var(--teal-50,#e6f6f3);color:var(--teal-700,#0b6b63);box-shadow:inset 0 -2px 0 var(--teal-500)}
+
+/* v40: TeachyRooms dropdown (components/Select.tsx) */
+.trs{position:relative;display:inline-flex;min-width:0;font-family:inherit}
+.trs-btn{display:inline-flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 10px 6px 12px;border:1px solid var(--line-2);border-radius:10px;background:#fff;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:left;box-shadow:0 1px 2px rgba(12,72,83,.05);transition:border-color .15s,box-shadow .15s}
+.trs-sm .trs-btn{min-height:32px;padding:4px 8px 4px 10px;font-size:13px;border-radius:9px}
+.trs-btn:hover{border-color:var(--teal-500)}
+.trs-btn:focus-visible,.trs-btn[aria-expanded=true]{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(20,150,140,.15)}
+.trs-btn:disabled{opacity:.55;cursor:not-allowed}
+.trs-val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.trs-val.placeholder{color:var(--muted);font-weight:500}
+.trs-chev{flex:none;color:var(--muted);transition:transform .15s}.trs-btn[aria-expanded=true] .trs-chev{transform:rotate(180deg)}
+.trs-ico{display:inline-flex;align-items:center;flex:none}
+.trs-list{position:absolute;z-index:80;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:min(340px,90vw);max-height:300px;overflow:auto;margin:0;padding:4px;list-style:none;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(12,72,83,.14),0 2px 6px rgba(12,72,83,.06);animation:trs-in .15s ease-out}
+.trs-list.up{top:auto;bottom:calc(100% + 4px)}
+@keyframes trs-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.trs-opt{display:flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border-radius:8px;font-size:13.5px;cursor:pointer;color:var(--ink-2)}
+.trs-opt.active{background:var(--panel-2)}
+.trs-opt.sel{color:var(--teal-700,#0b6b63);font-weight:650}
+.trs-opt[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.trs-lbl{flex:1;min-width:0;display:flex;flex-direction:column}.trs-lbl small{font-size:11.5px;color:var(--muted);font-weight:500}
+.trs-check{flex:none;color:var(--teal-500)}
+.trs-initials{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--teal-50,#e6f6f3);color:var(--teal-700,#0b6b63);font-size:10.5px;font-weight:700}
+@media(prefers-reduced-motion:reduce){.trs-list{animation:none}.trs-chev{transition:none}}
+
+/* v40: compact homework generator */
+.hw-card{display:grid;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.hw-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.hw-head b{display:inline-flex;align-items:center;gap:6px;font-size:14.5px}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:var(--panel-2)}
+.seg button{border:0;background:transparent;border-radius:7px;padding:4px 10px;min-height:30px;font:inherit;font-size:12.5px;font-weight:650;color:var(--ink-2);cursor:pointer;transition:background-color .15s}
+.seg button[aria-pressed=true]{background:#fff;color:var(--teal-700,#0b6b63);box-shadow:0 1px 3px rgba(12,72,83,.12)}
+.hw-row{display:flex;flex-wrap:wrap;gap:8px}.hw-row>.trs:first-child{flex:1 1 220px}
+.hw-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hw-card .field.compact{width:100%}
+.hw-section{margin-top:0}.hw-section>h2{font-size:17px;margin:0 0 10px}
+.hw-section .ai-homework{margin-bottom:12px}
+.hw-manual{border:1px dashed var(--line);border-radius:10px;padding:8px 12px;margin:0 0 12px}
+.hw-manual>summary{cursor:pointer;font-weight:650;font-size:13.5px;color:var(--ink-2)}
+/* v40: teacher-confirmed lesson topics */
+.topics-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;display:grid;gap:8px;margin:10px 0}
+.topics-box .grid2{gap:8px}
+.topics-box textarea.field{min-height:56px}
+.topics-box .tag.ok{background:var(--mint-100);color:#0f6d5c}

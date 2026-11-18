@@ -9,6 +9,8 @@ import {t as tt} from '../lib/i18n';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import type {Category,Suggestion} from '../lib/analysis/core';
 import {CompactAnalysis} from './CompactAnalysis';
+import {proposeTopics,type LessonTopics} from '../lib/analysis/material';
+import {ListChecks} from 'lucide-react';
 
 export type V2Row={id:string;student_id:string;lesson_date:string;status:string;transcript:string|null;error:string|null;is_test?:boolean;
  draft:unknown;final:unknown;stage?:string|null;stage_detail?:Record<string,unknown>|null;pipeline_version?:number|null;published_at?:string|null;updated_at?:string|null};
@@ -69,6 +71,20 @@ export function AnalysisV2View({doc,teacher=false}:{doc:AnalysisV2;teacher?:bool
   {teacher&&doc.later_note&&<p className="muted"><b>{tt("Voor later:")}</b> {doc.later_note}</p>}
   {!!doc.vocabulary?.length&&<><h4>{tt("Woordenschat")}</h4><table className="vocab"><tbody>{doc.vocabulary.map((v,i)=><tr key={i}><td><b>{v.term}</b></td><td>{v.translation}</td></tr>)}</tbody></table></>}
  </div>
+}
+
+/** v40 "Lesonderwerpen": the AI proposes (from this analysis, no extra AI call), the teacher adjusts and confirms.
+ *  Confirmed topics are the first source for homework "Vanuit mijn les". Stored in the analysis itself (no new table). */
+function LessonTopicsBox({doc,onSave}:{doc:AnalysisV2;onSave:(t:LessonTopics)=>void}){
+ const cur=(doc as AnalysisV2&{lesson_topics?:LessonTopics|null}).lesson_topics||null;
+ const [t,setT]=useState<LessonTopics>(()=>cur||proposeTopics(doc));
+ const F:[keyof Omit<LessonTopics,'instructions'|'confirmed_at'>,string][]=[['grammar','Behandelde grammatica'],['vocab','Woordenschat'],['errors','Fouten om te oefenen'],['repeat','Herhalen']];
+ return <details className="topics-box" open={!cur?.confirmed_at}><summary className="row between"><b><ListChecks size={15}/> {tt("Lesonderwerpen")}</b>{cur?.confirmed_at?<span className="tag ok"><Check size={12}/> {tt("bevestigd")}</span>:<span className="tag">{tt("AI-voorstel")}</span>}</summary>
+  <div className="grid2">{F.map(([k,l])=><label key={k} className="stack"><span className="label">{tt(l)} <small className="muted">{tt("(één per regel)")}</small></span><textarea className="field" rows={3} value={lines(t[k])} onChange={e=>setT(x=>({...x,[k]:unlines(e.target.value)}))}/></label>)}</div>
+  <label className="stack"><span className="label">{tt("Instructies voor het huiswerk")}</span><input className="field" value={t.instructions} placeholder={tt("bijv. focus op het perfectum met zijn")} onChange={e=>setT(x=>({...x,instructions:e.target.value.slice(0,600)}))}/></label>
+  <div className="row"><button className="button small" onClick={()=>onSave({...t,confirmed_at:new Date().toISOString()})}><Check size={14}/> {cur?.confirmed_at?tt("Wijzigingen bevestigen"):tt("Lesonderwerpen bevestigen")}</button>
+   <button className="button small secondary" onClick={()=>setT(proposeTopics(doc))}>{tt("AI-voorstel terugzetten")}</button></div>
+ </details>
 }
 
 type TopicName={id:string;title:string;status:GoalStatus};
@@ -135,6 +151,8 @@ export function TeacherAnalysisV2({a,onChange}:{a:V2Row;onChange:()=>void}){
    <table className="vocab edit"><tbody>{doc.vocabulary.map((v,i)=><tr key={i}><td><input type="checkbox" checked={keep[i]} onChange={()=>setKeep(k=>k.map((x,j)=>j===i?!x:x))}/></td><td><b>{v.term}</b></td><td>{v.translation}</td><td>{v.status&&<span className={'tag'+(v.status==='difficult'?' uncertain':'')}>{v.status==='difficult'?tt('nog moeilijk'):v.status==='practised'?tt('opnieuw geoefend'):tt('nieuw')}</span>}</td></tr>)}</tbody></table>
    {!a.is_test&&<p className="muted small-print">{tt('Nieuwe woorden staan ook als voorstel in de Woordenlijst; woorden die nog moeilijk zijn, krijgen voorrang bij flashcards en spelletjes.')}</p>}
    {!a.is_test&&<button className="button small secondary" onClick={()=>void addWords()}><Plus size={14}/> {tt("Aangevinkte woorden naar de woordenlijst")}</button>}</>}
+
+  {!a.is_test&&<LessonTopicsBox doc={doc} onSave={t=>{const next={...doc,lesson_topics:t} as AnalysisV2;setDoc(next);void save(next,tt("Lesonderwerpen bevestigd. Huiswerk 'Vanuit mijn les' gebruikt ze voortaan."))}}/>}
 
   <h4><ClipboardList size={15}/> {tt("Huiswerk")}</h4>
   {hw?.assignment_id?<p>{tt("Huiswerkconcept met {0} oefeningen staat klaar onder de tab Huiswerk. De leerling ziet het pas nadat jij het hebt gecontroleerd en gepubliceerd.",hw.items)}</p>

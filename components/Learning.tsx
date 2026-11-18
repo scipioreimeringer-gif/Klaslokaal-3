@@ -6,7 +6,8 @@ import {supabase} from '../lib/supabase';
 import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
 import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
-import {PenLine,Repeat,Wrench} from 'lucide-react';
+import {PenLine,Repeat,Wrench,CalendarDays,Clock3} from 'lucide-react';
+import {Select} from './Select';
 import {InfoTip} from './InfoTip';
 import {t as tt, translated} from '../lib/i18n';
 
@@ -182,18 +183,42 @@ export type ExerciseItem={type:'multiple_choice'|'fill_in'|'translate'|'conjugat
 export type ExerciseSet={title:string;items:ExerciseItem[]};
 const KIND_LABELS:Record<string,string>=translated({woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invulzinnen',meerkeuze:'Meerkeuze',werkwoorden:'Werkwoorden vervoegen',fouten:'Fouten verbeteren',zinnen:'Zinnen maken',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'});
 
+/* v40: one compact card. "Vanuit mijn les" (default) = one chosen lesson with its approved summary, errors, words,
+   notes and the teacher's confirmed lesson topics. "Zelf kiezen" = exercise types (multi-select), level, duration, topic.
+   AI is only called on the button; the same choices give the same set again this session (no second AI call),
+   "Opnieuw genereren" asks for a new one. A second click while busy is ignored. */
+const exCache=new Map<string,ExerciseSet>();
 export function ExerciseForm({studentId,defaultLevel,onReady,teacher}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean}){
- const [kinds,setKinds]=useState<string[]>(['gemengd']);const [level,setLevel]=useState(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState('');const [minutes,setMinutes]=useState(10);const [lessonDate,setLessonDate]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');
- async function go(){setBusy(true);setErr('');try{const r=await authedPost<ExerciseSet>(supabase()!,'/api/ai/exercises',{studentId,kinds,level,topic,minutes,lessonDate:lessonDate||undefined});onReady(r)}catch(e){setErr(e instanceof Error?e.message:String(e))}setBusy(false)}
- return <div className="exercise-form">
-  <div className="chipbar">{Object.entries(KIND_LABELS).map(([k,l])=><button key={k} aria-pressed={kinds.includes(k)} onClick={()=>setKinds(x=>x.includes(k)?x.filter(y=>y!==k):[...x,k])}>{l}</button>)}</div>
-  <div className="row"><label className="row"><span className="label">{tt("Niveau")}</span><select className="field" value={level} onChange={e=>setLevel(e.target.value)}>{LEVELS.map(l=><option key={l}>{l}</option>)}</select></label>
-   <label className="row"><span className="label">{tt("Duur")}</span><select className="field" value={minutes} onChange={e=>setMinutes(+e.target.value)}>{[5,10,15,20,30].map(m=><option key={m} value={m}>{m} {tt("min")}</option>)}</select></label>
-   {teacher&&<label className="row"><span className="label">{tt("Uit les van")}</span><input className="field" type="date" value={lessonDate} onChange={e=>setLessonDate(e.target.value)}/></label>}
-   <input className="field grow" placeholder={tt("Onderwerp (optioneel), bijv. pretérito perfeito")} value={topic} onChange={e=>setTopic(e.target.value)}/></div>
-  <button className="button" disabled={busy||!kinds.length} onClick={()=>void go()}><Sparkles size={16}/> {busy?tt("Oefeningen maken…"):teacher?tt("Genereer huiswerk"):tt("Maak mijn huiswerk")}</button>
+ const [mode,setMode]=useState<'lesson'|'own'>('lesson');
+ const [kinds,setKinds]=useState<string[]>(['gemengd']);const [level,setLevel]=useState<string>(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState('');const [minutes,setMinutes]=useState(10);
+ const [lessons,setLessons]=useState<{date:string;report:boolean}[]|null>(null);const [lessonDate,setLessonDate]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');const [reused,setReused]=useState(false);const inFlight=useRef(false);
+ useEffect(()=>{let c=false;const db=supabase()!;void Promise.all([db.from('lesson_entries').select('lesson_date').eq('student_id',studentId).order('lesson_date',{ascending:false}).limit(30),db.rpc('student_lesson_summaries',{sid:studentId})]).then(([l,s])=>{if(c)return;
+  const rep=new Set(((s.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date));const dates=Array.from(new Set([...rep,...((l.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date)])).sort().reverse().slice(0,30);
+  setLessons(dates.map(d=>({date:d,report:rep.has(d)})));setLessonDate(d=>d||dates[0]||'')});return()=>{c=true}},[studentId]);
+ const params=mode==='lesson'?{source:'lesson',kinds:['gemengd'],lessonDate:lessonDate||undefined,level,minutes}:{source:'own',kinds,level,minutes,topic:topic.trim()};
+ const key=studentId+'|'+JSON.stringify(params);
+ async function go(force=false){if(inFlight.current)return;setErr('');setReused(false);
+  if(!force&&exCache.has(key)){setReused(true);onReady(exCache.get(key)!);return}
+  inFlight.current=true;setBusy(true);try{const r=await authedPost<ExerciseSet>(supabase()!,'/api/ai/exercises',{studentId,...params});exCache.set(key,r);onReady(r)}catch(e){setErr(e instanceof Error?e.message:String(e))}inFlight.current=false;setBusy(false)}
+ const kindOpts=Object.entries(KIND_LABELS).map(([k,l])=>({value:k,label:l}));
+ return <div className="hw-card">
+  <div className="hw-head"><b><Sparkles size={16}/> {teacher?tt("Genereer huiswerk"):tt("Maak mijn huiswerk")}</b>
+   <div className="seg" role="group" aria-label={tt("Bron van de oefeningen")}><button type="button" aria-pressed={mode==='lesson'} onClick={()=>setMode('lesson')}>📚 {tt("Vanuit mijn les")}</button><button type="button" aria-pressed={mode==='own'} onClick={()=>setMode('own')}>✏️ {tt("Zelf kiezen")}</button></div></div>
+  <div className="hw-row">
+   {mode==='lesson'?(lessons&&!lessons.length?<span className="muted small">{tt("Nog geen lessen opgeslagen.")}</span>:
+    <Select<string> label={tt("Les")} value={lessonDate||null} placeholder={tt("Les kiezen…")} onChange={setLessonDate} icon={<CalendarDays size={15}/>}
+     options={(lessons||[]).map(x=>({value:x.date,label:niceDate(x.date),hint:x.report?tt("met lesverslag"):tt("alleen notities")}))}/>)
+    :<Select<string> label={tt("Oefentypes")} value={null} placeholder={tt("Oefentypes kiezen…")} options={kindOpts} onChange={()=>{}} icon={<ListChecks size={15}/>}
+      multi={{values:kinds,onToggle:k=>setKinds(x=>x.includes(k)?x.filter(y=>y!==k):[...x,k])}}/>}
+   <Select<string> size="sm" label={tt("Niveau")} value={level} onChange={setLevel} options={LEVELS.map(l=>({value:l,label:l}))}/>
+   <Select<number> size="sm" label={tt("Duur")} value={minutes} onChange={setMinutes} icon={<Clock3 size={14}/>} options={[5,10,15,20,30].map(m=>({value:m,label:`${m} ${tt("min")}`}))}/>
+  </div>
+  {mode==='own'&&<input className="field compact" placeholder={tt("Onderwerp (optioneel), bijv. pretérito perfeito")} value={topic} onChange={e=>setTopic(e.target.value)} aria-label={tt("Onderwerp (optioneel)")}/>}
+  <div className="hw-actions"><button className="button" disabled={busy||(mode==='own'&&!kinds.length)||(mode==='lesson'&&lessons!==null&&!lessons.length)} onClick={()=>void go()}><Sparkles size={15}/> {busy?tt("Oefeningen maken…"):tt("Genereer oefeningen")}</button>
+   {reused&&<button type="button" className="textlink" onClick={()=>void go(true)}>{tt("Opnieuw genereren")}</button>}
+   <InfoTip text={mode==='lesson'?tt("Gebaseerd op de gekozen les: goedgekeurd lesverslag, fouten, woorden, lesnotities en door de docent bevestigde lesonderwerpen. Door AI gemaakt."):tt("Gebaseerd op jouw woordenlijst, recente lesnotities en behandelde leerdoelen. Door AI gemaakt; controleer bij twijfel met je docent.")}/></div>
+  {reused&&<p className="muted small">{tt("Dezelfde keuzes als eerder: je ziet dezelfde oefeningen (geen nieuwe AI-aanvraag).")}</p>}
   {err&&<p className="notice">{err}</p>}
-  <p className="muted small-print">{tt("Gebaseerd op jouw woordenlijst, recente lesnotities en behandelde leerdoelen. Door AI gemaakt; controleer bij twijfel met je docent.")}</p>
  </div>
 }
 
