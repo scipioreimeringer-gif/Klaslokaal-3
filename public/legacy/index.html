@@ -2426,13 +2426,21 @@ if(isT){
     return api("api/ai", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
   }
   function busy(btn, on, label){ btn.disabled = on; if(on){ btn.dataset.l = btn.innerHTML; btn.innerHTML = label || "Bezig..."; } else if(btn.dataset.l){ btn.innerHTML = btn.dataset.l; } }
+  /* v40: compact grammar lines with an icon and a short label in the interface language:
+     "📘 het brood · znw. · mv. broden = bread", "⚡ lopen · ww. · liep · heeft gelopen", "🎨 mooi · bnw.", "💬 ik heb honger · uitdrukking" */
+  var GL = {nl:{n:"znw.",v:"ww.",a:"bnw.",e:"uitdrukking",s:"voorbeeldzin",pl:"mv."}, en:{n:"n.",v:"v.",a:"adj.",e:"expression",s:"example sentence",pl:"pl."},
+    pt:{n:"subst.",v:"verbo",a:"adj.",e:"expressão",s:"frase-exemplo",pl:"pl."}, es:{n:"sust.",v:"verbo",a:"adj.",e:"expresión",s:"frase de ejemplo",pl:"pl."},
+    fr:{n:"nom",v:"verbe",a:"adj.",e:"expression",s:"phrase exemple",pl:"pl."}, de:{n:"Subst.",v:"Verb",a:"Adj.",e:"Ausdruck",s:"Beispielsatz",pl:"Pl."}};
   function sortedToHtml(srt, title){
+    var g = GL[uiLang] || GL.en;
     var out = '<div class="b" data-t="h">' + esc(title) + "</div>";
     function sec(name, items, fmt){ if(!items || !items.length) return; out += '<div class="b" data-t="h">' + name + "</div>"; items.forEach(function(it){ out += '<div class="b" data-t="li">' + fmt(it) + "</div>"; }); }
-    sec("Werkwoorden", srt.werkwoorden, function(w){ return "<b>" + esc(w.infinitief) + "</b>" + esc(" · " + [w.verleden, (w.hulpwerkwoord ? w.hulpwerkwoord + " " : "") + (w.voltooid || "")].filter(Boolean).join(" · ")) + (w.betekenis ? esc(" = " + w.betekenis) : ""); });
-    sec("Zelfstandig naamwoorden", srt.zelfstandig, function(w){ return "<b>" + esc((w.lidwoord ? w.lidwoord + " " : "") + w.woord) + "</b>" + esc((w.meervoud ? " · " + w.meervoud : "") + (w.betekenis ? " = " + w.betekenis : "")); });
-    sec("Bijvoeglijk naamwoorden", srt.bijvoeglijk, function(w){ return "<b>" + esc(w.woord) + "</b>" + esc([w.vergrotend, w.overtreffend].filter(Boolean).map(function(x){ return " · " + x; }).join("") + (w.betekenis ? " = " + w.betekenis : "")); });
-    sec("Overig", srt.overig, function(w){ return "<b>" + esc(w.woord) + "</b>" + esc((w.soort ? " (" + w.soort + ")" : "") + (w.betekenis ? " = " + w.betekenis : "")); });
+    function tail(parts, mean){ var p = parts.filter(Boolean).join(" · "); return esc((p ? " · " + p : "") + (mean ? " = " + mean : "")); }
+    sec("Werkwoorden", srt.werkwoorden, function(w){ return "⚡ <b>" + esc(w.infinitief) + "</b>" + tail([g.v, w.verleden, (w.hulpwerkwoord ? w.hulpwerkwoord + " " : "") + (w.voltooid || "")], w.betekenis); });
+    sec("Zelfstandig naamwoorden", srt.zelfstandig, function(w){ return "📘 <b>" + esc((w.lidwoord ? w.lidwoord + " " : "") + w.woord) + "</b>" + tail([g.n, w.meervoud ? g.pl + " " + w.meervoud : ""], w.betekenis); });
+    sec("Bijvoeglijk naamwoorden", srt.bijvoeglijk, function(w){ return "🎨 <b>" + esc(w.woord) + "</b>" + tail([g.a, w.vergrotend, w.overtreffend], w.betekenis); });
+    sec("Overig", srt.overig, function(w){ var s = String(w.soort || ""), ex = /uitdrukking|expression|expressão|expresión|ausdruck/i.test(s), zin = /zin|sentence|frase|phrase|satz/i.test(s);
+      return (ex || zin ? "💬 " : "") + "<b>" + esc(w.woord) + "</b>" + tail([ex ? g.e : zin ? g.s : s], w.betekenis); });
     return out;
   }
   $("aiSort").addEventListener("click", function(){

@@ -9,6 +9,7 @@ import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
 import {PenLine,Repeat,Wrench,CalendarDays,Clock3} from 'lucide-react';
 import {Select} from './Select';
 import {InfoTip} from './InfoTip';
+import {posIcon} from '../lib/vocab/grammar';
 import {t as tt, translated} from '../lib/i18n';
 
 /* ========================= Vocabulary ========================= */
@@ -34,7 +35,7 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
   {rows.length?<table className="vocab edit"><tbody>{rows.map(s=><tr key={s.id}>
    <td><input className="cell" value={s.term} onChange={e=>up(s.id,{term:e.target.value})} aria-label={tt('Woord')}/></td>
    <td><input className="cell" value={s.translation} onChange={e=>up(s.id,{translation:e.target.value})} aria-label={tt('Betekenis')}/></td>
-   <td className="muted small-print">{s.pos||''}{s.source_page?' · '+s.source_page:''}{s.origin==='analysis'?' · '+tt('AI-lesanalyse'):''}</td>
+   <td className="muted small-print">{s.pos?(posIcon(s.pos)+' '+s.pos).trim():''}{s.source_page?' · '+s.source_page:''}{s.origin==='analysis'?' · '+tt('AI-lesanalyse'):''}</td>
    <td className="row"><button className="button small" disabled={busy||!s.term.trim()} onClick={()=>void accept([s])}><Check size={13}/> {tt('Toevoegen')}</button><button className="iconbtn danger" title={tt('Afwijzen')} onClick={()=>void reject(s)}><X size={14}/></button></td></tr>)}</tbody></table>
   :<p className="muted small-print">{tt('Geen voorstellen. Getypte tekst op het canvas wordt herkend; handgeschreven tekst op het bord niet, omdat die niet betrouwbaar te lezen is.')}</p>}
  </section>
@@ -64,7 +65,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
    <td>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
    <td className="muted">{canEdit(v)?<input className="cell" value={v.example} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,example:e.target.value}:i)||null)} onBlur={e=>void patch(v,{example:e.target.value})}/>:v.example}</td>
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
-   <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.pos?<small className="block">{v.pos}</small>:null}</td>
+   <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.pos?<small className="block">{(posIcon(v.pos)+' '+v.pos).trim()}</small>:null}</td>
    <td><span className="tag">{v.source==='lesson'?tt("les"):v.source==='ai'?tt("AI · goedgekeurd"):v.source==='canvas'?tt("canvas"):v.source==='student'?tt("zelf"):tt("docent")}</span>{v.difficult&&<span className="tag uncertain">{tt('moeilijk')}</span>}{viewer==='teacher'&&<button className="iconbtn" title={v.difficult?tt('Niet meer als moeilijk markeren'):tt('Markeren als moeilijk')} onClick={()=>void patch(v,{difficult:!v.difficult})}><Flag size={13}/></button>}</td>
    <td>{canEdit(v)&&<button className="iconbtn danger" title={tt("Verwijderen")} onClick={()=>void del(v)}><Trash2 size={14}/></button>}</td></tr>)}</tbody></table>}
  </div>

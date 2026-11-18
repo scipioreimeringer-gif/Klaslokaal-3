@@ -34,9 +34,17 @@ Antwoord ALLEEN met geldige JSON, zonder uitleg, in precies deze vorm:
  "zelfstandig":[{"woord":"","lidwoord":"de of het","meervoud":"","betekenis":""}],
  "bijvoeglijk":[{"woord":"","vergrotend":"","overtreffend":"","betekenis":""}],
  "overig":[{"woord":"","soort":"bijvoorbeeld bijwoord, voorzetsel, voegwoord, uitdrukking","betekenis":""}]}
-Regels: zet werkwoorden in de infinitief en zelfstandig naamwoorden in het enkelvoud. Laat lidwoorden, namen en dubbele woorden weg.
+Regels: zet werkwoorden in de infinitief, zelfstandig naamwoorden in het enkelvoud en bijvoeglijk naamwoorden in de basisvorm (mooie → mooi). Laat namen en dubbele woorden weg.
 "betekenis" is een korte Engelse vertaling (1 tot 4 woorden). Als de docent al een uitleg gaf, gebruik die.
-Bij een vaste uitdrukking (bijvoorbeeld "zin hebben in"): zet die bij overig met soort "uitdrukking".`;
+Bij een vaste uitdrukking (bijvoorbeeld "zin hebben in", "ik heb honger"): zet die bij overig met soort "uitdrukking".
+Bij een korte, nuttige voorbeeldzin (bijvoorbeeld "Hoe gaat het?"): zet die bij overig met soort "voorbeeldzin", precies zoals geschreven.`;
+// v40: conjugations and comparisons only from A2; at A0/A1 the learner first needs the base form
+function trimForLevel(result, level) {
+  if (!/^A[01]$/.test(level)) return result;
+  result.werkwoorden = result.werkwoorden.map((w) => ({ ...w, verleden: "", hulpwerkwoord: "", voltooid: "" }));
+  result.bijvoeglijk = result.bijvoeglijk.map((w) => ({ ...w, vergrotend: "", overtreffend: "" }));
+  return result;
+}
 
 const REPORT_SYSTEM = `Je schrijft namens Scip, een vriendelijke docent Nederlands, een kort lesverslag voor WhatsApp aan een leerling.
 Schrijf in eenvoudig Nederlands dat past bij het niveau van de leerling (bij A0/A1 heel eenvoudige korte zinnen, met een Engelse vertaling tussen haakjes bij moeilijke woorden).
@@ -81,11 +89,11 @@ module.exports = async (req, res) => {
       } else if (b.text) {
         input = "Haal uit deze lestekst de woorden die de leerling (niveau " + level + ") moet leren, maximaal 40, en sorteer ze:\n\n" + String(b.text).slice(0, 8000);
       } else return res.status(400).json({ error: "geen woorden" });
-      const system = lessonLanguage === 'Dutch' ? SORT_SYSTEM : `You are a language teacher specializing in ${lessonLanguage}. Sort the supplied vocabulary into grammatical categories. Reply ONLY as JSON with these exact keys: werkwoorden (array of objects with infinitief, verleden, hulpwerkwoord, voltooid, onregelmatig, betekenis), zelfstandig (array of objects with woord, lidwoord, meervoud, betekenis), bijvoeglijk (array of objects with woord, vergrotend, overtreffend, betekenis), overig (array of objects with woord, soort, betekenis). Use grammar appropriate to ${lessonLanguage}; where a field is not relevant, use an empty string. For betekenis give a short English translation. Do not invent vocabulary.`;
+      const system = lessonLanguage === 'Dutch' ? SORT_SYSTEM : `You are a language teacher specializing in ${lessonLanguage}. Sort the supplied vocabulary into grammatical categories. Reply ONLY as JSON with these exact keys: werkwoorden (array of objects with infinitief, verleden, hulpwerkwoord, voltooid, onregelmatig, betekenis), zelfstandig (array of objects with woord, lidwoord, meervoud, betekenis), bijvoeglijk (array of objects with woord, vergrotend, overtreffend, betekenis), overig (array of objects with woord, soort, betekenis). Use grammar appropriate to ${lessonLanguage}: verbs in the infinitive, nouns in the singular with the definite article of ${lessonLanguage} (empty if the language has none), adjectives in their base form. Fixed expressions go to overig with soort "uitdrukking", short useful example sentences to overig with soort "voorbeeldzin" exactly as written. Where a field is not relevant, use an empty string. For betekenis give a short English translation. Do not invent vocabulary.`;
       const out = await claude(system, input, 3000);
       const result = parseJSON(out);
       ["werkwoorden", "zelfstandig", "bijvoeglijk", "overig"].forEach((k) => { if (!Array.isArray(result[k])) result[k] = []; });
-      return res.status(200).json({ result });
+      return res.status(200).json({ result: trimForLevel(result, level) });
     }
     if (b.task === "report") {
       const words = (Array.isArray(b.words) ? b.words : []).slice(0, 30).map((w) => w.nl + (w.uit ? " = " + w.uit : "")).join("\n");
