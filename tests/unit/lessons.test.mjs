@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {lessonState, dayKey, clock, gridDays, shift, weekStart, byDay, nextLesson, countdown, planningError, minutesOf} from '../../lib/lessons.ts';
-import {setCurrentLang} from '../../lib/i18n.ts';
+import {setCurrentLang, loadMessages} from '../../lib/i18n.ts';
 
 const L = (id, s, e, extra = {}) => ({id, student_id: 'x', teacher_id: 't', starts_at: s, ends_at: e, timezone: 'Europe/Amsterdam', language: null, status: 'scheduled', series_id: null, cancelled_at: null, ...extra});
 const now = Date.parse('2026-11-20T18:30:00Z');
@@ -45,7 +45,8 @@ test('grouping per day and next lesson (running lesson counts, cancelled skipped
   assert.equal(minutesOf(ls[0]), 60);
 });
 
-test('countdown and readable planning errors (translated)', () => {
+test('countdown and readable planning errors (translated)', async () => {
+  await loadMessages();
   setCurrentLang('nl');
   assert.equal(countdown('2026-11-20T18:42:00Z', now), 'Over 12 min');
   assert.equal(countdown('2026-11-20T21:50:00Z', now), 'Over 3 u 20 min');

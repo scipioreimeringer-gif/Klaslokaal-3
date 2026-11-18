@@ -11,6 +11,10 @@ import {t as tt} from '../lib/i18n';
 import {AnalysisV2View,StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import {CompactAnalysis} from './CompactAnalysis';
+import {Flag} from './Flag';
+import {languageName} from '../lib/languages';
+import {getLang} from '../lib/i18n';
+import {applyTexts,extractTexts,switchLanguages} from '../lib/analysis/translate';
 
 const lines=(a:string[]|undefined)=>(a||[]).join('\n');
 const unlines=(s:string)=>s.split('\n').map(x=>x.trim()).filter(Boolean);
@@ -149,11 +153,37 @@ export function TeacherAnalyses({studentId}:{studentId:string}){
  </div>
 }
 
-export function StudentSummaries({studentId}:{studentId:string}){
+/* v40: bilingual summaries — translations are fetched per card, only for the language chosen in the switch, and
+   cached on the server per language and content version (and here for this page view). Examples are never translated. */
+const trCache=new Map<string,string[]|null>();
+function SummaryCard({r,studentId,lang,open}:{r:{id:string;lesson_date:string;final:AnalysisDoc};studentId:string;lang:string;open:boolean}){
+ const v2=(r.final as unknown as {version?:number}).version===2;const doc=r.final as unknown as AnalysisV2;
+ const src=v2?doc.explanation_language:'';const need=v2&&!!lang&&lang!==src;const key=r.id+'|'+lang;
+ const [texts,setTexts]=useState<string[]|null|undefined>(()=>trCache.get(key));const [state,setState]=useState<'idle'|'busy'|'err'>('idle');const [shown,setShown]=useState(open);
+ useEffect(()=>{setTexts(trCache.get(key))},[key]);
+ useEffect(()=>{if(!need||!shown||trCache.has(key))return;let c=false;setState('busy');
+  void authedPost<{texts:string[]|null}>(supabase()!,'/api/ai/translate-summary',{studentId,analysisId:r.id,lang}).then(x=>{trCache.set(key,x.texts);if(!c){setTexts(x.texts);setState('idle')}},()=>{if(!c)setState('err')});return()=>{c=true}},[need,shown,key,studentId,r.id,lang]);
+ const shownDoc=need&&texts?applyTexts(doc,extractTexts(doc),texts):r.final;
+ return <details className="analysis-card" open={open} onToggle={e=>{if((e.currentTarget as HTMLDetailsElement).open)setShown(true)}}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{v2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}{need&&state==='busy'&&<Loader2 size={14} className="spin" aria-label={tt("Vertalen…")}/>}</summary>
+  {need&&state==='err'&&<p className="muted small">{tt("Vertalen lukte niet; je ziet de oorspronkelijke tekst.")}</p>}
+  <CompactAnalysis doc={shownDoc as unknown as AnalysisV2|AnalysisDoc} details={v2?<AnalysisV2View doc={shownDoc as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}/></details>
+}
+/** Compact switch "🇧🇷 Portugees | 🇳🇱 Nederlands": lesson language first, then the student's own language. Remembered per student. */
+function SummaryLangSwitch({langs,value,onChange}:{langs:string[];value:string;onChange:(l:string)=>void}){
+ if(langs.length<2)return null;
+ return <div className="sum-switch" role="group" aria-label={tt("Taal van de lessamenvatting")}>{langs.map(l=><button key={l} type="button" aria-pressed={value===l} onClick={()=>onChange(l)}><Flag code={l} size={16}/>{languageName(l)}</button>)}</div>
+}
+
+export function StudentSummaries({studentId,lessonLang}:{studentId:string;lessonLang?:string}){
+ const langs=switchLanguages(lessonLang||'',getLang());const store='teachy-sum-lang-'+studentId;
+ const [lang,setLangState]=useState<string>(()=>{try{const v=localStorage.getItem(store);if(v&&langs.includes(v))return v}catch{}return ''});
+ const pick=(l:string)=>{setLangState(l);try{localStorage.setItem(store,l)}catch{}};
  const [rows,setRows]=useState<{id:string;lesson_date:string;final:AnalysisDoc}[]|null>(null);const [err,setErr]=useState('');
  useEffect(()=>{void supabase()!.rpc('student_lesson_summaries',{sid:studentId}).then(({data,error})=>{if(error)setErr(error.message.includes('student_lesson_summaries')?tt("Nog niet beschikbaar (database-update v28 ontbreekt)."):error.message);setRows((data||[]) as {id:string;lesson_date:string;final:AnalysisDoc}[])})},[studentId]);
  if(err)return <p className="muted">{err}</p>;
  if(!rows)return <div className="loader small"/>;
  if(!rows.length)return <p className="muted">{tt("Nog geen lessamenvattingen. Na een opgenomen les (met jouw toestemming voor AI-analyse) verschijnt hier een kort lesverslag met je foutenanalyse. Je docent kan het aanpassen.")}</p>;
- return <div className="analyses">{rows.map(r=><details className="analysis-card" key={r.id} open={r===rows[0]}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{(r.final as unknown as {version?:number}).version===2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}</summary><CompactAnalysis doc={r.final as unknown as AnalysisV2|AnalysisDoc} details={(r.final as unknown as {version?:number}).version===2?<AnalysisV2View doc={r.final as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}/></details>)}</div>
+ // until a language is chosen, each summary shows in the language it was written in (no translation, no AI call)
+ return <div className="analyses"><SummaryLangSwitch langs={langs} value={lang||((rows[0].final as unknown as AnalysisV2).explanation_language||'')} onChange={pick}/>
+  {rows.map(r=><SummaryCard key={r.id} r={r} studentId={studentId} lang={lang} open={r===rows[0]}/>)}</div>
 }

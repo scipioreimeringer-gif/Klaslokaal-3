@@ -122,7 +122,8 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       'kind: "slip" for an obvious one-off speech error, "self_correction" when the student immediately corrected it themselves, otherwise "error".',
       'No explanations. Keep it compact. Lines marked as context must not be analysed.',
       `Topic list (use the alias in "topic" when a mistake or covered topic belongs to it):\n${topicList || '(none)'}`,
-      `new_words: translations in ${ctx.uiName}. status "difficult" only with evidence in the student lines.`,
+      // v42: word translations are always English (the default flashcard back side), whatever the interface language
+      'new_words: translations in English (natural meaning; for expressions the idiomatic English meaning, not word for word). status "difficult" only with evidence in the student lines.',
     ].join('\n');
     let i = 0; const conc = ctx.concurrency || 4;
     const worker = async () => {

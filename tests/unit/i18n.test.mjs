@@ -7,7 +7,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {collectKeys, root} from './i18n-keys.mjs';
 import {M} from '../../lib/i18n/messages.ts';
-import {t, setCurrentLang, translated, LANGS} from '../../lib/i18n.ts';
+import {t, setCurrentLang, translated, LANGS, loadMessages, messagesLoaded} from '../../lib/i18n.ts';
 
 const ph = s => (s.match(/\{\d+\}/g) || []).sort().join();
 const keys = collectKeys();
@@ -26,7 +26,10 @@ test('placeholders and leading/trailing spaces are kept in every translation', (
   assert.deepEqual(bad, []);
 });
 
-test('t(): language switch, placeholders, unknown text passes through, label tables translate on read', () => {
+test('t(): language switch, placeholders, unknown text passes through, label tables translate on read', async () => {
+  // v40: the table is loaded on demand; before that, every language shows the Dutch source text
+  setCurrentLang('en'); if (!messagesLoaded()) assert.equal(t('Opslaan'), 'Opslaan');
+  await loadMessages(); assert.ok(messagesLoaded());
   setCurrentLang('en');
   assert.equal(t('Opslaan'), 'Save');
   assert.equal(t('{0} van {1} gedaan', 3, 5), '3 of 5 done');

@@ -7,6 +7,8 @@ import {Suspense,useEffect,useRef,useState} from 'react';
 function appCss(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}
  const b=getComputedStyle(document.body);
  return css.replace(/:root\b/g,':host')+`\n[data-mount]{font-family:${b.fontFamily};color:${b.color};font-size:15px;line-height:1.45;height:100%}\n[data-mount] .games-panel{position:static;width:auto;max-height:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;max-width:720px;padding:16px}`}
+/** v41: @font-face rules are ignored inside a shadow root, so the app font (Plus Jakarta Sans, self-hosted by next/font) is also registered in the classroom document once. */
+function fontFaces(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).filter(r=>r instanceof CSSFontFaceRule).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}return css}
 const frameCall=(fn:string,...a:unknown[])=>{try{const w=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentWindow as unknown as Record<string,(...x:unknown[])=>void>|null;w?.[fn]?.(...a)}catch{/* classroom not ready */}};
 import {ArrowLeft,Video,X} from 'lucide-react';
 import {useAuth} from '../../../components/Auth';
@@ -24,10 +26,11 @@ import {useLanguage} from '../../../components/I18n';
 
 type Room={student:StudentRecord;as:'teacher'|'student'};
 /** The planned lesson this classroom belongs to: the one in the link, else one happening now (15 min margin). Without one the classroom still works. */
-async function findLesson(db:ReturnType<typeof supabase>&{},sid:string,param:string|null){
- if(param&&/^[0-9a-f-]{36}$/i.test(param)){const r=await db.from('lessons').select('id').eq('id',param).eq('student_id',sid).maybeSingle();if(r.data)return (r.data as {id:string}).id}
- const now=Date.now();const r=await db.from('lessons').select('id').eq('student_id',sid).neq('status','cancelled').lte('starts_at',new Date(now+15*60e3).toISOString()).gte('ends_at',new Date(now-15*60e3).toISOString()).order('starts_at').limit(1);
- return r.error?null:((r.data||[])[0] as {id:string}|undefined)?.id||null;
+async function findLesson(db:ReturnType<typeof supabase>&{},sid:string,param:string|null):Promise<{id:string;starts_at:string|null}|null>{
+ // v42: also the planned start (same single query), for the lesson timer
+ if(param&&/^[0-9a-f-]{36}$/i.test(param)){const r=await db.from('lessons').select('id,starts_at').eq('id',param).eq('student_id',sid).maybeSingle();if(r.data)return r.data as {id:string;starts_at:string|null}}
+ const now=Date.now();const r=await db.from('lessons').select('id,starts_at').eq('student_id',sid).neq('status','cancelled').lte('starts_at',new Date(now+15*60e3).toISOString()).gte('ends_at',new Date(now-15*60e3).toISOString()).order('starts_at').limit(1);
+ return r.error?null:((r.data||[])[0] as {id:string;starts_at:string|null}|undefined)||null;
 }
 
 function Picker(){
@@ -53,8 +56,8 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
   const as:Room['as']|null=isTeacher&&isStudent?(mode==='student'?'student':'teacher'):isTeacher?'teacher':isStudent?'student':null;
   if(!as){setError(t("Geen toegang tot dit klaslokaal."));return}
   if(!s.room_code){setError(t(MIGRATION_HINT));return}
-  const lessonId=as==='teacher'?await findLesson(db,s.id,lessonParam):null;if(cancelled)return;
-  window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
+  const lesson=as==='teacher'?await findLesson(db,s.id,lessonParam):null;const lessonId=lesson?.id||null;if(cancelled)return;
+  window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,lessonStartsAt:lesson?.starts_at||null,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
   window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true),games:()=>frameCall('__klasTab','games','user')};
@@ -63,6 +66,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
  useEffect(()=>()=>{delete window.teachyBridge},[]);
  // v36: mount point for the games inside the classroom's work panel (re-attached after every classroom reload)
  useEffect(()=>{if(!ready)return;let stop=false;setGamesHost(null);const attach=()=>{if(stop)return;const el=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentDocument?.getElementById('gamesHost');if(!el){setTimeout(attach,400);return}
+  const fd=el.ownerDocument;if(!fd.querySelector('style[data-app-fonts]')){const fs=fd.createElement('style');fs.setAttribute('data-app-fonts','');fs.textContent=fontFaces();fd.head.appendChild(fs)}
   const root=el.shadowRoot||el.attachShadow({mode:'open'});if(!root.querySelector('style[data-app]')){const st=document.createElement('style');st.setAttribute('data-app','');st.textContent=appCss();root.appendChild(st)}
   let m=root.querySelector('div[data-mount]');if(!m){m=document.createElement('div');m.setAttribute('data-mount','');root.appendChild(m)}setGamesHost(m)};attach();return()=>{stop=true}},[ready,frameLoads,room?.student.id,room?.as]);
  // interface language: app → classroom (the classroom page is not reloaded, so a running lesson continues)
@@ -87,7 +91,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
    {/* always mounted: receives the game state even while closed (the student's panel opens when a game starts) */}
-   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasTab','wb','user');else setGamesOpen(false)}}/>
+   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasToggle','games',false);else setGamesOpen(false)}}/>
   </div>
  </main>;
 }

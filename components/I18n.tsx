@@ -8,7 +8,7 @@ import {Check,ChevronDown} from 'lucide-react';
 import {useAuth} from './Auth';
 import {Flag} from './Flag';
 import {supabase} from '../lib/supabase';
-import {LANGS,NATIVE,isLang,setCurrentLang,getLang,t,type Lang} from '../lib/i18n';
+import {LANGS,NATIVE,isLang,setCurrentLang,getLang,loadMessages,messagesLoaded,t,type Lang} from '../lib/i18n';
 export type {Lang} from '../lib/i18n';
 
 const KEY='klaslokaal-language';
@@ -21,7 +21,11 @@ export function LanguageProvider({children}:{children:React.ReactNode}){
  // the live classroom is never remounted on a language change (that would interrupt the lesson); it re-translates itself
  const remountKey=path.startsWith('/klaslokaal/live')?'live':lang;
  setCurrentLang(lang);
- function apply(x:Lang){setCurrentLang(x);setState(x);try{localStorage.setItem(KEY,x)}catch{}if(typeof document!=='undefined')document.documentElement.lang=x==='pt'?'pt-BR':x}
+ // v40: another language first loads its translations (once), then switches — no half-translated screen
+ const wanted=useRef<Lang>(lang);
+ function apply(x:Lang){wanted.current=x;try{localStorage.setItem(KEY,x)}catch{}
+  const go=()=>{if(wanted.current!==x)return;setCurrentLang(x);setState(x);if(typeof document!=='undefined')document.documentElement.lang=x==='pt'?'pt-BR':x};
+  if(x==='nl'||messagesLoaded())go();else void loadMessages().then(go,()=>{/* offline: stay in the current language */})}
  // this device / browser
  useEffect(()=>{let v:string|null=null;try{v=localStorage.getItem(KEY)}catch{}if(!isLang(v)){const b=(navigator.language||'').slice(0,2).toLowerCase();v=isLang(b)?b:'nl'}if(isLang(v))apply(v)},[]);// eslint-disable-line react-hooks/exhaustive-deps
  // restore the saved choice after logging in

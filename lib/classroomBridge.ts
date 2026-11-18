@@ -13,6 +13,8 @@ import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegac
  * Row Level Security decides what is allowed — never the iframe.
  */
 export type TeachyBridge = {
+  /** v42: planned start of the lesson in the agenda (ISO), used for the lesson timer; null without a planned lesson */
+  lessonStartsAt?: string | null;
   version: 1;
   role: 'teacher' | 'student';
   studentId: string;
@@ -30,7 +32,7 @@ export type TeachyBridge = {
   previewImport(backup: unknown): Promise<{oldName: string; newName: string | null}[]>;
   importBackup(backup: unknown): Promise<string>;
   /** Personal hover translation (never written to the shared canvas). */
-  translate(term: string, context: string): Promise<TranslateResult>;
+  translate(term: string, context: string, target?: string): Promise<TranslateResult>;
   /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
@@ -55,10 +57,12 @@ async function postJson<T>(db: SupabaseClient, path: string, body: unknown): Pro
 }
 const translateCache = new Map<string, Promise<TranslateResult>>();
 function translator(db: SupabaseClient) {
-  return (term: string, context: string) => {
-    const k = term.toLowerCase() + '\u0000' + context.toLowerCase();
+  // v40: optional target language (canvas "Vertalen" with a chosen language); same server cache per term+sentence+language
+  return (term: string, context: string, target?: string) => {
+    const tg = target && /^[a-z]{2}$/.test(target) ? target : '';
+    const k = term.toLowerCase() + '\u0000' + context.toLowerCase() + '\u0000' + tg;
     if (!translateCache.has(k)) {
-      const p = postJson<TranslateResult>(db, '/api/ai/translate', {term, context});
+      const p = postJson<TranslateResult>(db, '/api/ai/translate', tg ? {term, context, target: tg} : {term, context});
       p.catch(() => translateCache.delete(k));
       translateCache.set(k, p);
     }
@@ -84,7 +88,7 @@ function fetchIceServers(db: SupabaseClient, studentId: string) {
   })().catch(() => { icePromise = null; iceStatusValue = 'error'; return []; });
   return icePromise;
 }
-export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
+export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; lessonStartsAt?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
   let snap: Record<string, string> = {};
   let allowed = new Set<string>();
   let students: StudentRow[] = [];
@@ -134,7 +138,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
   }
 
   return {
-    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId),
+    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId), lessonStartsAt: opts.lessonStartsAt || null,
     async get(key) {
       const k = parseKey(key);
       if (!k) return null;

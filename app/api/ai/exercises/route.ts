@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {askFast, authUser, enforceLimit, HttpError, jsonError, langName, uiLanguage} from '../../../../lib/server/ai';
 import {studentAccess, subjectCode} from '../../../../lib/server/context';
+import {lessonMaterial} from '../../../../lib/analysis/material';
 
 export const maxDuration = 60;
 
@@ -35,19 +36,28 @@ export async function POST(req: Request) {
       (lessonDate ? db.from('lesson_entries').select('lesson_date,notes,homework').eq('student_id', student.id).eq('lesson_date', lessonDate)
         : db.from('lesson_entries').select('lesson_date,notes,homework').eq('student_id', student.id).order('lesson_date', {ascending: false}).limit(3)).then(r => r.data || []),
       db.from('student_goal_progress').select('status,curriculum_goals(title,level)').eq('student_id', student.id).in('status', ['in_progress', 'covered']).then(r => r.data || []),
-      db.rpc('student_lesson_summaries', {sid: student.id}).then(r => (r.data || []) as {final: {corrections?: {original: string; corrected: string; category?: string}[]; grammar?: {topic: string}[]}}[]),
+      db.rpc('student_lesson_summaries', {sid: student.id}).then(r => (r.data || []) as {lesson_date: string; final: unknown}[]),
       db.from('practice_sessions').select('details').eq('student_id', student.id).order('created_at', {ascending: false}).limit(10).then(r => r.data || []),
     ]);
-    const corrections = summaries.flatMap(s => s.final?.corrections || []).slice(0, 20);
-    const grammar = Array.from(new Set(summaries.flatMap(s => (s.final?.grammar || []).map(g => g.topic)))).slice(0, 12);
+    // v40 "Vanuit mijn les": the chosen lesson (or the latest) is THE source; otherwise all approved summaries.
+    // Both analysis versions are read (v2 errors used to be ignored), teacher-confirmed lesson topics first.
+    const fromLesson = body.source === 'lesson';
+    const picked = fromLesson ? (lessonDate ? summaries.filter(s => s.lesson_date === lessonDate) : summaries.slice(0, 1)) : summaries;
+    const mat = lessonMaterial(picked.map(s => s.final));
+    const corrections = mat.errors;
+    const grammar = mat.grammar;
     const recentWrong = Array.from(new Set(practice.flatMap(p => ((p.details as {wrong?: string[]} | null)?.wrong) || []))).slice(0, 20);
     const count = Math.round(minutes * 0.8) + 2;
     const input = [
       `Target language: ${langName(subject)}. Student level: ${level}. Exercise kinds wanted: ${kinds.join(', ')}. About ${count} items (${minutes} minutes).`,
       topic ? `Topic requested: ${topic}` : '',
       `Student vocabulary (prefer new/practicing and often-wrong words): ${vocab.map(v => `${v.term} = ${v.translation} [${v.status}${v.wrong_count ? ', ' + v.wrong_count + '× fout' : ''}]`).join('; ') || '(none yet)'}`,
-      `Student's own past errors (teacher-approved): ${corrections.map(c => `"${c.original}" → "${c.corrected}"${c.category ? ' [' + c.category + ']' : ''}`).join('; ') || '(none)'}`,
+      `Student's own past errors (teacher-approved): ${corrections.map(c => c.corrected ? `"${c.original}" → "${c.corrected}"${c.category ? ' [' + c.category + ']' : ''}` : `"${c.original}"`).join('; ') || '(none)'}`,
       `Grammar covered: ${grammar.join('; ') || '(none)'}`,
+      fromLesson ? `This homework is about ONE lesson${lessonDate ? ' (' + lessonDate + ')' : ' (the latest)'}: use only material covered in that lesson.` : '',
+      mat.vocab.length ? `Words from that lesson: ${mat.vocab.join(', ')}` : '',
+      mat.repeat.length ? `Recurring points to repeat: ${mat.repeat.join('; ')}` : '',
+      mat.instructions ? `Teacher's instructions for this homework (follow them): ${mat.instructions}` : '',
       `Recently answered wrong in practice: ${recentWrong.join(', ') || '(none)'}`,
       `Recent lesson notes: ${lessons.map(l => `${l.lesson_date}: ${String(l.notes || '').slice(0, 1500)}`).join('\n') || '(none)'}`,
       `Learning goals in progress/covered: ${goals.map(g => { const cg = (g as {curriculum_goals?: {title?: string; level?: string} | null}).curriculum_goals; return cg ? `${cg.level} ${cg.title}` : ''; }).filter(Boolean).join('; ') || '(none)'}`,

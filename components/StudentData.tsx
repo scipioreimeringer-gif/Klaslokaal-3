@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {BookOpenCheck,Clock3,ClipboardList,Languages,Lock,Mic,Trash2,Play,Search,LayoutGrid,History,NotebookPen,PenLine} from 'lucide-react';
+import {BookOpenCheck,Clock3,ClipboardList,Languages,Lock,Mic,Trash2,Play,Search,History,NotebookPen,PenLine,House,Route,MoreHorizontal} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUrl,type BoardData,type ClassroomState,type LessonEntry,type Recording} from '../lib/data';
 import Homework from '../app/huiswerk-client';
@@ -116,12 +116,14 @@ export function BoardPreview({board}:{board:BoardData|null}){
 
 function sanitizeCanvas(html:string){
  if(typeof window==='undefined')return '';
- const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');const allowed=new Set(['DIV','P','B','STRONG','I','EM','U','SPAN','MARK','BR','UL','OL','LI']);
+ const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');const allowed=new Set(['DIV','P','B','STRONG','I','EM','U','S','STRIKE','SPAN','MARK','BR','UL','OL','LI']);
  const walk=(el:Element)=>{for(const c of Array.from(el.children)){if(!allowed.has(c.tagName)){c.replaceWith(...Array.from(c.childNodes).filter(n=>n.nodeType===3||n.nodeType===1));continue}
   const color=(c as HTMLElement).style?.color,bg=(c as HTMLElement).style?.backgroundColor;const dt=c.getAttribute('data-t');
+  // v40: font size, underline/strikethrough, bold, italic from the new canvas toolbar (read BEFORE attributes are removed)
+  const el=c as HTMLElement;const fs=el.style?.fontSize,td=el.style?.textDecorationLine,fw=el.style?.fontWeight,fi=el.style?.fontStyle;
   for(const a of Array.from(c.attributes))c.removeAttribute(a.name);
-  if(dt&&/^[a-z]{1,4}$/.test(dt)){c.setAttribute('data-t',dt);c.setAttribute('class','b')}
-  const st=[color&&/^[#a-z0-9(),.\s%]+$/i.test(color)?`color:${color}`:'',bg&&/^[#a-z0-9(),.\s%]+$/i.test(bg)?`background-color:${bg}`:''].filter(Boolean).join(';');if(st)c.setAttribute('style',st);walk(c)}};
+  if(dt&&/^[a-z][a-z0-9]{0,3}$/.test(dt)){c.setAttribute('data-t',dt);c.setAttribute('class','b')}
+  const st=[color&&/^[#a-z0-9(),.\s%]+$/i.test(color)?`color:${color}`:'',bg&&/^[#a-z0-9(),.\s%]+$/i.test(bg)?`background-color:${bg}`:'',fs&&/^(1[0-9]|[2-5][0-9]|6[0-4])px$/.test(fs)?`font-size:${fs}`:'',td&&/^(underline|line-through|underline line-through)$/.test(td)?`text-decoration:${td}`:'',fw&&/^(bold|[6-9]00)$/.test(fw)?`font-weight:${fw}`:'',fi==='italic'?'font-style:italic':''].filter(Boolean).join(';');if(st)c.setAttribute('style',st);walk(c)}};
  const root=doc.body.firstElementChild!;walk(root);return root.innerHTML;
 }
 export function CanvasPreview({state}:{state:ClassroomState|null}){
@@ -143,17 +145,23 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
  const [b,setB]=useState<Bundle|null>(null);const [tab,setTab]=useState<Tab>('overzicht');
  const load=useCallback(async()=>{setB(await loadStudentBundle(supabase()!,studentId))},[studentId]);
  useEffect(()=>{setB(null);setTab((initialTab as Tab)||'overzicht');void load()},[load,initialTab]);
- const tabs:[Tab,string,typeof History][]=[['overzicht','Overzicht',LayoutGrid],['lessen','Lessen',History],['analyses',viewer==='teacher'?'Lesanalyses':'Samenvattingen',Sparkles],['woorden','Woordenlijst',Languages],['doelen','Leertraject',Target],['huiswerk','Huiswerk',ClipboardList],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2] as [Tab,string,typeof History]]:[]),['bord','Bord & canvas',PenLine],['opnames','Opnames',Mic],...(viewer==='teacher'?[['prive','Privé',Lock] as [Tab,string,typeof History]]:[])];
+ /* v40: short tab names; [primary on a phone] — the others go under "Meer" on small screens (all tabs and routes kept) */
+ const tabs:[Tab,string,typeof History,boolean][]=[['overzicht','Home',House,true],['lessen','Lessen',History,false],['analyses','AI-verslag',Sparkles,true],['woorden','Woorden',Languages,true],['doelen','Leerpad',Route,false],['huiswerk','Taken',ClipboardList,true],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2,true] as [Tab,string,typeof History,boolean]]:[]),['bord','Bord',PenLine,false],['opnames','Opnames',Mic,false],...(viewer==='teacher'?[['prive','Privé',Lock,false] as [Tab,string,typeof History,boolean]]:[])];
  const ws:WsStudent=student||{id:studentId,subject:'',level:null,lesson_language:null};
  const focus=useMemo(()=>b?.latestAnalysis?.final?compactAnalysis(b.latestAnalysis.final as AnalysisV2,{max:3,label:k=>CATEGORY_LABEL[k as CorrectionCategory]||k}).points.map(x=>x.label):[],[b]);
+ const [more,setMore]=useState(false);const secondary=tabs.filter(x=>!x[3]);const activeSecondary=secondary.find(x=>x[0]===tab);
+ useEffect(()=>{if(!more)return;const off=(e:MouseEvent)=>{if(!(e.target as Element).closest?.('.tabs-more'))setMore(false)};const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setMore(false)};document.addEventListener('mousedown',off);document.addEventListener('keydown',esc);return()=>{document.removeEventListener('mousedown',off);document.removeEventListener('keydown',esc)}},[more]);
  return <div className="workspace compact-ws">
-  {b&&<FactsBar p={b.progress} focus={focus}/>}
-  <div className="tabs" role="tablist">{tabs.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={14}/>{t(l)}</button>)}</div>
+  {b&&<FactsBar p={b.progress} focus={[]}/>}
+  <nav className="tabs" role="tablist" aria-label={t("Onderdelen")}>{tabs.map(([k,l,Icon,primary])=><button key={k} role="tab" data-secondary={primary?undefined:''} aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/>{t(l)}
+   {k==='analyses'&&focus.length>0&&<span className="tab-badge" title={t("Aandachtspunten:")+' '+focus.join(' · ')} aria-label={t("{0} aandachtspunten",focus.length)}>{focus.length}</span>}</button>)}
+   <span className="tabs-more"><button type="button" aria-haspopup="menu" aria-expanded={more} aria-selected={!!activeSecondary} onClick={()=>setMore(m=>!m)}><MoreHorizontal size={15}/>{activeSecondary?t(activeSecondary[1]):t("Meer")}</button>
+    {more&&<span className="tabs-more-menu" role="menu">{secondary.map(([k,l,Icon])=><button key={k} role="menuitem" aria-current={tab===k||undefined} onClick={()=>{setTab(k);setMore(false)}}><Icon size={15}/>{t(l)}</button>)}</span>}</span></nav>
   {!b?<div className="card"><div className="loader small"/></div>:<>
   {b.error&&<div className="notice">{b.error}</div>}
   {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
   {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonHistory lessons={b.lessons}/></section>}
-  {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId}/>}</section>}
+  {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId} lessonLang={subjectOf(ws)}/>}</section>}
   {tab==='woorden'&&<section className="card"><h3>{t("Woordenlijst")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}

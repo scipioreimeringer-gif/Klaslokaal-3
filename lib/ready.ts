@@ -7,7 +7,9 @@ export type ReadyInput = {
   vocab: {student_id: string; status: string; due_at?: string | null; translation?: string | null}[];
   summaries: {student_id: string; id: string; lesson_date: string; final: unknown}[];
 };
-export type ReadyItem = {studentId: string; homework: {id: string; title: string}[]; dueWords: number; latest: {id: string; lesson_date: string; final: unknown} | null};
+export type ReadyItem = {studentId: string; homework: {id: string; title: string}[]; dueWords: number; latest: {id: string; lesson_date: string; final: unknown} | null;
+  /** v40: progress for the homework card (published = visible to the student, done = handed in) */
+  homeworkPublished?: number; homeworkDone?: number};
 
 export function readyFor(d: ReadyInput, now = Date.now()): ReadyItem[] {
   const done = new Set(d.submissions.map(s => s.assignment_id));
@@ -19,7 +21,9 @@ export function readyFor(d: ReadyInput, now = Date.now()): ReadyItem[] {
     // flashcards need a meaning on the back; mastered words wait for their next review date like the others
     const dueWords = d.vocab.filter(v => v.student_id === s.id && !!(v.translation || '').trim() && (!v.due_at || new Date(v.due_at).getTime() <= now)).length;
     const latest = d.summaries.filter(x => x.student_id === s.id).sort((a, b) => (a.lesson_date < b.lesson_date ? 1 : -1))[0] || null;
-    return {studentId: s.id, homework, dueWords, latest: latest ? {id: latest.id, lesson_date: latest.lesson_date, final: latest.final} : null};
+    const published = d.assignments.filter(a => a.student_id === s.id && !!a.published_at);
+    return {studentId: s.id, homework, dueWords, latest: latest ? {id: latest.id, lesson_date: latest.lesson_date, final: latest.final} : null,
+      homeworkPublished: published.length, homeworkDone: published.filter(a => done.has(a.id)).length};
   });
 }
 export const hasReady = (r: ReadyItem) => r.homework.length > 0 || r.dueWords > 0 || !!r.latest;

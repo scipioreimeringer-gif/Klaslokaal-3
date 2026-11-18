@@ -23,7 +23,8 @@ export async function detectCanvasVocab(db: SupabaseClient, student: StudentCtx,
   const res = await detectPages(pages, {
     existing: [...(vi.data || []), ...(vs.data || [])].map(x => (x as {term: string}).term),
     scanned: new Set((sc.data || []).map(x => (x as {page_hash: string}).page_hash)),
-    targetName: langName(subject), explainName: langName(opts.ui === subject ? 'en' : opts.ui), level: student.level || 'A1',
+    targetName: langName(subject), // v42: the meaning stored with a word is English by default (flashcards); the grammar label follows the interface
+    explainName: langName('en'), explainCode: opts.ui === subject ? 'en' : opts.ui, targetCode: subject, level: student.level || 'A1',
     ask: (schema, system, user) => askFast(schema, system, user, {maxTokens: 3000, effort: 'low', log}) as never,
   });
   let added = 0;

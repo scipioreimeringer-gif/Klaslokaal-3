@@ -2,7 +2,7 @@ import {authUser, enforceLimit, HttpError, jsonError, langName, type UsageCtx} f
 import {studentAccess, subjectCode} from '../../../../lib/server/context';
 import {tabooFor} from '../../../../lib/server/vocab';
 import {pickRound, selectWords, type Selection, type Word} from '../../../../lib/vocab/core';
-import {bankPool, hasBank, isCat, isLevel, pickBank, widen, type BankFilter} from '../../../../lib/wordbank';
+import {BANKS, bankPool, hasBank, loadBank, isCat, isLevel, pickBank, termKey, widen, type BankFilter, type BankItem} from '../../../../lib/wordbank';
 
 type Card = {vocab_id: string | null; bank_id?: string; term: string; hint: string; forbidden: string[]};
 
@@ -30,7 +30,8 @@ export async function POST(req: Request) {
     if (b.source === 'bank') {
       /* ---------- built-in word bank ---------- */
       const lang = subjectCode(student);
-      if (!hasBank(lang)) throw new HttpError(400, 'De ingebouwde woordenbank is er nu alleen voor Nederlands.');
+      if (!hasBank(lang)) throw new HttpError(400, 'De ingebouwde woordenbank is er voor Nederlands en Portugees (Brazilië).');
+      await loadBank(lang); // v42: only this lesson language is loaded
       const f: BankFilter = {level: isLevel(b.level) ? b.level : 'mix', cat: isCat(b.category) ? b.category : 'all', minTaboo: kind === 'taboo' ? taboo : 0};
       const pool = bankPool(lang, f);
       if (pool.length < count) return Response.json({tooFew: true, available: pool.length, canWiden: !!widen(f)}); // never a silent fallback
@@ -45,22 +46,40 @@ export async function POST(req: Request) {
       const {data, error} = await db.from('vocab_items').select('id,term,translation,example,status,lesson_date,created_at,correct_count,wrong_count,difficult,due_at').eq('student_id', student.id);
       if (error) throw new HttpError(400, /difficult/.test(error.message) ? 'Voer eerst supabase/v35.sql uit.' : error.message);
       const pool = selectWords((data || []) as Word[], sel).filter(w => w.term.trim());
-      if (pool.length < count) return Response.json({tooFew: true, available: pool.length, canWiden: false});
+      // v41: too few personal words → top up with built-in words when asked (fillBank), never silently
+      const lang = subjectCode(student), canFill = b.fillBank === true && hasBank(lang);
+      await loadBank(lang); // for topping up and for the checked forbidden words (no-op for other languages)
+      if (pool.length < count && !canFill) return Response.json({tooFew: true, available: pool.length, canWiden: false});
       const used = await db.rpc('game_used_words', {p_session: sessionId, p_student: student.id});
       if (used.error) throw new HttpError(400, /game_used_words/.test(used.error.message) ? 'Voer eerst supabase/v35.sql uit.' : used.error.message);
-      const words = pickRound(pool, count, new Set((used.data || []) as string[]), roundNo * 7919 + Date.now() % 1000);
+      const words = pickRound(pool, Math.min(count, pool.length), new Set((used.data || []) as string[]), roundNo * 7919 + Date.now() % 1000);
+      let extra: BankItem[] = [];
+      if (words.length < count && canFill) {
+        const lv = isLevel(b.level) ? b.level : isLevel(student.level) ? student.level as BankFilter['level'] : 'mix';
+        const own = new Set(words.map(w => termKey(w.term)));
+        let bp = bankPool(lang, {level: lv, cat: 'all', minTaboo: kind === 'taboo' ? taboo : 0}).filter(w => !own.has(termKey(w.term)));
+        if (bp.length < count - words.length) bp = bankPool(lang, {level: 'mix', cat: 'all', minTaboo: kind === 'taboo' ? taboo : 0}).filter(w => !own.has(termKey(w.term)));
+        const ub = await db.rpc('game_used_bank', {p_session: sessionId, p_student: student.id}); // v38.sql; without it: no history, still no repeats within a round
+        extra = pickBank(bp, count - words.length, new Set(ub.error ? [] : (ub.data || []) as string[]));
+        if (extra.length) notice = 'Aangevuld met woorden uit de ingebouwde woordenbank.';
+      }
+      if (!words.length && !extra.length) return Response.json({tooFew: true, available: 0, canWiden: false});
       let forbidden = new Map<string, string[]>();
       if (kind === 'taboo') {
-        // forbidden words from the cache; AI only adds missing ones when the teacher allows it (optional, never required)
-        const ai = b.aiTaboo !== false;
+        // forbidden words from the cache, then the built-in bank (same word); AI only when the teacher switches it on
+        const ai = b.aiTaboo === true;
         const log: UsageCtx = {db, userId: user.id, kind: 'games', studentId: student.id};
         const opts = {level: student.level || 'A1', targetName: langName(subjectCode(student)), log};
         try { if (ai) await enforceLimit(db, user.id, 'games'); forbidden = await tabooFor(db, words.map(w => ({id: w.id, term: w.term})), {...opts, noAi: !ai}); }
         catch { forbidden = await tabooFor(db, words.map(w => ({id: w.id, term: w.term})), {...opts, noAi: true}).catch(() => new Map()); notice = 'AI-aanvulling lukte niet; kaarten zonder opgeslagen verboden woorden hebben er minder.'; }
+        // controlled local approach: a personal word that is also in the bank gets the bank's checked forbidden words
+        const byTerm = new Map((BANKS[lang] || []).map(x => [termKey(x.term), x.taboo]));
+        for (const w of words) { const have = forbidden.get(w.id) || []; const bt = byTerm.get(termKey(w.term)); if (have.length < taboo && bt) forbidden.set(w.id, [...have, ...bt.filter(x => !have.includes(x))].slice(0, 3)); }
         if (!notice && words.some(w => (forbidden.get(w.id) || []).length < taboo)) notice = 'Sommige kaarten hebben minder verboden woorden dan gekozen.';
       }
-      cards = words.map(w => ({vocab_id: w.id, term: w.term, hint: w.translation, forbidden: kind === 'taboo' ? (forbidden.get(w.id) || []).slice(0, taboo) : []}));
-      vocabIds = words.map(w => w.id);
+      cards = [...words.map(w => ({vocab_id: w.id, term: w.term, hint: w.translation, forbidden: kind === 'taboo' ? (forbidden.get(w.id) || []).slice(0, taboo) : []})),
+        ...extra.map(w => ({vocab_id: null, bank_id: w.id, term: w.term, hint: w.meaning, forbidden: kind === 'taboo' ? w.taboo.slice(0, taboo) : []}))];
+      vocabIds = words.map(w => w.id); bankIds = extra.map(w => w.id);
     }
 
     const explainerId = explainer === 'teacher' ? user.id : student.user_id!;
