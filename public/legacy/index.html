@@ -589,7 +589,21 @@ body.cam-full .vbody .selfv{max-width:220px;width:22%}
 .dock .navtab[hidden]{display:none!important}
 @media (max-width:700px){.dock .navsplit{display:none}}
 @media (min-width:701px){.dock .navtab .lbl,.dock .navsplit .lbl{display:inline;font-size:.78rem}}
-</style>
+
+/* v40: four toggles, canvas panel, calmer top bar */
+#pCv{min-width:0;min-height:0}
+#pCv .cvhead{flex-wrap:nowrap;overflow:visible}
+#pCv .cvhead .cvbar{flex:1;min-width:0}
+.dock .navtab.v40{transition:background-color .15s,color .15s}.dock .navtab.v40[aria-pressed="true"]{background:rgba(94,234,212,.18);color:#fff;box-shadow:inset 0 -2px 0 #5eead4}
+.dock .navtab.v40.live:before{content:"";position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:#d0523a}
+.dock .v40sep{width:1px;align-self:stretch;margin:6px 4px;background:var(--line,#d6e6e3)}
+.conn.conn-dot{font-size:0;width:10px;height:10px;min-width:10px;padding:0;border-radius:50%;background:#c3ccd0;border:2px solid #fff;box-shadow:0 0 0 1px #c3ccd0;cursor:help}
+.conn.conn-dot.ok{background:#2fa77c;box-shadow:0 0 0 1px #2fa77c}
+.tb-left .timer{margin-left:8px;font-variant-numeric:tabular-nums;font-size:.8rem;opacity:.85}
+.btn.leave40,#leaveBtn.leave40{background:#fff;color:#c2412d;border:1px solid #f0c9c0;border-radius:9px;min-height:32px;padding:4px 12px;font-weight:700}
+.btn.leave40:hover,#leaveBtn.leave40:hover{background:#fdf0ec}
+#morePop .menuitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left}
+#morePop .menuitem svg{width:16px;height:16px;flex:none}</style>
 </head>
 <body>
 
@@ -3082,6 +3096,151 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   });
   /* "Ga naar les": open the check straight away (the call starts only after "Deelnemen") */
   setTimeout(function(){ if(!$("joinBtn").hidden && $("preOv").hidden) window.__klasPrecheck(); }, 250);
+})();
+
+/* =================================================================== v40: FOUR TOGGLES AND A CALMER TOP BAR
+   Bottom bar middle: Canvas | Bord │ Scherm | Spelletjes. Every button is an on/off toggle (open, close, open again);
+   opening one never closes another, so any combination fits next to each other (existing split view + splitter).
+   Closing only hides a panel: no content is deleted and a shared screen keeps streaming until "stop" is chosen.
+   Canvas becomes its own panel (the SAME editor element, listeners and sync — only moved), so it can sit next to the
+   board. Content sync between teacher and student is unchanged; WebRTC/TURN/camera code is not touched. */
+(function(){
+  var ws = $("ws"), pWb = $("pWb"), pSl = $("pSl"), pGames = $("pGames"), split = $("split");
+  if(!ws || !pWb || !pSl || !pGames) return;
+  /* --- Canvas as its own panel --- */
+  var pCv = document.createElement("section"); pCv.className = "panel"; pCv.id = "pCv";
+  var cvHead = document.createElement("div"); cvHead.className = "phead cvhead"; pCv.appendChild(cvHead);
+  ws.insertBefore(pCv, pWb); /* first in the page, then move the editor parts into it */
+  var cvBar = $("cvBar"), cvBody = $("cvBody");
+  cvHead.appendChild(cvBar); cvBar.hidden = false;
+  pCv.appendChild(cvBody); cvBody.hidden = false;
+  /* the board panel always shows the board (no more board/canvas switch inside it) */
+  var seg = pWb.querySelector('.phead .seg'); if(seg) seg.hidden = true;
+  $("wbBody").hidden = false; $("wbNav").hidden = false; mode = "wb"; var wbTools = $("wbTools"); if(wbTools) wbTools.hidden = false;
+  $("pScr").hidden = true; var gb = $("gamesBtn"); if(gb) gb.hidden = true;
+
+  var ORDER = ["cv", "wb", "scr", "games"], PANEL = {cv:pCv, wb:pWb, scr:pSl, games:pGames};
+  var OPEN = store("klas-open");
+  if(!OPEN || typeof OPEN !== "object"){ var mv = store("klas-tab"); OPEN = {cv:false, wb:true, scr:mv === "sl" || mv === "both" || mv === "scr", games:false}; }
+  OPEN.games = false; /* games open when a game starts or on a click */
+  function gamesOn(){ var b = bridge(); return !!(SB && b && b.ui && b.ui.games); }
+  function save(){ store("klas-open", {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:false}); }
+  function setOpen(k, on, why){
+    if(!PANEL[k] || (k === "games" && on && !gamesOn())) return;
+    OPEN[k] = !!on; save(); layout();
+    if(on && window.__camWork) window.__camWork(why || "user");
+  }
+  window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); };
+  window.__klasOpen = function(){ return {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:!!OPEN.games}; };
+  /* compatible API for the rest of the classroom and the app: it only OPENS, never closes the others */
+  window.__klasTab = function(t, why){
+    if(t === "sl" || t === "scr") setOpen("scr", true, why);
+    else if(t === "both"){ OPEN.wb = true; setOpen("scr", true, why); }
+    else if(t === "games") setOpen("games", true, why);
+    else if(t === "cv") setOpen("cv", true, why);
+    else if(t === "wb") setOpen("wb", true, why);
+  };
+  /* canvas/board choice of the teacher still reaches the student: it opens that panel there (it closes nothing) */
+  setMode = function(m, remote){
+    var k = m === "cv" ? "cv" : "wb";
+    if(remote){ if(!OPEN[k]){ OPEN[k] = true; save(); layout(); } return; }
+    setOpen(k, true, "user"); if(isT) send({t:"mode", m:k});
+  };
+
+  layout = function(){
+    if(!gamesOn()) OPEN.games = false;
+    var vis = ORDER.filter(function(k){ return OPEN[k]; });
+    var stackIt = mqPhone.matches || mqPortrait.matches;
+    ORDER.forEach(function(k, i){ PANEL[k].hidden = vis.indexOf(k) < 0; PANEL[k].style.order = String(vis.indexOf(k) * 2); });
+    $("pScr").hidden = true; $("wsEmpty").hidden = vis.length > 0;
+    var two = vis.length === 2 && !stackIt;
+    split.hidden = !two; split.style.order = "1";
+    ws.classList.toggle("stack", stackIt && vis.length > 1);
+    if(two){ ws.style.gridTemplateColumns = (leftFr * 100) + "% 8px 1fr"; ws.style.gridTemplateRows = "minmax(0,1fr)"; }
+    else if(stackIt){ ws.style.gridTemplateColumns = "minmax(0,1fr)"; ws.style.gridTemplateRows = "repeat(" + Math.max(1, vis.length) + ", minmax(0,1fr))"; }
+    else if(vis.length === 4 && ws.clientWidth < 1400){ ws.style.gridTemplateColumns = "repeat(2, minmax(0,1fr))"; ws.style.gridTemplateRows = "repeat(2, minmax(0,1fr))"; }
+    else { ws.style.gridTemplateColumns = "repeat(" + Math.max(1, vis.length) + ", minmax(0,1fr))"; ws.style.gridTemplateRows = "minmax(0,1fr)"; }
+    mview = "-"; /* the v36 single-tab value is no longer used: "new" dots are decided below */
+    store("klas-tab", OPEN.scr ? "sl" : "wb");
+    sync();
+    if(window.__camLayout) window.__camLayout();
+    requestAnimationFrame(function(){ try{ WB.fit(); SL.fit(); }catch(e){} });
+  };
+
+  /* --- bottom bar: exactly four buttons in the middle --- */
+  var dock = document.querySelector(".dock"), grps = dock ? dock.querySelectorAll(".grp") : [], mid = grps[1], rgt = grps[2];
+  var SVG = function(p){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var BTN = {}, sepEl = null;
+  if(mid){
+    mid.querySelectorAll(".navtab,.navsplit,.vsep").forEach(function(x){ x.remove(); }); /* old Video / Slides / Splitsen and the v37 tabs */
+    /* board tools and undo belong to the board panel; "Leerling mag tekenen" moves to the ⋯ menu */
+    var phead = pWb.querySelector(".phead"), tl = mid.querySelector('[title="Gereedschap tonen of verbergen"]'), undo = $("undo");
+    var nav = $("wbNav");
+    [tl, undo].forEach(function(x){ if(!x) return; if(nav && nav.parentNode) nav.parentNode.insertBefore(x, nav); else if(phead) phead.appendChild(x); });
+    var allow = $("allowDraw") && $("allowDraw").closest("label");
+    var dm = rgt && Array.prototype.slice.call(rgt.querySelectorAll("details.popmenu")).filter(function(d){ return d.id !== "aiMenu"; })[0];
+    if(allow && dm) dm.querySelector(".menu-pop").appendChild(allow); else if(allow) allow.hidden = true;
+    function mk(k, icon, label, tip){
+      var x = document.createElement("button"); x.type = "button"; x.className = "db navtab v40"; x.setAttribute("data-open", k);
+      x.innerHTML = SVG(icon) + '<span class="lbl">' + label + '</span>'; x.title = tip; x.setAttribute("aria-label", label); x.setAttribute("aria-pressed", "false");
+      x.addEventListener("click", function(){ x.classList.remove("new"); toggle(k); }); BTN[k] = x; return x;
+    }
+    var first = mid.firstChild;
+    [mk("cv", '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>', "Canvas", "Canvas: samen typen (aan/uit)"),
+     mk("wb", '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', "Bord", "Bord: tekenen (aan/uit)")].forEach(function(x){ mid.insertBefore(x, first); });
+    sepEl = document.createElement("span"); sepEl.className = "vsep v40sep"; sepEl.setAttribute("aria-hidden", "true"); mid.insertBefore(sepEl, first);
+    [mk("scr", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>', "Scherm", "Scherm en slides (aan/uit). Verbergen stopt het delen niet."),
+     mk("games", '<path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><rect x="2" y="6" width="20" height="12" rx="4"/>', "Spelletjes", "Spelletjes: Flashcards, 30 Seconds en Taboe (aan/uit)")].forEach(function(x){ mid.insertBefore(x, first); });
+    /* teacher: start/stop sharing explicitly from the ⋯ menu (hiding the panel never stops the stream) */
+    if(isT && dm){
+      var shareItem = document.createElement("button"); shareItem.type = "button"; shareItem.id = "v40Share";
+      shareItem.addEventListener("click", function(){ dm.open = false; if(screenStream) stopShare(); else if(peer){ setOpen("scr", true, "user"); startShare(); } else toast("Start eerst de les; daarna kun je je scherm delen."); });
+      dm.querySelector(".menu-pop").insertBefore(shareItem, dm.querySelector(".menu-pop").firstChild);
+    }
+  }
+  function toggle(k){
+    if(k === "scr"){
+      if(OPEN.scr){ setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: ⋯ → Scherm delen stoppen."); return; }
+      setOpen("scr", true, "user");
+      /* teacher, nothing to show yet (no shared screen, no slides): start sharing — the browser asks only now */
+      if(isT && peer && !screenStream && !SL.screen && !(SL.key)) startShare();
+      return;
+    }
+    setOpen(k, !OPEN[k], "user");
+    if(OPEN[k] && isT && (k === "cv" || k === "wb")) send({t:"mode", m:k});
+  }
+  function sync(){
+    var full = document.body.classList.contains("cam-full");
+    ORDER.forEach(function(k){ var x = BTN[k]; if(!x) return; var on = !!OPEN[k] && !full; x.setAttribute("aria-pressed", on ? "true" : "false"); if(on) x.classList.remove("new"); });
+    if(BTN.scr) BTN.scr.classList.toggle("live", !!SL.screen || !!screenStream);
+    if(BTN.games) BTN.games.hidden = !gamesOn();
+    var si = $("v40Share"); if(si) si.textContent = screenStream ? "Scherm delen stoppen" : "Scherm delen starten";
+  }
+  window.__klasSyncDock = sync;
+  window.__klasMarkNew = function(which){ var k = which === "sl" || which === "scr" ? "scr" : which === "cv" ? "cv" : which === "games" ? "games" : "wb"; if(!OPEN[k] && BTN[k]) BTN[k].classList.add("new"); };
+  setInterval(sync, 1500); /* sharing state can change from outside (browser "stop sharing" bar) */
+
+  /* --- top bar: timer next to the lesson name, connection as a small dot, one ⋯ menu, one clear leave button --- */
+  var top = document.querySelector(".top"), tbl = top && top.querySelector(".tb-left"), tbr = top && top.querySelector(".tb-right");
+  if(tbl && $("timer")) tbl.appendChild($("timer"));
+  if($("conn")) $("conn").classList.add("conn-dot"); /* text stays for screen readers; the tooltip keeps the TURN diagnostics */
+  var gear = $("moreMenu");
+  if(gear && tbr){
+    var sum = gear.querySelector("summary"); sum.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>'; sum.title = "Meer"; sum.setAttribute("aria-label", "Meer");
+    var pop = $("morePop");
+    tbr.querySelectorAll(".tbbtn").forEach(function(x){ if(gear.contains(x)) return; var label = x.getAttribute("aria-label") || x.title || ""; x.className = "menuitem"; x.innerHTML = x.innerHTML + '<span>' + label + '</span>'; x.addEventListener("click", function(){ gear.open = false; }); pop.appendChild(x); });
+    var leave = $("leaveBtn"); if(leave){ leave.classList.add("leave40"); tbr.insertBefore(leave, gear); }
+    var join = $("joinBtn"); if(join) tbr.insertBefore(join, leave || gear);
+  }
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && gear && gear.open){ gear.open = false; } });
+  document.addEventListener("click", function(e){ if(gear && gear.open && !gear.contains(e.target)) gear.open = false; });
+
+  /* older code reads or sets `panels` ("Slides-paneel sluiten" in the slides menu sets pSl = false): map it onto OPEN */
+  var P = {};
+  Object.defineProperty(P, "pWb", {enumerable:true, get:function(){ return !!OPEN.wb; }, set:function(v){ OPEN.wb = !!v; save(); }});
+  Object.defineProperty(P, "pSl", {enumerable:true, get:function(){ return !!OPEN.scr; }, set:function(v){ OPEN.scr = !!v; save(); }});
+  panels = P;
+  layout();
 })();
 
 })();

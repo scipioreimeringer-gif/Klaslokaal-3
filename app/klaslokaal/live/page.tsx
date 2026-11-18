@@ -87,7 +87,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
    {/* always mounted: receives the game state even while closed (the student's panel opens when a game starts) */}
-   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasTab','wb','user');else setGamesOpen(false)}}/>
+   <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasToggle','games',false);else setGamesOpen(false)}}/>
   </div>
  </main>;
 }
