@@ -653,7 +653,20 @@ body .top .conn.conn-dot:before{display:none}
 .cvpop-swatches .sw.none{background:linear-gradient(135deg,#fff 45%,#d0523a 46%,#d0523a 54%,#fff 55%)!important}
 .cv .b[data-t="h2"]{font-weight:750;font-size:1.22em;line-height:1.3;margin:.4em 0 .15em}
 .cv .b[data-t="h3"]{font-weight:700;font-size:1.08em;line-height:1.3;margin:.35em 0 .1em}
-@media(prefers-reduced-motion:reduce){.cvpop{animation:none}.cvtb .tbb,.cvpop-item,.cvpop-swatches .sw{transition:none}}</style>
+@media(prefers-reduced-motion:reduce){.cvpop{animation:none}.cvtb .tbb,.cvpop-item,.cvpop-swatches .sw{transition:none}}
+/* v42: shared screen — wheel/drag move through a zoomed view without scrolling the classroom */
+#slBody{overscroll-behavior:contain;touch-action:none}
+#slBody.zoom-pan{cursor:grab}#slBody.is-panning{cursor:grabbing}
+.zoom-controls .zoomfit{display:inline-grid;place-items:center}
+/* v42: status dot colours — grey nobody, green student present, orange reconnecting, red failed */
+body .top .conn.conn-dot[data-state="ok"]{background:#2fd08f!important}
+body .top .conn.conn-dot[data-state="reconnect"]{background:#f5a524!important;animation:dotpulse 1.2s ease-in-out infinite}
+body .top .conn.conn-dot[data-state="error"]{background:#e5484d!important}
+body .top .conn.conn-dot[data-state="idle"]{background:#c3ccd0!important}
+body .top .conn.conn-dot:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@keyframes dotpulse{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){body .top .conn.conn-dot[data-state="reconnect"]{animation:none}}
+.tb-left .timer{font-variant-numeric:tabular-nums}</style>
 </head>
 <body>
 
@@ -751,6 +764,7 @@ body .top .conn.conn-dot:before{display:none}
         <button class="ib" id="zoomOut" type="button" title="Uitzoomen">−</button>
         <button class="zoom-level" id="zoomReset" type="button" title="Zoom terug naar 100%">100%</button>
         <button class="ib" id="zoomIn" type="button" title="Inzoomen">+</button>
+        <button class="ib zoomfit" id="zoomFit" type="button" title="Passend maken: het hele scherm zichtbaar" aria-label="Passend maken"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
       </div>
       <div class="pnav">
         <button class="ib" id="slPrev" data-teacher type="button" title="Vorige slide (pijltje links)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
@@ -1080,6 +1094,28 @@ function copy(text, msg){ (navigator.clipboard ? navigator.clipboard.writeText(t
 
 /* =================================================================== VERBINDING */
 var peer = null, local = null, conns = {}, calls = {}, tConn = null, tCall = null, remoteStreams = {};
+/* v42: lesson timer start (shared with the student) and connection health for the status dot */
+var lessonStart = 0, peerErr = "", ICE_ST = {};
+function fixLessonStart(){
+  /* the planned start from the agenda when the lesson has begun (a late teacher sees the real elapsed time), else the
+     moment the teacher starts; kept on this device so a refresh continues, never one request per second */
+  var b = bridge(), planned = b && b.lessonStartsAt ? Date.parse(b.lessonStartsAt) : 0, now = Date.now();
+  var key = "klas-start-" + (ROOM || "x") + (planned ? "-" + planned : "");
+  var s = store(key);
+  if(s && s.at && s.at <= now && now - s.at < 6 * 3600e3){ lessonStart = s.at; return; }
+  lessonStart = planned && planned <= now && now - planned < 4 * 3600e3 ? planned : now;
+  store(key, {at:lessonStart});
+}
+function presence(){
+  var n = isT ? Object.keys(conns).filter(function(id){ return conns[id].open; }).length : (online() ? 1 : 0);
+  var ices = Object.keys(ICE_ST).map(function(k){ return ICE_ST[k]; }), st, txt;
+  if(!peer){ st = "idle"; txt = isT ? "les niet gestart" : "niet verbonden"; }
+  else if(peer.destroyed || /network|server-error|socket-error|browser-incompatible|ssl-unavailable/.test(peerErr) || ices.indexOf("failed") >= 0){ st = "error"; txt = "verbinding mislukt"; }
+  else if(peer.disconnected || ices.indexOf("disconnected") >= 0){ st = "reconnect"; txt = "verbinding wordt hersteld"; }
+  else if(n > 0){ st = "ok"; txt = isT ? (n === 1 ? "1 leerling aanwezig" : n + " leerlingen aanwezig") : "verbonden met je docent"; }
+  else { st = "idle"; txt = isT ? "geen leerling aanwezig" : "wachten op je docent"; }
+  return {n:n, st:st, txt:txt};
+}
 var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = store("klas-self") !== false, retryT = null, myName = "";
 var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40) : "";
 var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
@@ -1105,7 +1141,8 @@ function onMessage(m){
   if(!m || !m.t) return;
   switch(m.t){
     case "bye": if(!isT){ removeRemote("docent"); status("Je docent heeft de les verlaten", "Zodra je docent de les weer start, ga je vanzelf verder."); } break;
-    case "hello": if(isT){ sendState(); var gh = bridge(); if(gh && gh.onPeerHello) try{ gh.onPeerHello(); }catch(e){} } break;
+    case "lstart": if(!isT && m.at && m.at <= Date.now() + 60000) lessonStart = +m.at; break; /* v42: the teacher's lesson start */
+    case "hello": if(isT){ sendState(); if(lessonStart) send({t:"lstart", at:lessonStart}); var gh = bridge(); if(gh && gh.onPeerHello) try{ gh.onPeerHello(); }catch(e){} } break;
     case "game": var gb = bridge(); if(gb && gb.onGame) try{ gb.onGame(m); }catch(e){} break;
     case "slide": incomingSlide(m); break;
     case "chunk": incomingChunk(m); break;
@@ -1290,7 +1327,7 @@ function watchIce(c, id){
   var pc = c.peerConnection; if(!pc) return;
   var lost = 0;
   pc.addEventListener("iceconnectionstatechange", function(){
-    var st = pc.iceConnectionState; clearTimeout(lost);
+    var st = pc.iceConnectionState; clearTimeout(lost); ICE_ST[id] = st;
     if(st === "connected" || st === "completed"){ capVideo(pc); setTimeout(function(){ detectRoute(pc); }, 800); }
     /* teacher: a student whose call is gone (closed, or interrupted for 12 s) is cleaned up; the teacher stays */
     if(isT && calls[id] === c){
@@ -1355,10 +1392,11 @@ function startTeacher(){
 function startTeacher2(){
   status("Even geduld", "Camera en microfoon aanzetten...");
   getMedia().then(function(stream){
-    local = stream; afterJoin();
+    local = stream; afterJoin(); fixLessonStart();
     peer = new Peer(TEACHER_ID, {config:ICE, debug:0});
-    peer.on("open", function(){ status("Wachten op je leerling", 'Lescode: ' + ROOM + '. Klik op "Link voor leerling" en stuur die link.'); });
+    peer.on("open", function(){ peerErr = ""; status("Wachten op je leerling", 'Lescode: ' + ROOM + '. Klik op "Link voor leerling" en stuur die link.'); });
     peer.on("error", function(err){
+      peerErr = err.type;
       if(err.type === "unavailable-id") status("Les staat al open", "Deze les is al open in een ander tabblad of op een ander apparaat. Sluit die eerst.");
       else if(err.type === "network" || err.type === "server-error" || err.type === "socket-error") status("Geen verbinding", "Kan de server niet bereiken (" + err.type + "). Check je internet of zet een adblocker uit.");
       else status("Fout", "Foutcode: " + err.type + ". Ververs de pagina en klik opnieuw op Start de les.");
@@ -1392,7 +1430,7 @@ function dropStudent(id, said){
   if(!isT || !id) return;
   var had = !!(conns[id] || calls[id] || remoteStreams[id]);
   var c = conns[id], k = calls[id], s = scrCalls[id];
-  delete conns[id]; delete calls[id]; delete scrCalls[id]; delete remoteStreams[id];
+  delete conns[id]; delete calls[id]; delete scrCalls[id]; delete remoteStreams[id]; delete ICE_ST[id];
   [c, k, s].forEach(function(x){ try{ if(x && x.open !== false) x.close(); }catch(e){} });
   removeRemote(id);
   if(REC.on && !online()){ recStop(); toast("Je leerling is weg: opname gestopt en opgeslagen"); }
@@ -1416,7 +1454,7 @@ function startStudent2(){
   getMedia().then(function(stream){
     local = stream; afterJoin();
     peer = new Peer(undefined, {config:ICE, debug:0});
-    peer.on("open", connectTeacher);
+    peer.on("open", function(){ peerErr = ""; connectTeacher(); });
     peer.on("call", function(c){
       if(!(c.metadata && c.metadata.type === "screen")) return;
       c.answer();
@@ -1425,6 +1463,7 @@ function startStudent2(){
       watchIce(c, "scherm");
     });
     peer.on("error", function(err){
+      peerErr = err.type === "peer-unavailable" ? "" : err.type; /* teacher not there yet is not an error */
       if(err.type === "peer-unavailable"){ status("Je docent is er nog niet", "We zoeken les " + ROOM + " en proberen het elke 5 seconden opnieuw."); retry(); }
       else if(err.type === "network" || err.type === "server-error" || err.type === "socket-error"){ status("Geen verbinding", "Kan de server niet bereiken (" + err.type + "). Check je internet."); retry(); }
       else { status("Fout", "Foutcode: " + err.type + ". We proberen het opnieuw."); retry(); }
@@ -1461,7 +1500,7 @@ function leave(){
   try{ if(tConn) tConn.close(); if(tCall) tCall.close(); }catch(e){}
   try{ if(peer) peer.destroy(); }catch(e){}
   if(local) local.getTracks().forEach(function(t){ t.stop(); });
-  peer = null; local = null; conns = {}; calls = {}; remoteStreams = {}; tConn = null; tCall = null; queue = []; joinedAt = 0;
+  peer = null; local = null; conns = {}; calls = {}; remoteStreams = {}; tConn = null; tCall = null; queue = []; joinedAt = 0; lessonStart = 0; ICE_ST = {}; peerErr = "";
   $("remotes").innerHTML = ""; $("selfV").srcObject = null; $("vTitle").textContent = "Video";
   status("Je bent uit de les", isT ? 'Klik op "Start de les" om opnieuw te beginnen.' : 'Klik op "Naar de les" om terug te gaan.');
   $("joinBtn").hidden = false; $("leaveBtn").hidden = true;
@@ -1484,19 +1523,25 @@ $("selfBtn").addEventListener("click", function(){
   $("selfV").hidden = !selfView || !local;
 });
 setInterval(function(){
-  var n = isT ? Object.keys(conns).filter(function(id){ return conns[id].open; }).length : (online() ? 1 : 0);
+  /* v42: grey = nobody, green = a student really connected (open data channel, not just an opened link),
+     orange = reconnecting, red = failed. Text stays for screen readers; tooltip/tap shows the details. */
+  var p = presence(), n = p.n;
   var c = $("conn");
-  var srv = peer && !peer.destroyed && !peer.disconnected && peer.open !== false;
-  c.textContent = isT ? (peer ? (srv ? (n === 1 ? "1 leerling verbonden" : n + " leerlingen verbonden") : "server niet bereikt") : "niet gestart") : (n ? "verbonden met docent" : "niet verbonden");
+  c.textContent = p.txt; c.setAttribute("data-state", p.st);
   c.title = "Lescode: " + (ROOM || "-") + " · TURN: " + turnText() + (netRoute ? " · verbinding: " + netRoute : "") + (RELAY_TEST ? " · TURN-testmodus" : "");
-  c.classList.toggle("ok", n > 0);
-  if(!joinedAt){ $("timer").textContent = "00:00"; return; }
-  var s = Math.floor((Date.now() - joinedAt) / 1000);
-  $("timer").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  c.title = p.txt + " · " + c.title;
+  c.classList.toggle("ok", p.st === "ok");
+  /* v42: the lesson timer runs from the shared lesson start (planned or teacher start), else from joining */
+  var since = lessonStart || joinedAt;
+  if(!since || !peer){ $("timer").textContent = "00:00"; return; }
+  var s = Math.max(0, Math.floor((Date.now() - since) / 1000)), h = Math.floor(s / 3600);
+  $("timer").textContent = (h ? h + ":" + String(Math.floor(s / 60) % 60).padStart(2, "0") : String(Math.floor(s / 60)).padStart(2, "0")) + ":" + String(s % 60).padStart(2, "0");
 }, 1000);
 setInterval(function(){
   if(peer && !peer.destroyed && peer.disconnected){ try{ peer.reconnect(); }catch(e){} }
 }, 8000);
+/* v42: tap (or Enter) on the status dot shows the details as a small message */
+(function(){ var c = $("conn"); if(!c) return; c.tabIndex = 0; c.setAttribute("role", "button"); function show(){ toast(c.title); } c.addEventListener("click", show); c.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); show(); } }); })();
 if(!isT && !ROOM) status("Verkeerde link", "Vraag je docent om de link van de les opnieuw te sturen.");
 else if(!isT) status(undefined, 'Klik bovenaan op "Naar de les".');
 
@@ -1687,13 +1732,27 @@ var slides = [], pdfDoc = null;
   }
   function setZoom(v){ scale = clamp(Math.round(v * 100) / 100, 1, 4); if(scale === 1){ panX = 0; panY = 0; } update(); }
   window.__slZoom = setZoom; window.__slScale = function(){ return scale; };
+  /* v42: pan from outside (two-finger gesture on touch screens) */
+  window.__slPan = function(dx, dy){ if(scale <= 1) return; panX += dx; panY += dy; update(); };
+  $("zoomFit").addEventListener("click", function(){ setZoom(1); });
   $("zoomIn").addEventListener("click", function(){ setZoom(scale + .25); });
   $("zoomOut").addEventListener("click", function(){ setZoom(scale - .25); });
   label.addEventListener("click", function(){ setZoom(1); });
   body.addEventListener("wheel", function(e){
-    if(!e.ctrlKey && !e.metaKey) return;
-    e.preventDefault(); setZoom(scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+    /* Ctrl/⌘ + wheel = zoom; plain wheel (and Shift = sideways) moves through a zoomed view, never the whole classroom */
+    if(e.ctrlKey || e.metaKey){ e.preventDefault(); setZoom(scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)); return; }
+    if(scale <= 1) return;
+    e.preventDefault();
+    var dx = e.shiftKey ? e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY, k = e.deltaMode === 1 ? 32 : 1;
+    panX -= dx * k; panY -= dy * k; update();
   }, {passive:false});
+  /* v42: drag with the mouse (left button) to move through a zoomed SHARED SCREEN (slides keep Shift+drag, so drawing stays possible) */
+  body.addEventListener("pointerdown", function(e){
+    if(scale <= 1 || !SL.screen || e.pointerType !== "mouse" || e.button !== 0 || e.shiftKey || active) return;
+    e.preventDefault(); e.stopPropagation();
+    active = {id:e.pointerId, x:e.clientX, y:e.clientY};
+    body.setPointerCapture(e.pointerId); body.classList.add("is-panning");
+  }, true);
   /* Pan with middle mouse, or Shift+drag; ordinary drawing stays available. */
   body.addEventListener("pointerdown", function(e){
     if(scale <= 1 || !(e.button === 1 || (e.shiftKey && e.button === 0))) return;
@@ -2896,7 +2955,11 @@ if(isT){
     var bodyEl = $("slBody"), pts = {}, start = null;
     function dist(){ var k = Object.keys(pts); if(k.length < 2) return 0; var a = pts[k[0]], c = pts[k[1]]; return Math.hypot(a[0] - c[0], a[1] - c[1]); }
     bodyEl.addEventListener("pointerdown", function(e){ if(e.pointerType !== "touch") return; pts[e.pointerId] = [e.clientX, e.clientY]; if(Object.keys(pts).length === 2 && window.__slScale){ start = {d:dist(), s:window.__slScale()}; } }, true);
-    bodyEl.addEventListener("pointermove", function(e){ if(!pts[e.pointerId]) return; pts[e.pointerId] = [e.clientX, e.clientY]; if(start && start.d){ e.preventDefault(); e.stopPropagation(); window.__slZoom(start.s * dist() / start.d); } }, true);
+    function mid(){ var k = Object.keys(pts); if(k.length < 2) return null; return [(pts[k[0]][0] + pts[k[1]][0]) / 2, (pts[k[0]][1] + pts[k[1]][1]) / 2]; }
+    var lastMid = null;
+    bodyEl.addEventListener("pointermove", function(e){ if(!pts[e.pointerId]) return; pts[e.pointerId] = [e.clientX, e.clientY]; if(start && start.d){ e.preventDefault(); e.stopPropagation(); window.__slZoom(start.s * dist() / start.d);
+      /* v42: two fingers also move the zoomed view */
+      var m = mid(); if(m && lastMid && window.__slPan) window.__slPan(m[0] - lastMid[0], m[1] - lastMid[1]); lastMid = m; } else lastMid = null; }, true);
     function up(e){ delete pts[e.pointerId]; if(Object.keys(pts).length < 2) start = null; }
     bodyEl.addEventListener("pointerup", up, true); bodyEl.addEventListener("pointercancel", up, true);
   })();
@@ -3195,6 +3258,9 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   function save(){ store("klas-open", {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:false}); }
   function setOpen(k, on, why){
     if(!PANEL[k] || (k === "games" && on && !gamesOn())) return;
+    /* v42: panels "open" behind the full video were not visible: opening one shows ONLY that one
+       (this is why Scherm used to bring the board along). Nothing is deleted; the others are just closed. */
+    if(on && document.body.classList.contains("cam-full")) ORDER.forEach(function(x){ if(x !== k) OPEN[x] = false; });
     OPEN[k] = !!on; save(); layout();
     if(on && window.__camWork) window.__camWork(why || "user");
   }
@@ -3271,16 +3337,19 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     }
   }
   function toggle(k){
-    /* v41: while the video is full, an "open" panel is not visible: the first click shows it (it does not close it) */
-    if(OPEN[k] && document.body.classList.contains("cam-full")){ if(window.__camWork) window.__camWork("user"); sync(); return; }
+    /* v41/v42: while the video is full no panel is visible: a click opens (only) this panel, it never closes it */
+    var full = document.body.classList.contains("cam-full");
     if(k === "scr"){
-      if(OPEN.scr){ setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: ⋯ → Scherm delen stoppen."); return; }
+      if(OPEN.scr && !full){
+        /* v42: sharing is stopped only on an explicit choice; otherwise the panel is just hidden and the stream keeps going */
+        if(screenStream && confirm("Scherm delen stoppen?\n\nOK = delen stoppen · Annuleren = alleen het paneel verbergen")){ stopShare(); setOpen("scr", false); return; }
+        setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: ⋯ → Scherm delen stoppen."); return; }
       setOpen("scr", true, "user");
       /* teacher, nothing to show yet (no shared screen, no slides): start sharing — the browser asks only now */
       if(isT && peer && !screenStream && !SL.screen && !(SL.key)) startShare();
       return;
     }
-    setOpen(k, !OPEN[k], "user");
+    setOpen(k, full ? true : !OPEN[k], "user");
     if(OPEN[k] && isT && (k === "cv" || k === "wb")) send({t:"mode", m:k});
   }
   function sync(){

@@ -1116,4 +1116,11 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Natuur": ["Nature","Natureza","Naturaleza","Nature","Natur"],
  "Gevoelens": ["Feelings","Sentimentos","Sentimientos","Sentiments","Gefühle"],
  "Aangevuld met woorden uit de ingebouwde woordenbank.": ["Topped up with words from the built-in word bank.","Completado com palavras do banco de palavras integrado.","Completado con palabras del banco de palabras integrado.","Complété avec des mots de la banque de mots intégrée.","Mit Wörtern aus der eingebauten Wortbank ergänzt."],
+ "geen woordenbank voor deze taal": ["no word bank for this language","sem banco de palavras para este idioma","sin banco de palabras para este idioma","pas de banque de mots pour cette langue","keine Wortbank für diese Sprache"],
+ "Richting": ["Direction","Direção","Dirección","Sens","Richtung"],
+ "{0} → Engels": ["{0} → English","{0} → Inglês","{0} → Inglés","{0} → Anglais","{0} → Englisch"],
+ "Engels → {0}": ["English → {0}","Inglês → {0}","Inglés → {0}","Anglais → {0}","Englisch → {0}"],
+ "Betekenis tonen": ["Show meaning","Mostrar significado","Mostrar significado","Afficher le sens","Bedeutung zeigen"],
+ "Lestaal → Engels": ["Lesson language → English","Idioma da aula → Inglês","Idioma de la clase → Inglés","Langue du cours → Anglais","Unterrichtssprache → Englisch"],
+ "Engels → Lestaal": ["English → Lesson language","Inglês → Idioma da aula","Inglés → Idioma de la clase","Anglais → Langue du cours","Englisch → Unterrichtssprache"],
 };

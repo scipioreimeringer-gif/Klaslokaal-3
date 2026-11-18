@@ -2,7 +2,7 @@ import {authUser, enforceLimit, HttpError, jsonError, langName, type UsageCtx} f
 import {studentAccess, subjectCode} from '../../../../lib/server/context';
 import {tabooFor} from '../../../../lib/server/vocab';
 import {pickRound, selectWords, type Selection, type Word} from '../../../../lib/vocab/core';
-import {BANKS, bankPool, hasBank, isCat, isLevel, pickBank, termKey, widen, type BankFilter, type BankItem} from '../../../../lib/wordbank';
+import {BANKS, bankPool, hasBank, loadBank, isCat, isLevel, pickBank, termKey, widen, type BankFilter, type BankItem} from '../../../../lib/wordbank';
 
 type Card = {vocab_id: string | null; bank_id?: string; term: string; hint: string; forbidden: string[]};
 
@@ -30,7 +30,8 @@ export async function POST(req: Request) {
     if (b.source === 'bank') {
       /* ---------- built-in word bank ---------- */
       const lang = subjectCode(student);
-      if (!hasBank(lang)) throw new HttpError(400, 'De ingebouwde woordenbank is er nu alleen voor Nederlands.');
+      if (!hasBank(lang)) throw new HttpError(400, 'De ingebouwde woordenbank is er voor Nederlands en Portugees (Brazilië).');
+      await loadBank(lang); // v42: only this lesson language is loaded
       const f: BankFilter = {level: isLevel(b.level) ? b.level : 'mix', cat: isCat(b.category) ? b.category : 'all', minTaboo: kind === 'taboo' ? taboo : 0};
       const pool = bankPool(lang, f);
       if (pool.length < count) return Response.json({tooFew: true, available: pool.length, canWiden: !!widen(f)}); // never a silent fallback
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       const pool = selectWords((data || []) as Word[], sel).filter(w => w.term.trim());
       // v41: too few personal words → top up with built-in words when asked (fillBank), never silently
       const lang = subjectCode(student), canFill = b.fillBank === true && hasBank(lang);
+      await loadBank(lang); // for topping up and for the checked forbidden words (no-op for other languages)
       if (pool.length < count && !canFill) return Response.json({tooFew: true, available: pool.length, canWiden: false});
       const used = await db.rpc('game_used_words', {p_session: sessionId, p_student: student.id});
       if (used.error) throw new HttpError(400, /game_used_words/.test(used.error.message) ? 'Voer eerst supabase/v35.sql uit.' : used.error.message);

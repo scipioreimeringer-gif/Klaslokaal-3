@@ -17,7 +17,7 @@ test('bottom bar middle: exactly Canvas | Bord │ Scherm | Spelletjes; old Vide
   assert.match(mod, /\[tl, undo\]\.forEach/, 'board tools and undo moved to the board panel');
 });
 test('every button is a toggle; opening one never closes another; closing deletes nothing', () => {
-  assert.match(mod, /setOpen\(k, !OPEN\[k\], "user"\)/);
+  assert.match(mod, /setOpen\(k, full \? true : !OPEN\[k\], "user"\)/, 'v42: a click while the video is full only opens');
   assert.match(mod, /window\.__klasTab = function\(t, why\)\{ \/\* compatible API|window\.__klasTab = function\(t, why\)\{/);
   const tab = mod.slice(mod.indexOf('window.__klasTab = function'), mod.indexOf('setMode = function'));
   assert.ok(!/, false/.test(tab), '__klasTab only opens');
@@ -32,7 +32,8 @@ test('Canvas and Bord separately or together (canvas is its own panel: same edit
   assert.match(mod, /ws\.style\.gridTemplateColumns = \(leftFr \* 100\) \+ "% 8px 1fr"/);
 });
 test('screen: hiding the panel is not stopping the stream; explicit start/stop in the ⋯ menu', () => {
-  assert.match(mod, /if\(OPEN\.scr\)\{ setOpen\("scr", false\); if\(screenStream\) toast\(/);
+  assert.match(mod, /if\(screenStream && confirm\("Scherm delen stoppen\?/, 'v42: stopping is an explicit choice');
+  assert.match(mod, /setOpen\("scr", false\); if\(screenStream\) toast\(/, 'otherwise only the panel is hidden');
   assert.match(mod, /if\(screenStream\) stopShare\(\); else if\(peer\)\{ setOpen\("scr", true, "user"\); startShare\(\); \}/);
 });
 test('sync kept: the teacher opening Canvas/Bord still reaches the student (opens there, closes nothing)', () => {

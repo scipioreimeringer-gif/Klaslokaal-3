@@ -12,6 +12,8 @@ import {authedPost} from '../lib/learning';
 import {newGame,reduce,remaining,wire,fromWire,flashSummary,type Action,type GameState,type Kind,type Role} from '../lib/games/state';
 import {selectWords,type Selection,type Word} from '../lib/vocab/core';
 import {Select} from './Select';
+import {languageName} from '../lib/languages';
+const langLabel=(l:string)=>l?languageName(l):tt('Lestaal');
 import {t as tt} from '../lib/i18n';
 
 type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidden:string[]};
@@ -46,6 +48,8 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  const [source,setSource]=useState<Source|null>(null);const [bank,setBank]=useState<BankMod|null>(null);const [bankLang,setBankLang]=useState('');
  const [level,setLevel]=useState<BankLevelSel>('mix');const [cat,setCat]=useState<BankCatSel>('all');const [aiTaboo,setAiTaboo]=useState(false);const [fill,setFill]=useState(true);
  const [widen,setWiden]=useState(false);const [notice,setNotice]=useState('');
+ // v42: flashcards lesson language → English (default) or English → lesson language; translations hidden during a guessing round
+ const [dir,setDir]=useState<'to-en'|'from-en'>('to-en');const [shown,setShown]=useState<Set<number>>(new Set());
 
  /* ---------- host: apply + broadcast ---------- */
  const apply=useCallback((a:Action,actor:Role)=>{const s=ref.current;if(!s)return;const n=reduce(s,a,actor,Date.now());if(n===s)return;
@@ -78,7 +82,8 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  useEffect(()=>{if(!host||!open||bank)return;let c=false;void(async()=>{const m=await import('../lib/wordbank');
   const r=await supabase()!.from('students').select('curriculum_subject,subject,lesson_language,level').eq('id',studentId).maybeSingle();
   const row=(r.error?(await supabase()!.from('students').select('subject,lesson_language,level').eq('id',studentId).maybeSingle()).data:r.data) as {curriculum_subject?:string|null;subject?:string|null;lesson_language?:string|null;level?:string|null}|null;
-  if(c)return;const lang=m.bankLangFor(row||{});setBank(m);setBankLang(lang);if(m.isLevel(row?.level))setLevel(row!.level as BankLevelSel)})();return()=>{c=true}},[host,open,bank,studentId]);
+  const lang=m.bankLangFor(row||{});await m.loadBank(lang); // v42: only the lesson language is loaded
+  if(c)return;setBank(m);setBankLang(lang);if(m.isLevel(row?.level))setLevel(row!.level as BankLevelSel)})();return()=>{c=true}},[host,open,bank,studentId]);
  const bankOk=!!bank&&bank.hasBank(bankLang);
  // default: random words from the bank (a game can start right away); personal words when the language has no bank
  const src:Source=source||(bankOk?'bank':'list');
@@ -94,8 +99,11 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  async function start(){setMsg('');setFew(null);const id=crypto.randomUUID();
   if(kind==='flash'){
    // personal cards (+ bank cards to top up), or bank cards only; the back shows the meaning or the words to describe it
-   const mine=src==='bank'?[]:pool.slice(0,30).map(w=>({id:w.id,term:w.term,back:w.translation,example:w.example}));
-   const fromBank=(src==='bank'||canFill)&&bank?bank.pickBank(bankPool,Math.max(0,(src==='bank'?20:Math.min(20,Math.max(10,mine.length)))-mine.length),new Set(),Math.random).map(w=>({id:w.id,term:w.term,back:w.meaning||('≈ '+w.taboo.join(', ')),example:''})):[];
+   // front = lesson language, back = English (stored translation; never generated here) — or the other way round
+   const rev=dir==='from-en';
+   const mine=src==='bank'?[]:pool.filter(w=>!rev||w.translation.trim()).slice(0,30).map(w=>rev?{id:w.id,term:w.translation,back:w.term,example:w.example}:{id:w.id,term:w.term,back:w.translation,example:w.example});
+   const fromBank=(src==='bank'||canFill)&&bank?bank.pickBank(bankPool.filter(w=>w.en),Math.max(0,(src==='bank'?20:Math.min(20,Math.max(10,mine.length)))-mine.length),new Set(),Math.random)
+    .map(w=>rev?{id:w.id,term:w.en,back:w.term,example:bank.bankGrammar(w)}:{id:w.id,term:w.term,back:w.en,example:bank.bankGrammar(w)}):[];
    const cardsF=[...mine,...fromBank];
    if(!cardsF.length){setMsg(tt('Er zijn nog geen woorden in deze selectie. Voeg woorden toe in de Woordenlijst.'));return}
    const s=newGame(id,'flash',{cards:cardsF});ref.current=s;setState(s);broadcast(s);return}
@@ -114,6 +122,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  /* ---------- explainer: load the round's cards (RLS: only the explainer can read them) ---------- */
  useEffect(()=>{const rid=state?.roundId;if(!explaining||!rid||cards?.roundId===rid)return;let c=false;
   void supabase()!.from('game_rounds').select('cards').eq('id',rid).maybeSingle().then(({data})=>{if(!c&&data)setCards({roundId:rid,cards:(data as {cards:Card[]}).cards})});return()=>{c=true}},[explaining,state?.roundId,cards?.roundId]);
+ useEffect(()=>{setShown(new Set())},[state?.roundId]); // a new round starts with all meanings hidden again
  function guessed(i:number){const c=cards?.cards[i];act({a:'guessed',index:i});if(c?.vocab_id&&state?.roundId)void supabase()!.rpc('game_mark_guessed',{p_round:state.roundId,p_vocab:c.vocab_id})}
 
  if(!open&&!mount)return null;
@@ -126,7 +135,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
   if(!host)return <aside className={'games-panel gx gx-'+accent} aria-live="polite">{head}<div className="gx-wait"><Deco/><p>{state?.phase==='ended'?tt('Het spel is afgelopen.'):tt('Je docent start zo een spel.')}</p>{state&&<Score s={state}/>}</div></aside>;
  }
  if(host&&(!state||state.phase==='ended')){
-  const srcOpts=[{value:'bank' as Source,label:tt('Willekeurig'),icon:<Dices size={15}/>,hint:bankOk?tt('ingebouwde woordenbank'):tt('woordenbank alleen voor Nederlands'),disabled:!bankOk},
+  const srcOpts=[{value:'bank' as Source,label:tt('Willekeurig'),icon:<Dices size={15}/>,hint:bankOk?tt('ingebouwde woordenbank'):tt('geen woordenbank voor deze taal'),disabled:!bankOk},
    {value:'list' as Source,label:tt('Mijn woordenlijst'),icon:<BookOpen size={15}/>,hint:tt('{0} woorden',words.length)},
    {value:'lesson' as Source,label:tt('Woorden uit de les'),icon:<Sparkles size={15}/>,hint:tt('vorige les')}];
   return <aside className={'games-panel gx gx-'+accent}>{head}
@@ -138,6 +147,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
    {src==='bank'&&bank&&<>
     <Select<BankLevelSel> size="sm" label={tt('Niveau')} value={level} onChange={setLevel} icon={<GraduationCap size={14}/>} options={(['mix',...bank.BANK_LEVELS] as BankLevelSel[]).map(l=>({value:l,label:tt(bank.LEVEL_LABEL[l])}))}/>
     <Select<BankCatSel> size="sm" label={tt('Categorie')} value={cat} onChange={setCat} options={(['all',...bank.BANK_CATS] as BankCatSel[]).map(c=>({value:c,label:tt(bank.CAT_LABEL[c])}))}/></>}
+   {kind==='flash'&&<Select<'to-en'|'from-en'> size="sm" label={tt('Richting')} value={dir} onChange={setDir} icon={<Repeat2 size={14}/>} options={[{value:'to-en',label:tt('{0} → Engels',langLabel(bankLang))},{value:'from-en',label:tt('Engels → {0}',langLabel(bankLang))}]}/>}
    {src==='list'&&<Select<Selection['mode']> size="sm" label={tt('Welke woorden?')} value={sel.mode} onChange={m=>setSel({mode:m})} options={(Object.keys(SEL_LABEL) as Selection['mode'][]).map(k=>({value:k,label:tt(SEL_LABEL[k])}))}/>}
    {kind!=='flash'&&<>
     <Select<30|60|90> size="sm" label={tt('Tijd')} value={duration} onChange={setDuration} icon={<Timer size={14}/>} options={([30,60,90] as const).map(d=>({value:d,label:tt('{0} sec',d)}))}/>
@@ -187,7 +197,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
   {host&&notice&&<p className="muted small">{notice}</p>}
   {(s.phase==='ready'||s.phase==='running'||s.phase==='paused')&&(explaining?
    <div className="gx-cards">{!cards||cards.roundId!==s.roundId?<div className="loader small"/>:cards.cards.map((c,i)=><div key={c.vocab_id||c.bank_id||i} className={'gx-card'+(s.guessed.includes(i)?' done':'')}>
-     <div className="grow"><b className="gx-word">{c.term}</b>{c.hint&&<small className="muted block">{c.hint}</small>}{!!c.forbidden.length&&<small className="gx-forbidden"><Ban size={12}/> {c.forbidden.join(' · ')}</small>}</div>
+     <div className="grow"><b className="gx-word">{c.term}</b>{c.hint&&(shown.has(i)?<small className="muted block">{c.hint}</small>:<button type="button" className="gx-reveal" onClick={()=>setShown(x=>new Set(x).add(i))}>{tt('Betekenis tonen')}</button>)}{!!c.forbidden.length&&<small className="gx-forbidden"><Ban size={12}/> {c.forbidden.join(' · ')}</small>}</div>
      {s.phase==='running'&&(s.guessed.includes(i)?<button className="gx-round" title={tt('Ongedaan maken')} aria-label={tt('Ongedaan maken')} onClick={()=>act({a:'undo',index:i})}><RotateCcw size={14}/></button>:<button className="gx-good small" onClick={()=>guessed(i)}><Check size={14}/> {tt('Geraden')}</button>)}</div>)}
     <p className="muted small">{s.kind==='taboo'?tt('Leg uit zonder het woord zelf en zonder de verboden woorden te gebruiken.'):tt('Leg uit zonder het woord zelf te noemen.')}</p></div>
    :<div className="gx-guess"><Deco/><strong>{tt('{0} van {1} geraden',s.guessed.length,s.cardCount)}</strong><p className="muted">{s.explainer==='teacher'?tt('Je docent legt uit. Raad de woorden!'):tt('Je leerling legt uit. Raad de woorden!')}</p></div>)}

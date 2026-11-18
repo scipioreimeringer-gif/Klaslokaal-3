@@ -5,6 +5,8 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {BANKS, BANK_CATS, BANK_LEVELS, CAT_LABEL, bankPool, pickBank, widen, hasBank, bankLangFor, isCat, isLevel} from '../../lib/wordbank/index.ts';
+import {loadBank} from '../../lib/wordbank/index.ts';
+await loadBank('nl'); // v42: banks are loaded per language
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const nl = BANKS.nl;
@@ -49,8 +51,8 @@ test('too few words → widen step by step (category, then level), never silentl
   assert.equal(widen({level: 'mix', cat: 'all'}), null);
   assert.equal(bankPool('nl', {level: 'A1', cat: 'proverb'}).length, 0, 'A1 has no proverbs: the route answers tooFew + canWiden');
 });
-test('language of the student decides the bank; only Dutch has one for now', () => {
-  assert.ok(hasBank('nl')); assert.ok(!hasBank('pt')); assert.ok(!hasBank(null));
+test('language of the student decides the bank; Dutch and Brazilian Portuguese have one (v42)', () => {
+  assert.ok(hasBank('nl')); assert.ok(hasBank('pt')); assert.ok(!hasBank('en')); assert.ok(!hasBank(null));
   assert.equal(bankLangFor({curriculum_subject: 'pt'}), 'pt');
   assert.equal(bankLangFor({subject: 'Nederlands NT2'}), 'nl');
   assert.ok(isCat('travel') && isCat('all') && !isCat('sayings') && !isCat('x'));

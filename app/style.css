@@ -941,3 +941,6 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .gx-flip .face strong{font-size:clamp(24px,4vw,34px)}
 @media(max-width:560px){.gx-kinds{grid-template-columns:1fr}.gx-kind{min-height:50px}.gx-kind-txt small{display:none}.gx-top{gap:10px}.gx-ring{width:56px;height:56px}}
 @media(prefers-reduced-motion:reduce){.gx-kind,.gx-start,.gx-good,.gx-bad,.gx-card,.gx-ring .bar,.gx-progress span{transition:none}.gx-ring.low b{animation:none}.gx-kind:hover,.gx-start:hover{transform:none}}
+.gx-reveal{display:inline-flex;margin-top:4px;padding:2px 8px;border:1px dashed #cfe1dd;border-radius:99px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.gx-reveal:hover{background:#f3f8f7;color:var(--ink-2)}
+.flash-dir{margin:0 auto 10px;display:flex;width:fit-content}

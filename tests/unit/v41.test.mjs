@@ -6,6 +6,8 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {BANKS, BANK_CATS, CAT_LABEL, bankPool, termKey} from '../../lib/wordbank/index.ts';
+import {loadBank} from '../../lib/wordbank/index.ts';
+await loadBank('nl'); // v42: banks are loaded per language
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = f => readFileSync(path.join(root, f), 'utf8');
@@ -45,8 +47,8 @@ test('Taboo: no AI per round by default; personal words that are in the bank get
   assert.equal(termKey('De Fiets'), 'fiets'); assert.equal(termKey('fiets'), 'fiets'); assert.equal(termKey('het  brood'), 'brood');
 });
 test('Flashcards: personal cards, or the bank (topped up when needed); bank cards are not recorded as personal practice', () => {
-  assert.match(games, /const fromBank=\(src==='bank'\|\|canFill\)&&bank\?bank\.pickBank\(/);
-  assert.match(games, /back:w\.meaning\|\|\('≈ '\+w\.taboo\.join\(', '\)\)/);
+  assert.match(games, /const fromBank=\(src==='bank'\|\|canFill\)&&bank\?bank\.pickBank\(bankPool\.filter\(w=>w\.en\)/);
+  assert.match(games, /\{id:w\.id,term:w\.term,back:w\.en,example:bank\.bankGrammar\(w\)\}/, 'v42: back = English + grammar');
   assert.match(games, /if\(c&&UUID\.test\(c\.id\)\)void supabase\(\)!\.rpc\('record_vocab_practice'/);
 });
 test('30 Seconds: 5 words, 30/60/90 s, teacher or student explains, cards only for the explainer (unchanged RLS path)', () => {
@@ -68,7 +70,7 @@ test('video: back to full only when the LAST work panel closes; lock respected; 
   assert.match(html, /if\(vis\.length === 0 && lastVis > 0 && window\.__camAutoFull\) window\.__camAutoFull\(\);/);
   assert.match(html, /window\.__camAutoFull = function\(\)\{ if\(mode !== "full" && mode !== "hidden"\) setMode\("full", "auto"\); \};/);
   assert.match(html, /if\(MODES\.indexOf\(m\) < 0 \|\| \(why === "auto" && P\.lock\)\) return;/, 'a locked layout stays as it is');
-  assert.match(html, /if\(OPEN\[k\] && document\.body\.classList\.contains\("cam-full"\)\)\{ if\(window\.__camWork\) window\.__camWork\("user"\); sync\(\); return; \}/);
+  assert.match(html, /if\(on && document\.body\.classList\.contains\("cam-full"\)\) ORDER\.forEach\(function\(x\)\{ if\(x !== k\) OPEN\[x\] = false; \}\);/, 'v42: from full video only the clicked panel opens');
   const mod = html.slice(html.indexOf('v40: FOUR TOGGLES'), html.indexOf('v40: NEW CANVAS TOOLBAR'));
   assert.ok(!/new Peer\(|getUserMedia|iceServers|leave\(\)/.test(mod), 'closing panels never touches the call');
 });

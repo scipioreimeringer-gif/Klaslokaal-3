@@ -13,6 +13,8 @@ import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegac
  * Row Level Security decides what is allowed — never the iframe.
  */
 export type TeachyBridge = {
+  /** v42: planned start of the lesson in the agenda (ISO), used for the lesson timer; null without a planned lesson */
+  lessonStartsAt?: string | null;
   version: 1;
   role: 'teacher' | 'student';
   studentId: string;
@@ -86,7 +88,7 @@ function fetchIceServers(db: SupabaseClient, studentId: string) {
   })().catch(() => { icePromise = null; iceStatusValue = 'error'; return []; });
   return icePromise;
 }
-export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
+export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string; userId: string; studentId: string; studentName: string; lessonId?: string | null; lessonStartsAt?: string | null; onSwitch: (id: string) => void}): TeachyBridge {
   let snap: Record<string, string> = {};
   let allowed = new Set<string>();
   let students: StudentRow[] = [];
@@ -136,7 +138,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
   }
 
   return {
-    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId),
+    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId), lessonStartsAt: opts.lessonStartsAt || null,
     async get(key) {
       const k = parseKey(key);
       if (!k) return null;

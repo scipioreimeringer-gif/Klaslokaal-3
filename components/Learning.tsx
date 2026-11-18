@@ -121,13 +121,17 @@ function GameShell({title,i,n,onQuit,children}:{title:string;i:number;n:number;o
  return <div className="game"><div className="row between"><b>{title}</b><div className="row"><span className="muted">{Math.min(i+1,n)} / {n}</span><button className="iconbtn" title={tt("Stoppen")} onClick={onQuit}><X size={16}/></button></div></div><div className="game-progress"><span style={{width:`${(i/n)*100}%`}}/></div>{children}</div>
 }
 
+/* v42: both directions — lesson language → English (translation) and English → lesson language; remembered on this device */
 function Flashcards({deck,studentId,onDone}:{deck:VocabItem[];studentId:string;onDone:(s:string)=>void}){
- const [i,setI]=useState(0);const [flip,setFlip]=useState(false);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);
+ const [i,setI]=useState(0);const [flip,setFlip]=useState(false);
+ const [rev,setRevRaw]=useState(()=>{try{return localStorage.getItem('teachy-flash-dir')==='from-en'}catch{return false}});
+ const setRev=(r:boolean)=>{setRevRaw(r);setFlip(false);try{localStorage.setItem('teachy-flash-dir',r?'from-en':'to-en')}catch{}};const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);
  async function answer(ok:boolean){const v=deck[i];void record(v.id,ok);if(ok)score.current++;else wrong.current.push(v.term);setFlip(false);
   if(i+1>=deck.length){await saveSession(studentId,'flashcards',score.current,deck.length,started.current,{wrong:wrong.current});onDone(`Flashcards: ${score.current} van ${deck.length} gekend`)}else setI(i+1)}
  const v=deck[i];
  return <GameShell title={tt("Flashcards")} i={i} n={deck.length} onQuit={()=>onDone('')}>
-  <button className={'flipcard'+(flip?' flipped':'')} onClick={()=>setFlip(!flip)} aria-live="polite"><span className="face front"><strong>{v.term}</strong><small><Eye size={14}/> {tt("tik om om te draaien")}</small></span><span className="face back"><strong>{v.translation}</strong>{v.example&&<small>{v.example}</small>}</span></button>
+  <div className="seg flash-dir" role="group" aria-label={tt('Richting')}><button type="button" aria-pressed={!rev} onClick={()=>setRev(false)}>{tt('Lestaal → Engels')}</button><button type="button" aria-pressed={rev} onClick={()=>setRev(true)}>{tt('Engels → Lestaal')}</button></div>
+  <button className={'flipcard'+(flip?' flipped':'')} onClick={()=>setFlip(!flip)} aria-live="polite"><span className="face front"><strong>{rev?v.translation:v.term}</strong><small><Eye size={14}/> {tt("tik om om te draaien")}</small></span><span className="face back"><strong>{rev?v.term:v.translation}</strong>{v.pos&&<small>{v.pos}</small>}{v.example&&<small>{v.example}</small>}</span></button>
   <div className="row center"><button className="button secondary" onClick={()=>void answer(false)}><RotateCcw size={15}/> {tt("Nog oefenen")}</button><button className="button" onClick={()=>void answer(true)}><Check size={15}/> {tt("Ken ik")}</button></div>
  </GameShell>
 }

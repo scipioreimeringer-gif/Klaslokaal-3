@@ -23,7 +23,7 @@ export type Page = {id?: string; title: string; html: string};
 /** No AI needed: every candidate is an explicit "term = translation" pair of at most 3 words without digits. */
 const obvious = (c: Candidate[]) => c.length > 0 && c.every(x => x.reason === 'pair' && x.translation && words(x.term).length <= 3 && !/\d/.test(x.term));
 
-export async function detectPages(pages: Page[], opts: {existing: string[]; scanned: Set<string>; targetName: string; explainName: string; level: string; ask: Ask; maxCandidates?: number; explainCode?: string}) {
+export async function detectPages(pages: Page[], opts: {existing: string[]; scanned: Set<string>; targetName: string; explainName: string; level: string; ask: Ask; maxCandidates?: number; explainCode?: string; targetCode?: string}) {
   const hashes: {hash: string; found: number}[] = []; let all: Candidate[] = []; let aiCalls = 0;
   for (const p of pages) {
     const blocks = canvasBlocks(p.html); const text = blocks.map(b => b.text).join('\n');
@@ -44,7 +44,7 @@ export async function detectPages(pages: Page[], opts: {existing: string[]; scan
       const byIdx = new Map(r.items.map(x => [x.index, x]));
       const early = /^(A0|A1)$/.test(opts.level);
       kept = cands.flatMap((c, i) => { const x = byIdx.get(i); return x?.keep ? [{...c, translation: c.translation || x.translation.trim().slice(0, 300),
-        pos: grammarLabel({pos: x.pos, article: x.article, plural: early ? '' : x.plural}, opts.explainCode || 'en'), kind: x.kind}] : []; });
+        pos: grammarLabel({pos: x.pos, article: x.article, plural: early ? '' : x.plural}, opts.explainCode || 'en', opts.targetCode || ''), kind: x.kind}] : []; });
     }
     all = [...all, ...kept]; hashes.push({hash, found: kept.length});
   }
