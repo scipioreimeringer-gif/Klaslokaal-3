@@ -10,6 +10,7 @@ import {PenLine,Repeat,Wrench,CalendarDays,Clock3} from 'lucide-react';
 import {Select} from './Select';
 import {InfoTip} from './InfoTip';
 import {posIcon,posKindOf,POS_GROUP_ORDER,POS_GROUP_TITLE} from '../lib/vocab/grammar';
+import {filterVocab,vocabFacets,type VocabFilter} from '../lib/vocab/filter';
 import {t as tt, translated} from '../lib/i18n';
 
 /* ========================= Vocabulary ========================= */
@@ -45,6 +46,7 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
 export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teacher'|'student'}){
  const [items,setItems]=useState<VocabItem[]|null>(null);const [err,setErr]=useState('');const [q,setQ]=useState('');const [filter,setFilter]=useState<'all'|VocabItem['status']>('all');
  const [term,setTerm]=useState('');const [tr,setTr]=useState('');const [ex,setEx]=useState('');
+ const [fx,setFx]=useState<VocabFilter>({lang:'all',pos:'all',level:'all',lesson:'all'});
  const load=useCallback(async()=>{const r=await loadVocab(supabase()!,studentId);if(r.error)setErr(/vocab_items/.test(r.error)?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):r.error);setItems(r.items)},[studentId]);
  useEffect(()=>{void load()},[load]);
  const canEdit=(v:VocabItem)=>viewer==='teacher'||v.source==='student';
@@ -53,11 +55,21 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
  async function del(v:VocabItem){if(!confirm(tt("\"{0}\" verwijderen?", v.term)))return;await supabase()!.from('vocab_items').delete().eq('id',v.id);await load()}
  if(!items)return <div className="loader small"/>;
  const counts={new:items.filter(i=>i.status==='new').length,practicing:items.filter(i=>i.status==='practicing').length,mastered:items.filter(i=>i.status==='mastered').length};
- const shown=items.filter(i=>(filter==='all'||i.status===filter)&&(i.term+' '+i.translation+' '+i.example).toLowerCase().includes(q.toLowerCase()));
+ // v44: filters on the ONE central word list (same rows as the word list of a lesson; one row per word)
+ const facets=vocabFacets(items);
+ const shown=filterVocab(items,{...fx,status:filter,q});
  return <div>
   {err&&<div className="notice">{err}</div>}
   {viewer==='teacher'&&<Suggestions studentId={studentId} onAdded={()=>void load()}/>}
   <div className="chipbar"><button aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>{tt("Alle ({0})", items.length)}</button>{(['new','practicing','mastered'] as const).map(s=><button key={s} aria-pressed={filter===s} onClick={()=>setFilter(s)}>{VOCAB_STATUS_LABEL[s]} ({counts[s]})</button>)}</div>
+  <div className="vocab-filters" role="group" aria-label={tt("Filters")}>
+   {facets.langs.length>1&&<Select size="sm" label={tt("Lestaal")} value={fx.lang} onChange={v=>setFx({...fx,lang:v})} options={[{value:'all',label:tt("Alle talen")},...facets.langs.map(l=>({value:l,label:l.toUpperCase()}))]}/>}
+   <Select size="sm" label={tt("Woordsoort")} value={fx.pos} onChange={v=>setFx({...fx,pos:v})} options={[{value:'all',label:tt("Alle woordsoorten")},...facets.pos.map(p=>({value:p,label:tt(POS_GROUP_TITLE[p])}))]}/>
+   {facets.levels.length>0&&<Select size="sm" label={tt("Niveau")} value={fx.level} onChange={v=>setFx({...fx,level:v})} options={[{value:'all',label:tt("Alle niveaus")},...facets.levels.map(l=>({value:l,label:l}))]}/>}
+   {facets.lessons.length>0&&<Select size="sm" label={tt("Les")} value={fx.lesson} onChange={v=>setFx({...fx,lesson:v})} options={[{value:'all',label:tt("Alle lessen")},...facets.lessons.map(d=>({value:d,label:niceDate(d)}))]}/>}
+   {(fx.lang!=='all'||fx.pos!=='all'||fx.level!=='all'||fx.lesson!=='all')&&<button type="button" className="linklike" onClick={()=>setFx({lang:'all',pos:'all',level:'all',lesson:'all'})}>{tt("Filters wissen")}</button>}
+   <span className="muted small-print">{tt("{0} van {1} woorden",shown.length,items.length)}</span>
+  </div>
   <form className="row vocab-add" onSubmit={e=>{e.preventDefault();void add()}}><input className="field" placeholder={tt("Woord of uitdrukking")} value={term} onChange={e=>setTerm(e.target.value)}/><input className="field" placeholder={tt("Betekenis")} value={tr} onChange={e=>setTr(e.target.value)}/><input className="field grow" placeholder={tt("Voorbeeldzin (optioneel)")} value={ex} onChange={e=>setEx(e.target.value)}/><button className="button small" type="submit"><Plus size={15}/> {tt("Toevoegen")}</button></form>
   <label className="searchbox"><Search size={16}/><input placeholder={tt("Zoeken…")} value={q} onChange={e=>setQ(e.target.value)}/></label>
   {!shown.length?<p className="muted">{tt("Nog geen woorden. Woorden uit de live les, goedgekeurde AI-analyses en woorden die je hier toevoegt, komen in deze lijst.")}</p>:

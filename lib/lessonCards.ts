@@ -6,6 +6,7 @@ export type LessonCard = {
   key: string; number: number; date: string; minutes: number | null; words: number; errors: number | null;
   recording: boolean; analysis: CardAnalysis | null; status: 'none' | 'queued' | 'processing' | 'ready' | 'approved' | 'failed';
   language: string | null; legacy: boolean; startedAt: string | null;
+  /** v44: planned lesson of the session (homework linked to it) */ lessonId: string | null;
 };
 
 /** Certain errors in a report (v2: examples per category; v1: corrections). Uncertain ones are never counted. */
@@ -42,8 +43,13 @@ export function lessonCards(entries: LessonLike[], sessions: SessionLike[] | nul
       words: Array.isArray(m.words) ? m.words.length : 0,
       errors: a && a.status === 'approved' ? errorCount(a.final) : a && a.status === 'ready' ? errorCount(a.final) : null,
       recording: s ? !!s.recording_id : recordings.some(r => r.created_at.slice(0, 10) === m.lesson_date),
-      analysis: a, status: (a?.status as LessonCard['status']) || 'none', language: s?.language || null, legacy: !!m.legacy, startedAt: s?.started_at || null,
+      analysis: a, status: (a?.status as LessonCard['status']) || 'none', language: s?.language || null, legacy: !!m.legacy, startedAt: s?.started_at || null, lessonId: s?.lesson_id || null,
     };
   });
+  // v44: a report whose lesson was not registered (e.g. heartbeat failed) still gets its own card: no report is unreachable
+  for (const a of analyses) if (!used.has(a.id)) cards.push({key: 'an-' + a.id, number: 0, date: a.lesson_date, minutes: null, words: 0, errors: a.status === 'approved' || a.status === 'ready' ? errorCount(a.final) : null,
+    recording: !!a.recording_id, analysis: a, status: (a.status as LessonCard['status']) || 'none', language: null, legacy: true, startedAt: null, lessonId: null});
+  cards.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : (x.startedAt || '') < (y.startedAt || '') ? -1 : 1));
+  cards.forEach((c, i) => { c.number = i + 1; });
   return cards.reverse();
 }

@@ -36,11 +36,19 @@ function DeepDive({c,studentId,level,canPractise}:{c:Cat;studentId?:string;level
  </details>
 }
 
-export function LessonReport({doc,studentId,level,lessonLang,teacher=false}:{doc:AnalysisV2;studentId?:string;level?:string|null;lessonLang?:string;teacher?:boolean}){
+export type LessonWord={term:string;translation?:string|null;pos?:string|null};
+/** Word list of ONE lesson (rows of the central word list, or the report's own list for older lessons). */
+export function LessonWords({words}:{words:LessonWord[]}){
+ if(!words.length)return <p className="muted small">{tt("Nog geen woorden bij deze les.")}</p>;
+ return <table className="vocab lr-words"><thead><tr><th>{tt("Woord")}</th><th>{tt("Engels")}</th></tr></thead><tbody>{words.map((v,i)=><tr key={i}><td><b>{v.term}</b>{v.pos&&<small className="muted"> · {v.pos}</small>}</td><td>{v.translation||<span className="muted">—</span>}</td></tr>)}</tbody></table>
+}
+
+/** v44 order inside a lesson: 1 Fouten · 2 Grammatica · 3 Woordenlijst van deze les · 4 Verdieping · 5 Samenvatting en opdrachten. */
+export function LessonReport({doc,studentId,level,lessonLang,teacher=false,words,extra}:{doc:AnalysisV2;studentId?:string;level?:string|null;lessonLang?:string;teacher?:boolean;words?:LessonWord[];extra?:React.ReactNode}){
  const r=doc.report;const errors=reportErrors(doc);
  const cats=(doc.categories||[]).filter(c=>c.relevance!=='later'&&(c.count>0||c.examples.some(e=>e.certainty!=='uncertain')));
  const groups=groupCategories(cats,lessonLang);
- const words=(doc.vocabulary||[]).filter(v=>v.term);
+ const list=words&&words.length?words:(doc.vocabulary||[]).filter(v=>v.term);
  const well=[...(r?.went_well||[]),...(doc.positives||[]).map(p=>p.note||p.text).filter(Boolean)].slice(0,6);
  return <div className="lesson-report">
   <Section n={1} icon={XCircle} title={tt("Mijn fouten")} tone="coral">
@@ -48,20 +56,20 @@ export function LessonReport({doc,studentId,level,lessonLang,teacher=false}:{doc
     <div className="lr-pair"><span className="lr-wrong"><span className="sr-only">{tt("Gezegd:")}</span><s>{e.original}</s></span><span className="lr-arrow" aria-hidden>→</span><span className="lr-right"><span className="sr-only">{tt("Beter:")}</span>{e.corrected}</span></div>
     {e.why&&<p className="lr-why"><b>{tt("Waarom:")}</b> {e.why}</p>}</li>)}</ol>:<p className="muted">{tt("Geen belangrijke fouten in de stof van deze les. Goed gedaan!")}</p>}
   </Section>
-  {!!groups.length&&<Section n={2} icon={ListTree} title={tt("Grammaticale aandachtspunten")} tone="blue">
-   <ul className="lr-groups">{groups.map(g=><li key={g.group}><span>{tt(g.group)}</span>{g.count>0&&<b className="lr-count">{tt("{0}×",g.count)}</b>}<small className="muted">{g.categories.map(c=>c.label).join(' · ')}</small></li>)}</ul>
-  </Section>}
-  {!!cats.length&&<Section n={3} icon={BookOpen} title={tt("Verdieping")} tone="violet">
+  <Section n={2} icon={ListTree} title={tt("Grammaticale aandachtspunten")} tone="blue">
+   {groups.length?<ul className="lr-groups">{groups.map(g=><li key={g.group}><span>{tt(g.group)}</span>{g.count>0&&<b className="lr-count">{tt("{0}×",g.count)}</b>}<small className="muted">{g.categories.map(c=>c.label).join(' · ')}</small></li>)}</ul>:<p className="muted small">{tt("Geen grammaticale aandachtspunten in deze les.")}</p>}
+  </Section>
+  <Section n={3} icon={Languages} title={tt("Woordenlijst van deze les")} tone="mint"><LessonWords words={list}/></Section>
+  {!!cats.length&&<Section n={4} icon={BookOpen} title={tt("Verdieping")} tone="violet">
    {cats.map(c=><DeepDive key={c.key} c={c} studentId={studentId} level={level} canPractise={!teacher}/>)}
   </Section>}
-  {!!words.length&&<Section n={4} icon={Languages} title={tt("Nieuwe woorden")} tone="mint">
-   <table className="vocab lr-words"><thead><tr><th>{tt("Woord")}</th><th>{tt("Engels")}</th></tr></thead><tbody>{words.map((v,i)=><tr key={i}><td><b>{v.term}</b></td><td>{v.translation||<span className="muted">—</span>}</td></tr>)}</tbody></table>
-  </Section>}
-  {!!well.length&&<Section n={5} icon={ThumbsUp} title={tt("Wat ging goed")} tone="green"><ul>{well.map((x,i)=><li key={i}>{x}</li>)}</ul></Section>}
-  {(r?.summary||doc.summary)&&<Section n={6} icon={FileText} title={tt("Samenvatting")} tone="grey"><p className="analysis-summary">{r?.summary||doc.summary}</p>{!!r?.covered?.length&&<p className="muted small"><b>{tt("Behandeld")}:</b> {r.covered.join(' · ')}</p>}</Section>}
-  <Section n={7} icon={Dumbbell} title={tt("Oefenen en huiswerk")} tone="teal">
-   {!!r?.focus?.length&&<ul>{r.focus.map((x,i)=><li key={i}>{x}</li>)}</ul>}
-   <p className="muted small">{doc.homework?.assignment_id?tt("Je docent heeft huiswerk bij deze les klaargezet: zie Taken."):tt("Kies hierboven bij Verdieping een onderwerp om te oefenen, of kijk bij Taken.")}</p>
+  <Section n={5} icon={FileText} title={tt("Samenvatting en opdrachten")} tone="teal">
+   {(r?.summary||doc.summary)&&<p className="analysis-summary">{r?.summary||doc.summary}</p>}
+   {!!r?.covered?.length&&<p className="muted small"><b>{tt("Behandeld")}:</b> {r.covered.join(' · ')}</p>}
+   {!!well.length&&<div className="lr-well"><h5><ThumbsUp size={14} aria-hidden/> {tt("Wat ging goed")}</h5><ul>{well.map((x,i)=><li key={i}>{x}</li>)}</ul></div>}
+   {!!r?.focus?.length&&<div className="lr-focus"><h5><Dumbbell size={14} aria-hidden/> {tt("Oefenen")}</h5><ul>{r.focus.map((x,i)=><li key={i}>{x}</li>)}</ul></div>}
+   {extra}
+   {!extra&&<p className="muted small">{doc.homework?.assignment_id?tt("Je docent heeft huiswerk bij deze les klaargezet: zie Huiswerk."):tt("Kies hierboven bij Verdieping een onderwerp om te oefenen, of kijk bij Huiswerk.")}</p>}
   </Section>
  </div>
 }

@@ -114,7 +114,7 @@ function TestTranscriptImport({defaultStudent,onClose,onStarted}:{defaultStudent
  </div></div>
 }
 
-export function TeacherAnalyses({studentId,focusId,lessonLang}:{studentId:string;focusId?:string|null;lessonLang?:string}){
+export function TeacherAnalyses({studentId,focusId,lessonLang,onlyId}:{studentId:string;focusId?:string|null;lessonLang?:string;onlyId?:string}){
  const {role}=useAuth();const [importing,setImporting]=useState(false);const [testMsg,setTestMsg]=useState('');
  const [rows,setRows]=useState<AnalysisRow[]>([]);const [recs,setRecs]=useState<{id:string;created_at:string;ai:boolean}[]>([]);const [err,setErr]=useState('');const [open,setOpen]=useState<string|null>(focusId||null);
  useEffect(()=>{if(focusId){setOpen(focusId);setTimeout(()=>document.getElementById('an-'+focusId)?.scrollIntoView({block:'start',behavior:'smooth'}),300)}},[focusId,rows.length]);/* v43: opened from a lesson card */const [busy,setBusy]=useState(false);
@@ -133,12 +133,12 @@ export function TeacherAnalyses({studentId,focusId,lessonLang}:{studentId:string
  const pendingRecs=recs.filter(r=>r.ai&&!rows.some(a=>a.recording_id===r.id));
  return <div className="analyses">
   {err&&<div className="notice">{err}</div>}
-  {role==='admin'&&<div className="row between test-bar"><small className="muted">{tt('Beheerder: test de AI-lesanalyse met een fictief transcript.')}</small><button className="button small secondary" onClick={()=>{setTestMsg('');setImporting(true)}}><FlaskConical size={14}/> {tt('Testtranscript importeren')}</button></div>}
+  {role==='admin'&&!onlyId&&<div className="row between test-bar"><small className="muted">{tt('Beheerder: test de AI-lesanalyse met een fictief transcript.')}</small><button className="button small secondary" onClick={()=>{setTestMsg('');setImporting(true)}}><FlaskConical size={14}/> {tt('Testtranscript importeren')}</button></div>}
   {testMsg&&<p className="muted" role="status">{testMsg}</p>}
   {importing&&<TestTranscriptImport defaultStudent={studentId} onClose={()=>setImporting(false)} onStarted={sid=>{setImporting(false);setTestMsg(sid===studentId?tt('Test-analyse gestart. Het resultaat verschijnt hieronder met het label TEST (dit duurt meestal minder dan een minuut).'):tt('Test-analyse gestart bij een andere leerling. Open die leerling, tab Lesanalyses, om het resultaat te zien.'));void load()}}/>}
-  {pendingRecs.map(r=><div className="analysis-card" key={r.id}><div className="row between"><span><b>{tt("Opname")} {niceDate(r.created_at)}</b> <small className="muted">{tt("toestemming voor AI-analyse gegeven")}</small></span><button className="button small" disabled={busy} onClick={()=>void start(r.id)}><Sparkles size={14}/> {tt("Analyse starten")}</button></div></div>)}
+  {(onlyId?[]:pendingRecs).map(r=><div className="analysis-card" key={r.id}><div className="row between"><span><b>{tt("Opname")} {niceDate(r.created_at)}</b> <small className="muted">{tt("toestemming voor AI-analyse gegeven")}</small></span><button className="button small" disabled={busy} onClick={()=>void start(r.id)}><Sparkles size={14}/> {tt("Analyse starten")}</button></div></div>)}
   {!rows.length&&!pendingRecs.length&&<p className="muted">{tt("Nog geen lesanalyses. Start een opname in het live klaslokaal en vink “AI-lesanalyse” aan; als je leerling ook toestemming geeft, verschijnt de analyse hier automatisch ter controle.")}</p>}
-  {rows.map(a=><div className="analysis-card" key={a.id} id={'an-'+a.id}>
+  {(onlyId?rows.filter(r=>r.id===onlyId):rows).map(a=><div className="analysis-card" key={a.id} id={'an-'+a.id}>{/* v44: onlyId = inside the page of one lesson */}
    <div className="row between"><button className="analysis-head" onClick={()=>setOpen(open===a.id?null:a.id)}>{a.is_test&&<span className="test-badge">{'TEST'}</span>}<b>{niceDate(a.lesson_date)}</b><StatusChip status={a.status}/></button>
     <div className="row">{a.status==='failed'&&a.recording_id&&!isV2(a as V2Row)&&<button className="button small secondary" disabled={busy} onClick={()=>void start(a.recording_id!)}><RotateCcw size={14}/> {tt("Opnieuw")}</button>}<button className="iconbtn danger" title={tt("Analyse verwijderen")} onClick={()=>void remove(a)}><Trash2 size={15}/></button></div></div>
    {isV2(a as V2Row)?<>
