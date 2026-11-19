@@ -109,7 +109,7 @@ test('wiring: dashboard section, student data via RLS only, compact report every
   assert.ok(home.indexOf('<ReadyForYou') < home.indexOf('className="statgrid"', home.indexOf('function StudentHome')), 'near the top of the student dashboard');
   // phase 5: no extra queries — the dashboard's own (RLS-limited) data is reused
   assert.match(home, /select\('id,student_id,title,published_at'\)/);
-  assert.match(home, /select\('student_id,status,due_at,translation'\)/);
+  assert.match(home, /select\('student_id,status,due_at,translation,term'\)/, 'v43: + term for the real word count');
   assert.match(home, /rpc\('student_lesson_summaries',\{sid:id\}\)\.then/, 'reports via the existing approved-only function, tagged per relation');
   const r = read('components/ReadyForYou.tsx');
   assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');

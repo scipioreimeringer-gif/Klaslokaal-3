@@ -2,6 +2,7 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {progressOf, type LegacyWord} from './classroomMapping';
 import {t, locale} from './i18n';
+import {mergeLessons, distinctWords, type SessionLike} from './stats';
 
 export type StudentRecord = {
   id: string; teacher_id: string; user_id: string | null; name: string; email: string; subject: string;
@@ -53,12 +54,16 @@ async function latestSummary(db: SupabaseClient, studentId: string): Promise<{da
   } catch (e) { return {data: null, error: e}; }
 }
 export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
-  const [lessons, recordings, assignments, state] = await Promise.all([
+  const [lessons, recordings, assignments, state, sess, vocab] = await Promise.all([
     db.from('lesson_entries').select('id,student_id,lesson_date,notes,homework,words,updated_at').eq('student_id', studentId).order('lesson_date', {ascending: false}),
     db.from('lesson_recordings').select('*').eq('student_id', studentId).order('created_at', {ascending: false}),
     db.from('assignments').select('id,published_at').eq('student_id', studentId),
     db.from('classroom_states').select('board,canvas,updated_at').eq('student_id', studentId).maybeSingle(),
+    // v43: registered lessons (joint presence) and the real word list; both optional on an older database
+    db.from('lesson_sessions').select('id,student_id,lesson_date,started_at,ended_at,joint_seconds,registered_at,lesson_id,recording_id,language').eq('student_id', studentId).order('started_at', {ascending: false}),
+    db.from('vocab_items').select('student_id,term').eq('student_id', studentId),
   ]);
+  const sessions = sess.error ? null : (sess.data || []) as SessionLike[];
   // v39: latest teacher-approved analysis (same access rule for teacher and student) → "Aandachtspunten" in the header.
   // Separate call: a missing function on an older database must not affect the queries above.
   const latest = await latestSummary(db, studentId);
@@ -72,7 +77,12 @@ export async function loadStudentBundle(db: SupabaseClient, studentId: string) {
     lessons: L,
     recordings: (recordings.data || []) as Recording[],
     state: (state.data || null) as ClassroomState | null,
-    progress: progressOf(L, (assignments.data || []) as {published_at: string | null}[], (subs.data || []) as {assignment_id: string}[]),
+    sessions,
+    progress: (() => {
+      const p = progressOf(mergeLessons(L, sessions), (assignments.data || []) as {published_at: string | null}[], (subs.data || []) as {assignment_id: string}[]);
+      const V = vocab.error ? [] : (vocab.data || []) as {student_id: string; term: string | null}[];
+      return V.length ? {...p, words: distinctWords(V)} : p; // v43: words = the real word list, never counted twice
+    })(),
     latestAnalysis: (latest.error ? null : ((latest.data || []) as {lesson_date: string; final: unknown}[])[0] || null),
   };
 }

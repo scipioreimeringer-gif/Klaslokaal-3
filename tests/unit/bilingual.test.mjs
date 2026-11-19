@@ -61,5 +61,5 @@ test('client: no translation until a language is chosen; only the opened card is
   assert.match(a, /const need=v2&&!!lang&&lang!==src/);
   assert.match(a, /if\(!need\|\|!shown\|\|trCache\.has\(key\)\)return/);
   assert.match(a, /localStorage\.setItem\(store,l\)/, 'choice remembered per student');
-  assert.match(read('components/StudentData.tsx'), /<StudentSummaries studentId=\{studentId\} lessonLang=\{subjectOf\(ws\)\}\/>/);
+  assert.match(read('components/StudentData.tsx'), /<StudentSummaries studentId=\{studentId\} lessonLang=\{subjectOf\(ws\)\} focusId=\{report\}\/>/);
 });

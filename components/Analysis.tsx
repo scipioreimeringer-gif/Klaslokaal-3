@@ -8,8 +8,9 @@ import {approveAnalysis,authedPost,type AnalysisRow} from '../lib/learning';
 import {CATEGORY_LABEL,STATUS_LABEL,type AnalysisDoc,type AnalysisStatus,type Correction,type CorrectionCategory} from '../lib/analysisTypes';
 import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
-import {AnalysisV2View,StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
+import {StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
+import {LessonReport} from './LessonReport';
 import {CompactAnalysis} from './CompactAnalysis';
 import {Flag} from './Flag';
 import {languageName} from '../lib/languages';
@@ -113,9 +114,10 @@ function TestTranscriptImport({defaultStudent,onClose,onStarted}:{defaultStudent
  </div></div>
 }
 
-export function TeacherAnalyses({studentId}:{studentId:string}){
+export function TeacherAnalyses({studentId,focusId,lessonLang}:{studentId:string;focusId?:string|null;lessonLang?:string}){
  const {role}=useAuth();const [importing,setImporting]=useState(false);const [testMsg,setTestMsg]=useState('');
- const [rows,setRows]=useState<AnalysisRow[]>([]);const [recs,setRecs]=useState<{id:string;created_at:string;ai:boolean}[]>([]);const [err,setErr]=useState('');const [open,setOpen]=useState<string|null>(null);const [busy,setBusy]=useState(false);
+ const [rows,setRows]=useState<AnalysisRow[]>([]);const [recs,setRecs]=useState<{id:string;created_at:string;ai:boolean}[]>([]);const [err,setErr]=useState('');const [open,setOpen]=useState<string|null>(focusId||null);
+ useEffect(()=>{if(focusId){setOpen(focusId);setTimeout(()=>document.getElementById('an-'+focusId)?.scrollIntoView({block:'start',behavior:'smooth'}),300)}},[focusId,rows.length]);/* v43: opened from a lesson card */const [busy,setBusy]=useState(false);
  const load=useCallback(async()=>{const db=supabase()!;
   const cols='id,student_id,recording_id,lesson_date,status,transcript,source_quality,draft,final,error,approved_at,created_at';
   const q=(c:string)=>db.from('lesson_analyses').select(c).eq('student_id',studentId).order('created_at',{ascending:false});
@@ -136,12 +138,12 @@ export function TeacherAnalyses({studentId}:{studentId:string}){
   {importing&&<TestTranscriptImport defaultStudent={studentId} onClose={()=>setImporting(false)} onStarted={sid=>{setImporting(false);setTestMsg(sid===studentId?tt('Test-analyse gestart. Het resultaat verschijnt hieronder met het label TEST (dit duurt meestal minder dan een minuut).'):tt('Test-analyse gestart bij een andere leerling. Open die leerling, tab Lesanalyses, om het resultaat te zien.'));void load()}}/>}
   {pendingRecs.map(r=><div className="analysis-card" key={r.id}><div className="row between"><span><b>{tt("Opname")} {niceDate(r.created_at)}</b> <small className="muted">{tt("toestemming voor AI-analyse gegeven")}</small></span><button className="button small" disabled={busy} onClick={()=>void start(r.id)}><Sparkles size={14}/> {tt("Analyse starten")}</button></div></div>)}
   {!rows.length&&!pendingRecs.length&&<p className="muted">{tt("Nog geen lesanalyses. Start een opname in het live klaslokaal en vink “AI-lesanalyse” aan; als je leerling ook toestemming geeft, verschijnt de analyse hier automatisch ter controle.")}</p>}
-  {rows.map(a=><div className="analysis-card" key={a.id}>
+  {rows.map(a=><div className="analysis-card" key={a.id} id={'an-'+a.id}>
    <div className="row between"><button className="analysis-head" onClick={()=>setOpen(open===a.id?null:a.id)}>{a.is_test&&<span className="test-badge">{'TEST'}</span>}<b>{niceDate(a.lesson_date)}</b><StatusChip status={a.status}/></button>
     <div className="row">{a.status==='failed'&&a.recording_id&&!isV2(a as V2Row)&&<button className="button small secondary" disabled={busy} onClick={()=>void start(a.recording_id!)}><RotateCcw size={14}/> {tt("Opnieuw")}</button>}<button className="iconbtn danger" title={tt("Analyse verwijderen")} onClick={()=>void remove(a)}><Trash2 size={15}/></button></div></div>
    {isV2(a as V2Row)?<>
     {(a.status==='processing'||a.status==='queued'||a.status==='failed')&&<StageProgress a={a as V2Row} onChange={()=>void load()}/>}
-    {open===a.id&&(a.status==='approved'||a.status==='ready'||(a.status==='failed'&&(a.draft as {steps?:{synthesis?:boolean}}|null)?.steps?.synthesis))&&(a.final||a.draft)&&<TeacherAnalysisV2 key={a.id} a={a as V2Row} onChange={()=>void load()}/>}
+    {open===a.id&&(a.status==='approved'||a.status==='ready'||(a.status==='failed'&&(a.draft as {steps?:{synthesis?:boolean}}|null)?.steps?.synthesis))&&(a.final||a.draft)&&<TeacherAnalysisV2 key={a.id} a={a as V2Row} lessonLang={lessonLang} onChange={()=>void load()}/>}
     {open!==a.id&&(a.status==='approved'||a.status==='ready')&&<p className="muted small-print">{a.is_test?tt('TEST-analyse: klik om het resultaat te bekijken. Wordt nooit gedeeld.'):tt('Klik om het verslag, de foutenanalyse en de voorstellen te bekijken en aan te passen.')}</p>}
    </>:<>
    {a.status==='failed'&&<p className="muted">{a.error}</p>}
@@ -156,7 +158,7 @@ export function TeacherAnalyses({studentId}:{studentId:string}){
 /* v40: bilingual summaries — translations are fetched per card, only for the language chosen in the switch, and
    cached on the server per language and content version (and here for this page view). Examples are never translated. */
 const trCache=new Map<string,string[]|null>();
-function SummaryCard({r,studentId,lang,open}:{r:{id:string;lesson_date:string;final:AnalysisDoc};studentId:string;lang:string;open:boolean}){
+function SummaryCard({r,studentId,lang,open,lessonLang}:{r:{id:string;lesson_date:string;final:AnalysisDoc};studentId:string;lang:string;open:boolean;lessonLang?:string}){
  const v2=(r.final as unknown as {version?:number}).version===2;const doc=r.final as unknown as AnalysisV2;
  const src=v2?doc.explanation_language:'';const need=v2&&!!lang&&lang!==src;const key=r.id+'|'+lang;
  const [texts,setTexts]=useState<string[]|null|undefined>(()=>trCache.get(key));const [state,setState]=useState<'idle'|'busy'|'err'>('idle');const [shown,setShown]=useState(open);
@@ -164,9 +166,10 @@ function SummaryCard({r,studentId,lang,open}:{r:{id:string;lesson_date:string;fi
  useEffect(()=>{if(!need||!shown||trCache.has(key))return;let c=false;setState('busy');
   void authedPost<{texts:string[]|null}>(supabase()!,'/api/ai/translate-summary',{studentId,analysisId:r.id,lang}).then(x=>{trCache.set(key,x.texts);if(!c){setTexts(x.texts);setState('idle')}},()=>{if(!c)setState('err')});return()=>{c=true}},[need,shown,key,studentId,r.id,lang]);
  const shownDoc=need&&texts?applyTexts(doc,extractTexts(doc),texts):r.final;
- return <details className="analysis-card" open={open} onToggle={e=>{if((e.currentTarget as HTMLDetailsElement).open)setShown(true)}}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{v2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}{need&&state==='busy'&&<Loader2 size={14} className="spin" aria-label={tt("Vertalen…")}/>}</summary>
+ useEffect(()=>{if(open)document.getElementById('an-'+r.id)?.scrollIntoView({block:'start'})},[open,r.id]);
+ return <details className="analysis-card" id={'an-'+r.id} open={open} onToggle={e=>{if((e.currentTarget as HTMLDetailsElement).open)setShown(true)}}><summary className="analysis-head"><b>{niceDate(r.lesson_date)}</b>{v2?<span className="status-chip st-approved"><Sparkles size={13}/> {tt("AI-lesverslag")}</span>:<span className="status-chip st-approved"><CheckCircle2 size={13}/> {tt("Goedgekeurd door docent")}</span>}{need&&state==='busy'&&<Loader2 size={14} className="spin" aria-label={tt("Vertalen…")}/>}</summary>
   {need&&state==='err'&&<p className="muted small">{tt("Vertalen lukte niet; je ziet de oorspronkelijke tekst.")}</p>}
-  <CompactAnalysis doc={shownDoc as unknown as AnalysisV2|AnalysisDoc} details={v2?<AnalysisV2View doc={shownDoc as unknown as AnalysisV2}/>:<AnalysisView doc={r.final}/>}/></details>
+  {v2?<LessonReport doc={shownDoc as unknown as AnalysisV2} studentId={studentId} lessonLang={lessonLang}/>:<CompactAnalysis doc={shownDoc as unknown as AnalysisV2|AnalysisDoc} details={<AnalysisView doc={r.final}/>}/>}</details>
 }
 /** Compact switch "🇧🇷 Portugees | 🇳🇱 Nederlands": lesson language first, then the student's own language. Remembered per student. */
 function SummaryLangSwitch({langs,value,onChange}:{langs:string[];value:string;onChange:(l:string)=>void}){
@@ -174,7 +177,7 @@ function SummaryLangSwitch({langs,value,onChange}:{langs:string[];value:string;o
  return <div className="sum-switch" role="group" aria-label={tt("Taal van de lessamenvatting")}>{langs.map(l=><button key={l} type="button" aria-pressed={value===l} onClick={()=>onChange(l)}><Flag code={l} size={16}/>{languageName(l)}</button>)}</div>
 }
 
-export function StudentSummaries({studentId,lessonLang}:{studentId:string;lessonLang?:string}){
+export function StudentSummaries({studentId,lessonLang,focusId}:{studentId:string;lessonLang?:string;focusId?:string|null}){
  const langs=switchLanguages(lessonLang||'',getLang());const store='teachy-sum-lang-'+studentId;
  const [lang,setLangState]=useState<string>(()=>{try{const v=localStorage.getItem(store);if(v&&langs.includes(v))return v}catch{}return ''});
  const pick=(l:string)=>{setLangState(l);try{localStorage.setItem(store,l)}catch{}};
@@ -185,5 +188,5 @@ export function StudentSummaries({studentId,lessonLang}:{studentId:string;lesson
  if(!rows.length)return <p className="muted">{tt("Nog geen lessamenvattingen. Na een opgenomen les (met jouw toestemming voor AI-analyse) verschijnt hier een kort lesverslag met je foutenanalyse. Je docent kan het aanpassen.")}</p>;
  // until a language is chosen, each summary shows in the language it was written in (no translation, no AI call)
  return <div className="analyses"><SummaryLangSwitch langs={langs} value={lang||((rows[0].final as unknown as AnalysisV2).explanation_language||'')} onChange={pick}/>
-  {rows.map(r=><SummaryCard key={r.id} r={r} studentId={studentId} lang={lang} open={r===rows[0]}/>)}</div>
+  {rows.map(r=><SummaryCard key={r.id} r={r} studentId={studentId} lang={lang} lessonLang={lessonLang} open={focusId?r.id===focusId:r===rows[0]}/>)}</div>
 }

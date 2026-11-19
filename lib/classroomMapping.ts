@@ -129,7 +129,7 @@ export function mergeBackupLessons(existing: LegacyLesson[], incoming: LegacyLes
 }
 
 /** Progress figures for a student, derived from stored data only (no invented metrics). */
-export function progressOf(lessons: {lesson_date: string; words: unknown}[], assignments: {published_at: string | null}[] = [], submissions: {assignment_id: string}[] = [], now = new Date()) {
+export function progressOf(lessons: {lesson_date: string; words?: unknown}[], assignments: {published_at: string | null}[] = [], submissions: {assignment_id: string}[] = [], now = new Date()) {
   const month = now.toISOString().slice(0, 7);
   const words = lessons.reduce((n, l) => n + (Array.isArray(l.words) ? l.words.length : 0), 0);
   const published = assignments.filter(a => a.published_at).length;

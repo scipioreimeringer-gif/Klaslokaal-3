@@ -41,14 +41,14 @@ test('canvas recognition stores the label; plural left out at A0/A1; the term it
   assert.equal(b1.suggestions[0].term, 'het brood', 'term from the canvas, not from AI');
   assert.equal(b1.suggestions[0].pos, 'znw. · het · mv. broden');
   assert.equal(a1.suggestions[0].pos, 'znw. · het', 'no plural at A1');
-  assert.match(read('lib/vocab/detect.ts'), /pos: z\.enum\(\['noun', 'verb', 'adjective', 'adverb', 'expression', 'sentence', 'other'\]\)/);
+  assert.match(read('lib/vocab/detect.ts'), /pos: z\.enum\(\['noun', 'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'expression', 'sentence', 'other'\]\)/);
 });
 test('"✨ Woorden" (canvas): infinitive, singular + article, adjective base form, expressions and example sentences; conjugations only from A2', () => {
   const ai = read('pages/api/ai.js');
   assert.match(ai, /bijvoeglijk naamwoorden in de basisvorm/);
   assert.match(ai, /soort "voorbeeldzin"/);
   assert.match(ai, /function trimForLevel\(result, level\) \{\s*if \(!\/\^A\[01\]\$\/\.test\(level\)\) return result;/);
-  assert.match(ai, /result: trimForLevel\(result, level\)/);
+  assert.match(ai, /result: trimForLevel\(normalizeSort\(result\), level\)/);
   assert.match(ai, /definite article of \$\{lessonLanguage\}/, 'other lesson languages get their own grammar');
   const html = read('public/legacy/index.html');
   assert.match(html, /"⚡ <b>" \+ esc\(w\.infinitief\)/); assert.match(html, /"📘 <b>" \+ esc\(\(w\.lidwoord/); assert.match(html, /"🎨 <b>" \+ esc\(w\.woord\)/);

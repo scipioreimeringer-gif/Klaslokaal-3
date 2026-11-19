@@ -667,6 +667,20 @@ body .top .conn.conn-dot:focus-visible{outline:2px solid #fff;outline-offset:2px
 @keyframes dotpulse{50%{opacity:.45}}
 @media(prefers-reduced-motion:reduce){body .top .conn.conn-dot[data-state="reconnect"]{animation:none}}
 .tb-left .timer{font-variant-numeric:tabular-nums}</style>
+<style id="v43css">
+/* v43: close X per panel (same state as the dock) and whiteboard full screen */
+.pclose43,.pmax43{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;min-width:32px;padding:0 8px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--muted,#6b7a86);cursor:pointer;transition:background .15s ease,color .15s ease}
+.cvhead .pclose43{order:99;margin-left:auto;flex:none}.slbar .pclose43{margin-left:4px;flex:none}.ctl43{flex:none}
+.ctl43{display:inline-flex;align-items:center;gap:2px;margin-left:4px;padding-left:4px;border-left:1px solid var(--line,#e6ecef)}
+.pclose43:hover{background:#fdecea;color:#b33a2a}
+.pmax43:hover,.pmax43[aria-pressed="true"]{background:#e5f6f3;color:#0f8f86}
+.pclose43 svg,.pmax43 svg{width:17px;height:17px}
+.pmax43 .lbl:empty{display:none}.pmax43 .lbl{font-weight:700;font-size:13px}
+body.wb-max #pWb{position:fixed!important;inset:8px!important;z-index:80!important;display:flex!important;border-radius:14px;box-shadow:0 10px 40px rgba(10,30,40,.25)}
+body.wb-max #pWb[hidden]{display:flex!important}
+body.wb-max #ws{z-index:79!important;position:relative} /* the panel lives in the workspace stacking context: lift it above the top bar and the video window */
+@media(max-width:640px){body.wb-max #pWb{inset:0!important;border-radius:0}}
+</style>
 </head>
 <body>
 
@@ -1116,6 +1130,47 @@ function presence(){
   else { st = "idle"; txt = isT ? "geen leerling aanwezig" : "wachten op je docent"; }
   return {n:n, st:st, txt:txt};
 }
+/* v43: AUTOMATIC LESSON REGISTRATION. Only the teacher's device counts the seconds in which teacher and student are
+   really connected together (open data channel = the status dot is green). A small heartbeat goes to the server about
+   every 30 s; the server registers the lesson once the joint time reaches its threshold (2 min). The session key stays on
+   this device, so a refresh or reconnect within the grace period continues the same lesson; after a longer break
+   (or another planned lesson) a new key = a new lesson. The lesson timer (lessonStart) is separate from this. */
+var LSS = {key:"", joint:0, last:0, lesson:""}, LSS_GRACE = 15 * 60e3, lssSent = 0, lssSentJoint = -1, lssBusy = false, lssOff = false, lssThreshold = 120;
+function lssOn(){ var b = bridge(); return !!(SB && isT && b && b.role === "teacher" && b.presence) && !lssOff; }
+function lssStoreKey(){ var b = bridge(); return "klas-sess-" + ((b && b.studentId) || ROOM || "x"); }
+function lssNewKey(){ var a = new Uint8Array(12); (window.crypto || {getRandomValues:function(x){ for(var i = 0; i < x.length; i++) x[i] = Math.random() * 256; return x; }}).getRandomValues(a); return "s" + Array.prototype.map.call(a, function(x){ return ("0" + x.toString(16)).slice(-2); }).join(""); }
+function lssLoad(){
+  var b = bridge(), lesson = (b && b.lessonStartsAt) || "", s = store(lssStoreKey()), now = Date.now();
+  if(s && s.key && now - (s.last || 0) < LSS_GRACE && (s.lesson || "") === lesson) LSS = s;
+  else LSS = {key:lssNewKey(), joint:0, last:now, lesson:lesson};
+  store(lssStoreKey(), LSS);
+}
+function lssBeat(force){
+  if(!lssOn() || lssBusy || !LSS.key || LSS.joint <= 0 || LSS.joint === lssSentJoint) return;
+  var now = Date.now();
+  if(!force && now - lssSent < 30e3 && !(LSS.joint >= lssThreshold && lssSentJoint < lssThreshold)) return;
+  lssBusy = true; lssSent = now; var sentJoint = LSS.joint;
+  bridge().presence({key:LSS.key, joint:sentJoint}).then(function(r){
+    lssBusy = false; r = r || {};
+    if(r.threshold) lssThreshold = r.threshold;
+    if(r.expired){ LSS = {key:lssNewKey(), joint:0, last:Date.now(), lesson:LSS.lesson}; store(lssStoreKey(), LSS); lssSentJoint = -1; return; }
+    if(r.error === "migration"){ lssOff = true; return; } /* database update v43 not run yet: the classroom keeps working */
+    if(r.error) return;
+    lssSentJoint = sentJoint;
+    if(r.registered && !LSS.registered){ LSS.registered = true; store(lssStoreKey(), LSS); }
+  }, function(){ lssBusy = false; });
+}
+function lssTick(){
+  if(!lssOn() || !peer) return;
+  if(!LSS.key) lssLoad();
+  var now = Date.now();
+  if(presence().st === "ok"){
+    if(LSS.last && now - LSS.last > LSS_GRACE){ LSS = {key:lssNewKey(), joint:0, last:now, lesson:LSS.lesson}; lssSentJoint = -1; }
+    LSS.joint++; LSS.last = now;
+    if(LSS.joint % 5 === 0) store(lssStoreKey(), LSS); /* a refresh continues the counter */
+  }
+  lssBeat(false);
+}
 var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = store("klas-self") !== false, retryT = null, myName = "";
 var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40) : "";
 var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
@@ -1493,6 +1548,7 @@ function leave(){
   if(REC.on) recStop();
   if(!isT){ recBadge(false); $("recOv").hidden = true; }
   sayBye();
+  if(lssOn() && LSS.key){ store(lssStoreKey(), LSS); lssBeat(true); } /* v43: last joint seconds; rejoining within the grace period continues this lesson */
   if(screenStream) stopShare();
   clearTimeout(retryT);
   Object.keys(conns).forEach(function(id){ try{ conns[id].close(); }catch(e){} });
@@ -1531,6 +1587,7 @@ setInterval(function(){
   c.title = "Lescode: " + (ROOM || "-") + " · TURN: " + turnText() + (netRoute ? " · verbinding: " + netRoute : "") + (RELAY_TEST ? " · TURN-testmodus" : "");
   c.title = p.txt + " · " + c.title;
   c.classList.toggle("ok", p.st === "ok");
+  lssTick();
   /* v42: the lesson timer runs from the shared lesson start (planned or teacher start), else from joining */
   var since = lessonStart || joinedAt;
   if(!since || !peer){ $("timer").textContent = "00:00"; return; }
@@ -2355,8 +2412,13 @@ if(isT){
     group("Werkwoorden", srt.werkwoorden, function(w){ return "<b>" + esc(w.infinitief) + "</b>" + (w.onregelmatig ? ' <span style="color:var(--coral);font-size:.78rem;font-weight:700">onregelmatig</span>' : "") + "<br><small>" + esc([w.verleden, (w.hulpwerkwoord ? w.hulpwerkwoord + " " : "") + (w.voltooid || "")].filter(Boolean).join(" · ")) + (w.betekenis ? " = " + esc(w.betekenis) : "") + "</small>"; });
     group("Zelfstandig naamwoorden", srt.zelfstandig, function(w){ return "<b>" + esc(w.lidwoord ? w.lidwoord + " " : "") + esc(w.woord) + "</b>" + (w.meervoud ? " · " + esc(w.meervoud) : "") + (w.betekenis ? "<br><small>= " + esc(w.betekenis) + "</small>" : ""); });
     group("Bijvoeglijk naamwoorden", srt.bijvoeglijk, function(w){ return "<b>" + esc(w.woord) + "</b>" + ((w.vergrotend || w.overtreffend) ? " · " + esc([w.vergrotend, w.overtreffend].filter(Boolean).join(" · ")) : "") + (w.betekenis ? "<br><small>= " + esc(w.betekenis) + "</small>" : ""); });
-    group("Overig", srt.overig, function(w){ return "<b>" + esc(w.woord) + "</b>" + (w.soort ? " <small>(" + esc(w.soort) + ")</small>" : "") + (w.betekenis ? "<br><small>= " + esc(w.betekenis) + "</small>" : ""); });
+    /* v43: the rest per word class (adverbs, prepositions, conjunctions, expressions, example sentences) */
+    soortGroups(srt.overig).forEach(function(g){ group(g[0], g[1], function(w){ return "<b>" + esc(w.woord) + "</b>" + (w.betekenis ? "<br><small>= " + esc(w.betekenis) + "</small>" : ""); }); });
   }
+  var SOORT_TITLE = [["bijwoord","Bijwoorden"],["voorzetsel","Voorzetsels"],["voegwoord","Voegwoorden"],["uitdrukking","Uitdrukkingen"],["voorbeeldzin","Voorbeeldzinnen"],["overig","Overig"]];
+  function soortOf(w){ var s = String(w.soort || "");
+    return /bijwoord|adverb|adv[ée]rbio/i.test(s) ? "bijwoord" : /voorzetsel|preposi/i.test(s) ? "voorzetsel" : /voegwoord|conjun|conjon/i.test(s) ? "voegwoord" : /uitdrukking|expression|express[ãa]o|expresi[óo]n|ausdruck/i.test(s) ? "uitdrukking" : /zin|sentence|frase|phrase|satz/i.test(s) ? "voorbeeldzin" : "overig"; }
+  function soortGroups(items){ return SOORT_TITLE.map(function(st){ return [st[1], (items || []).filter(function(w){ return soortOf(w) === st[0]; }), st[0]]; }).filter(function(g){ return g[1].length; }); }
   function renderAll(){
     var s = stu();
     ["nToday","nHw","wNl","wUit","pName","pLevel","pGoal","pAbout"].forEach(function(id){ $(id).disabled = !s; });
@@ -2545,8 +2607,8 @@ if(isT){
   function busy(btn, on, label){ btn.disabled = on; if(on){ btn.dataset.l = btn.innerHTML; btn.innerHTML = label || "Bezig..."; } else if(btn.dataset.l){ btn.innerHTML = btn.dataset.l; } }
   /* v40: compact grammar lines with an icon and a short label in the interface language:
      "📘 het brood · znw. · mv. broden = bread", "⚡ lopen · ww. · liep · heeft gelopen", "🎨 mooi · bnw.", "💬 ik heb honger · uitdrukking" */
-  var GL = {nl:{n:"znw.",v:"ww.",a:"bnw.",e:"uitdrukking",s:"voorbeeldzin",pl:"mv."}, en:{n:"n.",v:"v.",a:"adj.",e:"expression",s:"example sentence",pl:"pl."},
-    pt:{n:"subst.",v:"verbo",a:"adj.",e:"expressão",s:"frase-exemplo",pl:"pl."}, es:{n:"sust.",v:"verbo",a:"adj.",e:"expresión",s:"frase de ejemplo",pl:"pl."},
+  var GL = {nl:{n:"znw.",v:"ww.",a:"bnw.",e:"uitdrukking",s:"voorbeeldzin",pl:"mv.",bijwoord:"bijw.",voorzetsel:"vz.",voegwoord:"vw."}, en:{n:"n.",v:"v.",a:"adj.",e:"expression",s:"example sentence",pl:"pl.",bijwoord:"adv.",voorzetsel:"prep.",voegwoord:"conj."},
+    pt:{n:"subst.",v:"verbo",a:"adj.",e:"expressão",s:"frase-exemplo",pl:"pl.",bijwoord:"adv.",voorzetsel:"prep.",voegwoord:"conj."}, es:{n:"sust.",v:"verbo",a:"adj.",e:"expresión",s:"frase de ejemplo",pl:"pl."},
     fr:{n:"nom",v:"verbe",a:"adj.",e:"expression",s:"phrase exemple",pl:"pl."}, de:{n:"Subst.",v:"Verb",a:"Adj.",e:"Ausdruck",s:"Beispielsatz",pl:"Pl."}};
   function sortedToHtml(srt, title){
     var g = GL[uiLang] || GL.en;
@@ -2556,8 +2618,8 @@ if(isT){
     sec("Werkwoorden", srt.werkwoorden, function(w){ return "⚡ <b>" + esc(w.infinitief) + "</b>" + tail([g.v, w.verleden, (w.hulpwerkwoord ? w.hulpwerkwoord + " " : "") + (w.voltooid || "")], w.betekenis); });
     sec("Zelfstandig naamwoorden", srt.zelfstandig, function(w){ return "📘 <b>" + esc((w.lidwoord ? w.lidwoord + " " : "") + w.woord) + "</b>" + tail([g.n, w.meervoud ? g.pl + " " + w.meervoud : ""], w.betekenis); });
     sec("Bijvoeglijk naamwoorden", srt.bijvoeglijk, function(w){ return "🎨 <b>" + esc(w.woord) + "</b>" + tail([g.a, w.vergrotend, w.overtreffend], w.betekenis); });
-    sec("Overig", srt.overig, function(w){ var s = String(w.soort || ""), ex = /uitdrukking|expression|expressão|expresión|ausdruck/i.test(s), zin = /zin|sentence|frase|phrase|satz/i.test(s);
-      return (ex || zin ? "💬 " : "") + "<b>" + esc(w.woord) + "</b>" + tail([ex ? g.e : zin ? g.s : s], w.betekenis); });
+    soortGroups(srt.overig).forEach(function(grp){ var k = grp[2], ex = k === "uitdrukking", zin = k === "voorbeeldzin";
+      sec(grp[0], grp[1], function(w){ return (ex || zin ? "💬 " : k === "bijwoord" ? "🔹 " : k === "voorzetsel" ? "📍 " : k === "voegwoord" ? "🔗 " : "") + "<b>" + esc(w.woord) + "</b>" + tail([ex ? g.e : zin ? g.s : (g[k] || "")], w.betekenis); }); });
     return out;
   }
   $("aiSort").addEventListener("click", function(){
@@ -3283,6 +3345,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
 
   layout = function(){
     if(!gamesOn()) OPEN.games = false;
+    if(!OPEN.wb && document.body.classList.contains("wb-max")){ document.body.classList.remove("wb-max"); if(window.__wbMax) window.__wbMax(false); } /* v43 */
     var vis = ORDER.filter(function(k){ return OPEN[k]; });
     /* v41: the LAST open work panel was closed → video full again (existing camera layout; the call itself is untouched).
        With other panels still open nothing changes; opening a panel shrinks the video again via __camWork. */
@@ -3383,6 +3446,39 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   Object.defineProperty(P, "pWb", {enumerable:true, get:function(){ return !!OPEN.wb; }, set:function(v){ OPEN.wb = !!v; save(); }});
   Object.defineProperty(P, "pSl", {enumerable:true, get:function(){ return !!OPEN.scr; }, set:function(v){ OPEN.scr = !!v; save(); }});
   panels = P;
+
+  /* v43: a close X on Canvas, Bord and Scherm (Spelletjes has its own X in the games header). It changes exactly the
+     same OPEN state as the dock buttons, so dock and X always agree; closing the last panel makes the video big again
+     (v41 rule in layout). Closing Scherm goes through toggle("scr"): sharing only stops on an explicit choice. */
+  function closeBtn(k, label){
+    var x = document.createElement("button"); x.type = "button"; x.className = "pclose43"; x.setAttribute("data-close", k);
+    x.title = label; x.setAttribute("aria-label", label);
+    x.innerHTML = SVG('<path d="M18 6 6 18M6 6l12 12"/>');
+    x.addEventListener("click", function(e){ e.stopPropagation(); if(k === "wb" && document.body.classList.contains("wb-max")) wbMax(false); if(k === "scr") { if(OPEN.scr) toggle("scr"); } else setOpen(k, false); });
+    return x;
+  }
+  /* placed in the toolbar each panel really shows (the v40 floating bars; the old .phead rows are hidden) */
+  var wbGrp = document.createElement("div"); wbGrp.className = "ftgrp ctl43";
+  var ftBar = pWb.querySelector("#ftools"); if(ftBar) ftBar.appendChild(wbGrp); else if(pWb.querySelector(".phead")) pWb.querySelector(".phead").appendChild(wbGrp); /* outside the scrolling tool list: always visible */
+  [["cv", pCv.querySelector(".cvtb") || cvHead, "Canvas sluiten"], ["wb", wbGrp, "Bord sluiten"], ["scr", pSl.querySelector(".slbar") || pSl.querySelector(".phead"), "Scherm sluiten"]].forEach(function(a){
+    if(a[1]) a[1].appendChild(closeBtn(a[0], a[2]));
+  });
+  /* v43: whiteboard full screen inside the classroom (video, call and sync untouched); one click (or Esc) back */
+  var wbMaxBtn = document.createElement("button"); wbMaxBtn.type = "button"; wbMaxBtn.className = "pmax43"; wbMaxBtn.id = "wbMaxBtn";
+  function wbMax(on){
+    document.body.classList.toggle("wb-max", !!on);
+    wbMaxBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    wbMaxBtn.title = on ? "Terug naar het klaslokaal" : "Bord op volledig scherm";
+    wbMaxBtn.setAttribute("aria-label", wbMaxBtn.title);
+    wbMaxBtn.innerHTML = SVG(on ? '<path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/>' : '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>') + '<span class="lbl">' + (on ? "Terug" : "") + '</span>';
+    if(on && !OPEN.wb) setOpen("wb", true, "user");
+    requestAnimationFrame(function(){ try{ WB.fit(); }catch(e){} });
+  }
+  window.__wbMax = wbMax;
+  wbMaxBtn.addEventListener("click", function(){ wbMax(!document.body.classList.contains("wb-max")); });
+  wbGrp.insertBefore(wbMaxBtn, wbGrp.querySelector(".pclose43"));
+  wbMax(false);
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && document.body.classList.contains("wb-max")) wbMax(false); });
   layout();
 })();
 

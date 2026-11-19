@@ -76,14 +76,15 @@ export function nextLesson(lessons: Lesson[], now = Date.now()) {
   return [...lessons].filter(l => l.status !== 'cancelled' && l.status !== 'completed' && Date.parse(l.ends_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0] || null;
 }
 
-/** "in 2 days" / "in 3 h 20 min" / "in 12 min" / "now" — measured, never rounded up to a start that passed. */
+/** v43: "Over 1 dag en 2 uur" / "Over 5 uur en 30 min" / "Over 25 minuten" / "Les bezig" — measured from the absolute
+ *  start time (time-zone safe), never rounded up to a start that passed. */
 export function countdown(startIso: string, now = Date.now()) {
   const ms = Date.parse(startIso) - now;
-  if (ms <= 0) return t('Nu bezig');
-  const min = Math.ceil(ms / 60000), h = Math.floor(min / 60), d = Math.floor(h / 24);
-  if (d >= 2) return t('Over {0} dagen', d);
-  if (h >= 1) return t('Over {0} u {1} min', h, min - h * 60);
-  return t('Over {0} min', min);
+  if (ms <= 0) return t('Les bezig');
+  const min = Math.ceil(ms / 60000), h = Math.floor(min / 60), d = Math.floor(h / 24), rh = h - d * 24, rm = min - h * 60;
+  if (d >= 1) return rh ? t(d === 1 ? 'Over {0} dag en {1} uur' : 'Over {0} dagen en {1} uur', d, rh) : t(d === 1 ? 'Over {0} dag' : 'Over {0} dagen', d);
+  if (h >= 1) return rm ? t('Over {0} uur en {1} min', h, rm) : t('Over {0} uur', h);
+  return t(min === 1 ? 'Over 1 minuut' : 'Over {0} minuten', min);
 }
 
 /** Readable message for database errors from planning (double booking, invalid input). */

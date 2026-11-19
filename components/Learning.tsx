@@ -9,7 +9,7 @@ import {blankSentence,drillSet,hasDrills} from '../lib/conjugation';
 import {PenLine,Repeat,Wrench,CalendarDays,Clock3} from 'lucide-react';
 import {Select} from './Select';
 import {InfoTip} from './InfoTip';
-import {posIcon} from '../lib/vocab/grammar';
+import {posIcon,posKindOf,POS_GROUP_ORDER,POS_GROUP_TITLE} from '../lib/vocab/grammar';
 import {t as tt, translated} from '../lib/i18n';
 
 /* ========================= Vocabulary ========================= */
@@ -32,11 +32,12 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
   <div className="row between wrap"><h4><Sparkles size={15}/> {tt('Voorgestelde woorden')} {rows.length>0&&<span className="tag">{rows.length}</span>}</h4>
    <div className="row wrap"><button className="button small secondary" disabled={busy} onClick={()=>void scan()}>{tt('Woorden van het canvas herkennen')}</button>{rows.length>1&&<button className="button small" disabled={busy} onClick={()=>void accept(rows)}><Check size={14}/> {tt('Alles toevoegen')}</button>}</div></div>
   {msg&&<p className="muted" role="status">{msg}</p>}
-  {rows.length?<table className="vocab edit"><tbody>{rows.map(s=><tr key={s.id}>
+  {rows.length?<table className="vocab edit">{/* v43: grouped per word class (nouns, verbs, adjectives, adverbs, prepositions, conjunctions, expressions); teacher edits each row */}
+   {POS_GROUP_ORDER.map(k=>[k,rows.filter(s=>posKindOf(s.pos)===k)] as const).filter(([,g])=>g.length).map(([k,g])=><tbody key={k}><tr className="pos-group"><th colSpan={4}>{posIcon(g[0].pos)} {tt(POS_GROUP_TITLE[k])} <small className="muted">{g.length}</small></th></tr>{g.map(s=><tr key={s.id}>
    <td><input className="cell" value={s.term} onChange={e=>up(s.id,{term:e.target.value})} aria-label={tt('Woord')}/></td>
    <td><input className="cell" value={s.translation} onChange={e=>up(s.id,{translation:e.target.value})} aria-label={tt('Betekenis')}/></td>
    <td className="muted small-print">{s.pos?(posIcon(s.pos)+' '+s.pos).trim():''}{s.source_page?' · '+s.source_page:''}{s.origin==='analysis'?' · '+tt('AI-lesanalyse'):''}</td>
-   <td className="row"><button className="button small" disabled={busy||!s.term.trim()} onClick={()=>void accept([s])}><Check size={13}/> {tt('Toevoegen')}</button><button className="iconbtn danger" title={tt('Afwijzen')} onClick={()=>void reject(s)}><X size={14}/></button></td></tr>)}</tbody></table>
+   <td className="row"><button className="button small" disabled={busy||!s.term.trim()} onClick={()=>void accept([s])}><Check size={13}/> {tt('Toevoegen')}</button><button className="iconbtn danger" title={tt('Afwijzen')} onClick={()=>void reject(s)}><X size={14}/></button></td></tr>)}</tbody>)}</table>
   :<p className="muted small-print">{tt('Geen voorstellen. Getypte tekst op het canvas wordt herkend; handgeschreven tekst op het bord niet, omdat die niet betrouwbaar te lezen is.')}</p>}
  </section>
 }
@@ -193,9 +194,9 @@ const KIND_LABELS:Record<string,string>=translated({woordenschat:'Woordenschat',
    AI is only called on the button; the same choices give the same set again this session (no second AI call),
    "Opnieuw genereren" asks for a new one. A second click while busy is ignored. */
 const exCache=new Map<string,ExerciseSet>();
-export function ExerciseForm({studentId,defaultLevel,onReady,teacher}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean}){
- const [mode,setMode]=useState<'lesson'|'own'>('lesson');
- const [kinds,setKinds]=useState<string[]>(['gemengd']);const [level,setLevel]=useState<string>(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState('');const [minutes,setMinutes]=useState(10);
+export function ExerciseForm({studentId,defaultLevel,onReady,teacher,initialTopic}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean;initialTopic?:string}){
+ const [mode,setMode]=useState<'lesson'|'own'>(initialTopic?'own':'lesson');// v43: 'Oefen dit onderwerp' from a report presets the topic (AI only on the button)
+ const [kinds,setKinds]=useState<string[]>(initialTopic?['grammatica']:['gemengd']);const [level,setLevel]=useState<string>(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState(initialTopic||'');const [minutes,setMinutes]=useState(10);
  const [lessons,setLessons]=useState<{date:string;report:boolean}[]|null>(null);const [lessonDate,setLessonDate]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');const [reused,setReused]=useState(false);const inFlight=useRef(false);
  useEffect(()=>{let c=false;const db=supabase()!;void Promise.all([db.from('lesson_entries').select('lesson_date').eq('student_id',studentId).order('lesson_date',{ascending:false}).limit(30),db.rpc('student_lesson_summaries',{sid:studentId})]).then(([l,s])=>{if(c)return;
   const rep=new Set(((s.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date));const dates=Array.from(new Set([...rep,...((l.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date)])).sort().reverse().slice(0,30);
@@ -248,7 +249,7 @@ export function ExercisePlayer({set,studentId,kind='exercise',assignmentId,onFin
  </div>
 }
 
-export function SelfPractice({studentId,level}:{studentId:string;level?:string|null}){
+export function SelfPractice({studentId,level,topic}:{studentId:string;level?:string|null;topic?:string}){
  const [set,setSet]=useState<ExerciseSet|null>(null);
- return set?<div><ExercisePlayer set={set} studentId={studentId} onFinish={()=>{}}/><button className="button secondary" onClick={()=>setSet(null)}><Shuffle size={15}/> {tt("Nieuwe oefeningen")}</button></div>:<ExerciseForm studentId={studentId} defaultLevel={level} onReady={setSet}/>
+ return set?<div><ExercisePlayer set={set} studentId={studentId} onFinish={()=>{}}/><button className="button secondary" onClick={()=>setSet(null)}><Shuffle size={15}/> {tt("Nieuwe oefeningen")}</button></div>:<ExerciseForm studentId={studentId} defaultLevel={level} onReady={setSet} initialTopic={topic}/>
 }

@@ -10,7 +10,7 @@ export const VocabCheckSchema = z.object({
     index: z.number().describe('index of the candidate'),
     keep: z.boolean().describe('true only for a word or fixed expression a learner should study; false for instructions, names, dates, headings, grammar labels, sentences'),
     translation: z.string().describe('short meaning in the explanation language; for several meanings: "meaning 1; meaning 2"'),
-    pos: z.enum(['noun', 'verb', 'adjective', 'adverb', 'expression', 'sentence', 'other']).describe('word class; "expression" for a fixed multi-word expression, "sentence" for a useful example sentence'),
+    pos: z.enum(['noun', 'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'expression', 'sentence', 'other']).describe('word class (nouns in the singular with article, verbs as infinitive, adjectives in the base form); "expression" for a fixed multi-word expression, "sentence" for a useful example sentence'),
     article: z.string().describe('nouns in a language with articles: the definite article of the singular as used in the lesson language (e.g. de/het, o/a, el/la, le/la, der/die/das); else empty'),
     plural: z.string().describe('nouns: the plural form in the lesson language when useful for the level; else empty'),
     kind: z.enum(['word', 'expression']),

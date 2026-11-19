@@ -51,7 +51,7 @@ test('route: "Vanuit mijn les" uses the chosen lesson (or the latest) as the sou
 });
 test('form: compact card, default "Vanuit mijn les", 5–30 min, all exercise types, AI only on the button, no double request, reuse', () => {
   const l = read('components/Learning.tsx');
-  assert.match(l, /useState<'lesson'\|'own'>\('lesson'\)/);
+  assert.match(l, /useState<'lesson'\|'own'>\(initialTopic\?'own':'lesson'\)/, 'v43: default Vanuit mijn les, unless opened from a report topic');
   assert.match(l, /\[5,10,15,20,30\]/);
   for (const k of ['woordenschat', 'grammatica', 'vertalen', 'invullen', 'meerkeuze', 'werkwoorden', 'fouten', 'zinnen', 'schrijven', 'lezen', 'gemengd']) assert.ok(l.includes(k + ':'), k);
   assert.match(l, /if\(inFlight\.current\)return;/, 'double click ignored');

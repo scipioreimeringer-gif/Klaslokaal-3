@@ -33,6 +33,11 @@ export const DYNAMIC = [
   // v35: word list and classroom games (components/Games.tsx labels, route messages)
   'Woordenlijst', 'Flashcards', '30 Seconds', 'Taboe', 'Woorden uit de vorige les', 'Woorden uit de laatste vijf lessen', 'Alle woorden', 'Woorden die de leerling moeilijk vindt', 'Zelf kiezen',
   'Alleen de docent kan woorden van het canvas laten herkennen.', 'Alleen de docent start een spelronde.', 'Ongeldige spelronde', 'De leerling heeft nog geen account gekoppeld en kan daarom niet uitleggen.', 'Voer eerst supabase/v35.sql uit.', 'Deze ronde is al gestart.',
+  // v43: countdown wording (lib/lessons.ts), grammar groups (lib/analysis/groups.ts), word classes (lib/vocab/grammar.ts)
+  'Over {0} dag en {1} uur', 'Over {0} dagen en {1} uur', 'Over {0} dag', 'Over {0} dagen', 'Over 1 minuut', 'Over {0} minuten',
+  'Woordvolgorde', 'Lidwoorden (de/het)', 'Meervoud', 'Bijvoeglijk naamwoord', 'Voorzetsels', 'Voornaamwoorden', 'Werkwoorden en tijden', 'Woordkeuze', 'Uitspraak', 'Spelling',
+  'Ser en estar', 'Overeenstemming (concordância)', 'Geslacht en lidwoorden', 'Voorzetsels en samentrekkingen', 'Spelling en accenten', 'Overig',
+  'Zelfstandige naamwoorden', 'Bijvoeglijke naamwoorden', 'Bijwoorden', 'Voegwoorden', 'Uitdrukkingen', 'Voorbeeldzinnen',
 ];
 
 function sourceFiles() {

@@ -6,6 +6,7 @@ import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUr
 import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
+import {LessonCards} from './LessonCards';
 import {SelfPractice,VocabGames,VocabManager} from './Learning';
 import {LearningPath} from './LearningPath';
 import {subjectOf,authedPost} from '../lib/learning';
@@ -142,7 +143,8 @@ export function PrivateNotes({studentId}:{studentId:string}){
 type Tab='overzicht'|'lessen'|'analyses'|'woorden'|'doelen'|'huiswerk'|'oefenen'|'bord'|'opnames'|'prive';
 type WsStudent={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
 export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{studentId:string;viewer:'teacher'|'student';intro?:React.ReactNode;student?:WsStudent;initialTab?:string|null}){
- const [b,setB]=useState<Bundle|null>(null);const [tab,setTab]=useState<Tab>('overzicht');
+ const [b,setB]=useState<Bundle|null>(null);const [tab,setTab]=useState<Tab>('overzicht');const [report,setReport]=useState<string|null>(null);
+ const openReport=(id:string)=>{setReport(id);setTab('analyses')};// v43: a lesson card opens the report of THAT lesson
  const load=useCallback(async()=>{setB(await loadStudentBundle(supabase()!,studentId))},[studentId]);
  useEffect(()=>{setB(null);setTab((initialTab as Tab)||'overzicht');void load()},[load,initialTab]);
  /* v40: short tab names; [primary on a phone] — the others go under "Meer" on small screens (all tabs and routes kept) */
@@ -159,9 +161,9 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
     {more&&<span className="tabs-more-menu" role="menu">{secondary.map(([k,l,Icon])=><button key={k} role="menuitem" aria-current={tab===k||undefined} onClick={()=>{setTab(k);setMore(false)}}><Icon size={15}/>{t(l)}</button>)}</span>}</span></nav>
   {!b?<div className="card"><div className="loader small"/></div>:<>
   {b.error&&<div className="notice">{b.error}</div>}
-  {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonHistory lessons={b.lessons.slice(0,1)}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
-  {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonHistory lessons={b.lessons}/></section>}
-  {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId}/>:<StudentSummaries studentId={studentId} lessonLang={subjectOf(ws)}/>}</section>}
+  {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonCards studentId={studentId} viewer={viewer} entries={b.lessons} sessions={b.sessions} recordings={b.recordings} lang={subjectOf(ws)} level={ws.level} onOpenReport={openReport} limit={1}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
+  {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonCards studentId={studentId} viewer={viewer} entries={b.lessons} sessions={b.sessions} recordings={b.recordings} lang={subjectOf(ws)} level={ws.level} onOpenReport={openReport}/></section>}
+  {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId} focusId={report} lessonLang={subjectOf(ws)}/>:<StudentSummaries studentId={studentId} lessonLang={subjectOf(ws)} focusId={report}/>}</section>}
   {tab==='woorden'&&<section className="card"><h3>{t("Woordenlijst")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
