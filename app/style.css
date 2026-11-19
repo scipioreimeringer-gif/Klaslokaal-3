@@ -944,3 +944,78 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .gx-reveal{display:inline-flex;margin-top:4px;padding:2px 8px;border:1px dashed #cfe1dd;border-radius:99px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
 .gx-reveal:hover{background:#f3f8f7;color:var(--ink-2)}
 .flash-dir{margin:0 auto 10px;display:flex;width:fit-content}
+
+/* ===== v43: next lessons ("DAARNA") ===== */
+.next-after{margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#e6ecef)}
+.next-after h4{margin:0 0 6px;font-size:11px;font-weight:750;letter-spacing:.12em;color:var(--muted,#6b7a86)}
+.after-rows{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.after-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;color:inherit;text-decoration:none;transition:background .15s ease}
+.after-row:hover,.after-row:focus-visible{background:var(--teal-50)}
+.after-row .ar-who{display:flex;align-items:center;gap:8px;min-width:0}
+.after-row .ar-who .who-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650;font-size:14px}
+.after-row .ar-when{font-size:13px;color:var(--muted,#6b7a86);white-space:nowrap}
+.after-row .ar-count{font-size:12px;font-weight:700;color:var(--teal-600);white-space:nowrap}
+@media(max-width:640px){.after-row{grid-template-columns:minmax(0,1fr) auto auto}.after-row .ar-count{display:none}}
+/* ===== v43: lesson cards ===== */
+.lc-list{display:grid;gap:8px}
+.lc-card{border:1px solid var(--line,#e6ecef);border-radius:14px;background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
+.lc-card:hover{border-color:#bfe5dc;box-shadow:0 4px 14px rgba(15,60,70,.06)}
+.lc-main{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"num title status go" "num facts status go";align-items:center;column-gap:12px;row-gap:2px;padding:10px 14px;border-radius:14px}
+.lc-main:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px}
+.lc-num{grid-area:num;display:grid;place-items:center;min-width:54px;height:40px;padding:0 8px;border-radius:12px;background:var(--teal-50);color:var(--teal-600);font-weight:800;font-size:13px}
+.lc-title{grid-area:title;display:flex;align-items:center;gap:6px;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-facts{grid-area:facts;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted,#6b7a86)}
+.lc-facts span{display:inline-flex;align-items:center;gap:4px}
+.lc-status{grid-area:status;font-size:12px;font-weight:650;color:var(--muted,#6b7a86);background:#f3f5f7;border-radius:999px;padding:4px 10px;display:inline-flex;align-items:center;gap:5px;max-width:260px;text-align:right}
+.lc-status.ok{background:var(--teal-50);color:var(--teal-600)}
+.lc-card.st-ready .lc-status{background:#fff4e0;color:#a86400}
+.lc-card.st-failed .lc-status{background:#fdecea;color:#b33a2a}
+.lc-go{grid-area:go;color:var(--muted,#6b7a86)}
+.lc-body{padding:0 14px 12px 80px}
+.lc-body h4{margin:10px 0 4px;font-size:13px}
+.lc-empty{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed #cfe3df;border-radius:14px;background:#fbfdfc}
+.lc-empty strong{display:block;font-size:14px}.lc-empty p{margin:2px 0 0;font-size:13px}
+@media(max-width:640px){.lc-main{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"num title go" "num facts go" "num status go"}.lc-status{justify-self:start;max-width:none;text-align:left}.lc-body{padding-left:14px}}
+/* ===== v43: AI lesson report (fixed order, soft accents) ===== */
+.lesson-report{display:grid;gap:12px;margin-top:8px}
+.lr-sec{border-radius:14px;padding:12px 14px;background:#fff;border:1px solid var(--line,#e6ecef);border-left:4px solid var(--lr-acc,#13A89E)}
+.lr-sec h4{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:14px}
+.lr-sec ul,.lr-sec ol{margin:0;padding-left:18px}
+.lr-n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:999px;background:var(--lr-soft,#e5f6f3);color:var(--lr-acc,#13A89E);font-size:11px;font-weight:800}
+.lr-coral{--lr-acc:#e0664a;--lr-soft:#fdece7}.lr-blue{--lr-acc:#4a7fd4;--lr-soft:#e8f0fc}.lr-violet{--lr-acc:#8a63d2;--lr-soft:#f1ebfb}
+.lr-mint{--lr-acc:#13A89E;--lr-soft:#e5f6f3}.lr-green{--lr-acc:#3d9a5b;--lr-soft:#e7f5ec}.lr-grey{--lr-acc:#7b8a96;--lr-soft:#eef1f4}.lr-teal{--lr-acc:#0f8f86;--lr-soft:#e5f6f3}
+.lr-errors{list-style:none;padding:0!important;display:grid;gap:8px}
+.lr-errors li{background:#fffaf8;border-radius:12px;padding:8px 10px}
+.lr-pair{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;font-size:15px}
+.lr-wrong s{color:#b5482f;text-decoration-thickness:1.5px}
+.lr-right{color:#1f7a4a;font-weight:700}
+.lr-arrow{color:var(--muted,#6b7a86)}
+.lr-why{margin:4px 0 0;font-size:13px;color:#4a5864}
+.lr-groups{list-style:none;padding:0!important;display:grid;gap:6px}
+.lr-groups li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:center;padding:6px 10px;border-radius:10px;background:var(--lr-soft)}
+.lr-groups li>span{font-weight:650}.lr-groups small{grid-column:1/-1;font-size:12px}
+.lr-count{color:var(--lr-acc);font-size:13px}
+.lr-deep{border-radius:12px;background:#faf8fe;margin:0 0 6px;padding:2px 10px}
+.lr-deep summary{display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;list-style:none}
+.lr-deep summary::-webkit-details-marker{display:none}
+.lr-deep .lr-chev{margin-left:auto;transition:transform .18s ease}.lr-deep[open] .lr-chev{transform:rotate(180deg)}
+.lr-deep>p{margin:0 0 6px;font-size:13.5px}.lr-examples{margin:0 0 8px!important;font-size:13.5px}
+.lr-deep .button{margin:0 0 10px}.lr-practise{margin:4px 0 10px}
+.lr-words td,.lr-words th{padding:4px 8px}
+/* v43: word suggestions grouped per word class */
+.vocab.edit tr.pos-group th{text-align:left;font-size:12px;font-weight:750;letter-spacing:.02em;color:var(--teal-600);padding:10px 6px 4px;border-bottom:1px solid var(--line,#e6ecef)}
+
+/* ===== v43: task cards per type (Huiswerk coral · Flashcards purple · Grammatica blue · Oefenen green) ===== */
+.rcard{border-top:3px solid var(--rc-acc,var(--line))}
+.rcard.tone-coral{--rc-acc:#e8775c}.rcard.tone-violet{--rc-acc:#8a63d2}.rcard.tone-blue{--rc-acc:#4a7fd4}.rcard.tone-teal{--rc-acc:#13A89E}.rcard.tone-yellow{--rc-acc:#3d9a5b}
+.rcard.tone-blue .rcard-ico{background:#e8f0fc;color:#3a6cc0}
+.rcard.tone-violet .rcard-bar{color:#8a63d2}
+.rcard.tone-yellow .rcard-ico{background:#e7f5ec;color:#2f8550}
+.rcard .rcard-action{color:var(--rc-acc,#0b6b63)}
+.rgrid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+@media(max-width:380px){.rgrid{grid-template-columns:1fr}}
+/* compact empty states for charts: no big empty chart frames */
+.chart-card.is-empty,.chartcard.is-empty{min-height:0}.chart-card.is-empty{order:10;min-height:0!important;padding-bottom:12px}
+.chart-card.is-empty.span2{grid-column:auto!important}
+.chart-card.is-empty .chart-empty{min-height:0!important;height:auto!important;flex-direction:row!important;justify-content:flex-start!important;gap:8px;padding:6px 0 0!important;text-align:left!important;font-size:12.5px;color:var(--muted,#6b7a86)}
+.chart-card.is-empty .chart-head p{display:none}

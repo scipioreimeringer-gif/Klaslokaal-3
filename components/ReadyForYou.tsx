@@ -3,7 +3,7 @@
 // v40: compact card grid (desktop 4, tablet 2, mobile 1–2) with short labels: 📋 Huiswerk · 🧠 Flashcards ·
 // ✨ Laatste les · 🎯 Oefenen. All data comes from the dashboard's own RLS-limited queries; nothing is generated here.
 import Link from 'next/link';
-import {ClipboardList,Brain,Sparkles,Target,ChevronRight,CheckCircle2} from 'lucide-react';
+import {ClipboardList,Brain,Sparkles,Target,ChevronRight,CheckCircle2,BookA} from 'lucide-react';
 import {niceDate} from '../lib/data';
 import {hasReady,type ReadyItem} from '../lib/ready';
 import {compactAnalysis} from '../lib/analysis/compact';
@@ -39,6 +39,7 @@ export function ReadyForYou({relations,items}:{relations:ReadyRel[];items:ReadyI
     <div className="rgrid">
      {r.homework.length>0&&<Card tone="coral" icon={<ClipboardList size={16}/>} title={tt("Huiswerk")} value={tt("{0} open",r.homework.length)} sub={r.homework[0].title} progress={pub?done/pub*100:null} href={base+'&tab=huiswerk'} action={tt("Maken")}/>}
      {r.dueWords>0&&<Card tone="violet" icon={<Brain size={16}/>} title={tt("Flashcards")} value={tt("{0} woorden herhalen",r.dueWords)} href={`/oefenen?student=${rel.id}&spel=flashcards`} action={tt("Oefenen")}/>}
+     {pts.length>0&&<Card tone="blue" icon={<BookA size={16}/>} title={tt("Grammatica")} value={pts[0].label} sub={pts.length>1?tt("+{0} aandachtspunten",pts.length-1):tt("Uit je laatste les")} href={base+'&tab=analyses'} action={tt("Bekijken en oefenen")}/>}{/* v43: blue grammar card from the approved report (real data only) */}
      {r.latest&&<Card tone="teal" icon={<Sparkles size={16}/>} title={tt("Laatste les")} value={niceDate(r.latest.lesson_date)} sub={pts.length?pts.map(p=>p.label).join(' · '):tt("Geen belangrijke fouten")} href={base+'&tab=analyses'} action={tt("Bekijken")}/>}
      <Card tone="yellow" icon={<Target size={16}/>} title={tt("Oefenen")} value={tt("Gemengde oefening")+(rel.level?` · ${rel.level}`:'')} href={`/oefenen?student=${rel.id}`} action={tt("Start")}/>
     </div></div>})}

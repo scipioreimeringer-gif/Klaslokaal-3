@@ -8,7 +8,7 @@ import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import type {Category,Suggestion} from '../lib/analysis/core';
-import {CompactAnalysis} from './CompactAnalysis';
+import {LessonReport} from './LessonReport';
 import {proposeTopics,type LessonTopics} from '../lib/analysis/material';
 import {ListChecks} from 'lucide-react';
 
@@ -89,7 +89,7 @@ function LessonTopicsBox({doc,onSave}:{doc:AnalysisV2;onSave:(t:LessonTopics)=>v
 
 type TopicName={id:string;title:string;status:GoalStatus};
 /** Teacher: review and edit a finished analysis. Edits are saved to the version the student sees (not for TEST). */
-export function TeacherAnalysisV2({a,onChange}:{a:V2Row;onChange:()=>void}){
+export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>void;lessonLang?:string}){
  const src=(a.final||a.draft) as AnalysisV2;const [doc,setDoc]=useState<AnalysisV2>(src);const [busy,setBusy]=useState(false);const [msg,setMsg]=useState('');
  const [keep,setKeep]=useState<boolean[]>(src.vocabulary.map(()=>true));const [topics,setTopics]=useState<Record<string,TopicName>>({});const [adj,setAdj]=useState<Record<string,GoalStatus>>({});
  useEffect(()=>{const ids=src.checklist_suggestions.map(s=>s.topic_id);if(!ids.length)return;const db=supabase()!;
@@ -120,7 +120,7 @@ export function TeacherAnalysisV2({a,onChange}:{a:V2Row;onChange:()=>void}){
   {a.is_test?<p className="notice test-note"><span className="test-badge">{'TEST'}</span> {tt('TEST-analyse: nooit gedeeld met de leerling; geen huiswerk, geen voorstellen voor het leertraject.')}</p>
    :published&&<p className="muted"><CheckCircle2 size={14}/> {tt("Verslag en foutenanalyse zijn automatisch gedeeld met de leerling{0}. Je kunt ze hier aanpassen.",a.published_at?' ('+niceDate(a.published_at)+')':'')}</p>}
 
-  {!a.is_test&&<details className="compact-preview"><summary><b>{tt("Zo ziet de leerling het (kort, max. 3 punten)")}</b></summary><CompactAnalysis doc={doc}/></details>}
+  {!a.is_test&&<details className="compact-preview"><summary><b>{tt("Zo ziet de leerling het verslag")}</b></summary><LessonReport doc={doc} teacher lessonLang={lessonLang}/></details>}
 
   <h4>{tt("Kort lesverslag")}</h4>
   <label className="stack"><span className="label">{tt("Samenvatting")}</span><textarea className="field" rows={4} value={rep?.summary||''} onChange={e=>setReport({summary:e.target.value})}/></label>

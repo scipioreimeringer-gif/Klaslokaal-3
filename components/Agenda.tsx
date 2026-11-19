@@ -50,10 +50,9 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
  const range=useMemo(()=>({from:new Date(Date.now()-12*3600e3).toISOString(),to:new Date(Date.now()+60*86400e3).toISOString()}),[]);
  const {lessons,relations,ready,loaded,error}=useLessons(range,mode);
  const teacherName=(sid:string)=>studentLinks.find(x=>x.id===sid)?.teacher_name||'';
- const next=nextLesson(lessons,now);const today=dayKey(now,tz);const weekEnd=new Date(now+7*86400e3).toISOString();
- const upcoming=lessons.filter(l=>l.status!=='cancelled'&&Date.parse(l.ends_at)>now);
- const todays=upcoming.filter(l=>dayKey(l.starts_at,tz)===today&&l.id!==next?.id);
- const week=upcoming.filter(l=>dayKey(l.starts_at,tz)!==today&&l.starts_at<weekEnd&&l.id!==next?.id);
+ const next=nextLesson(lessons,now);
+ // v43: "DAARNA" = the next three lessons after the next one (any day), compact
+ const after=lessons.filter(l=>l.status!=='cancelled'&&l.status!=='completed'&&Date.parse(l.ends_at)>now&&l.id!==next?.id).sort((a,b)=>a.starts_at.localeCompare(b.starts_at)).slice(0,3);
  if(!ready)return <section className="panel next-lesson"><p className="muted">{t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.')}</p></section>;
  if(!loaded)return <section className="panel next-lesson"><div className="loader small"/></section>;
  const rel=next?relations.get(next.student_id):undefined;const lang=next?langOf(next,rel):'';
@@ -72,19 +71,15 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
     <Link className="button next-open" href={classroomHref(next)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
    </div>
   </div>}
-  {(todays.length>0||week.length>0)&&<div className="next-lists">
-   {todays.length>0&&<div><h4>{t('Vandaag')}</h4><LessonRows items={todays} relations={relations} mode={mode} teacherName={teacherName} tz={tz} now={now}/></div>}
-   {week.length>0&&<div><h4>{t('Deze week')}</h4><LessonRows items={week} relations={relations} mode={mode} teacherName={teacherName} tz={tz} now={now} withDay/></div>}
-  </div>}
+  {next&&after.length>0&&<div className="next-after"><h4>{t('DAARNA')}</h4><ul className="after-rows">{after.map(l=>{const r=relations.get(l.student_id);const lg=langOf(l,r);return <li key={l.id}>
+   <Link href={classroomHref(l)} className="after-row" title={t('Klaslokaal openen')}>
+    <span className="ar-who"><Who l={l} rel={r} mode={mode} teacherName={teacherName} size={26}/></span>
+    {lg&&<Flag code={lg} size={16}/>}
+    <span className="ar-when">{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})} · {clock(l.starts_at,tz)}</span>
+    <span className="ar-count">{countdown(l.starts_at,now)}</span>
+   </Link></li>})}</ul></div>}
   {next&&<div className="next-foot"><Link href="/agenda">{t('Naar de agenda')} →</Link></div>}
  </section>
-}
-function LessonRows({items,relations,mode,teacherName,tz,now,withDay}:{items:Lesson[];relations:Map<string,StudentRecord>;mode:'teacher'|'student';teacherName:(id:string)=>string;tz:string;now:number;withDay?:boolean}){
- return <ul className="lesson-rows">{items.map(l=>{const rel=relations.get(l.student_id);const lang=langOf(l,rel);return <li key={l.id}>
-  <span className="lr-time">{withDay&&<small>{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})}</small>}{clock(l.starts_at,tz)}–{clock(l.ends_at,tz)}</span>
-  <span className="lr-who"><Who l={l} rel={rel} mode={mode} teacherName={teacherName} size={26}/></span>
-  <span className="lr-lang">{lang&&<Flag code={lang} size={16}/>}</span><StatusChip state={lessonState(l,now)}/>
-  <Link className="iconbtn" href={classroomHref(l)} title={t('Klaslokaal openen')} aria-label={t('Klaslokaal openen')}><Video size={16}/></Link></li>})}</ul>
 }
 
 /* ---------------- agenda page ---------------- */

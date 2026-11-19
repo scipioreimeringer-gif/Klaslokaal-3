@@ -6,7 +6,7 @@ import {useAuth,PendingLinks} from '../components/Auth';
 import {BarChart,CHART,ChartCard,HBars,LineChart,ProgressRing,StatTile} from '../components/Charts';
 import {supabase} from '../lib/supabase';
 import {loadStudents,isMissingMigration,MIGRATION_HINT,type StudentRecord} from '../lib/data';
-import {activeStudents,cumulativeWords,groupCount,homeworkProgress,isEmptySeries,lessonsPerMonth,wordsPerMonth,type LessonLike} from '../lib/stats';
+import {activeStudents,cumulativeWords,distinctWords,groupCount,homeworkProgress,isEmptySeries,lessonsPerMonth,mergeLessons,wordsPerMonth,type LessonLike,type MergedLesson,type SessionLike} from '../lib/stats';
 import {sessionsPerWeek} from '../lib/answers';
 import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
@@ -19,12 +19,12 @@ import {Flag} from '../components/Flag';
 import {subjectOf as langOf} from '../lib/learning';
 import {languageName} from '../lib/languages';
 import {CATEGORY_LABEL,type AnalysisDoc,type AnalysisStatus,type CorrectionCategory} from '../lib/analysisTypes';
-import {UsersRound,BookOpenCheck,Languages,ClipboardList,Video,Plus,ChevronRight,BookOpen,Presentation,Activity,Mic,CalendarCheck,Sparkles} from 'lucide-react';
+import {UsersRound,BookOpenCheck,Languages,ClipboardList,Video,Plus,ChevronRight,BookOpen,Presentation,Activity,Mic,CalendarCheck,Sparkles,Unlink} from 'lucide-react';
 import {t, locale} from '../lib/i18n';
 
-type V28={vocab:{student_id:string;status:string;due_at?:string|null;translation?:string|null}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[];summaries:{id:string;student_id:string;lesson_date:string;final:AnalysisDoc}[]};
-type Dash={students:StudentRecord[];lessons:LessonLike[];assignments:{id:string;student_id:string;title:string;published_at:string|null}[];submissions:{assignment_id:string}[];error:string;loaded:boolean}&V28;
-const EMPTY:Dash={students:[],lessons:[],assignments:[],submissions:[],error:'',loaded:false,vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
+type V28={vocab:{student_id:string;status:string;due_at?:string|null;translation?:string|null;term?:string|null}[];progress:{student_id:string;status:string;goal_id:string;curriculum_goals:{level:string}|null}[];practice:{student_id:string;kind:string;score:number;total:number;created_at:string}[];analyses:{id:string;student_id:string;lesson_date:string;status:string}[];summaries:{id:string;student_id:string;lesson_date:string;final:AnalysisDoc}[]};
+type Dash={students:StudentRecord[];lessons:MergedLesson[];sessions:SessionLike[]|null;assignments:{id:string;student_id:string;title:string;published_at:string|null}[];submissions:{assignment_id:string}[];error:string;loaded:boolean}&V28;
+const EMPTY:Dash={students:[],lessons:[],sessions:null,assignments:[],submissions:[],error:'',loaded:false,vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
 
 /** Loads the real stored data for the dashboard (RLS limits it to what this user may see). */
 function useDashboard(filter:{teacherId?:string;userId?:string}|null){
@@ -33,14 +33,15 @@ function useDashboard(filter:{teacherId?:string;userId?:string}|null){
  useEffect(()=>{if(!filter)return;let cancelled=false;void(async()=>{
   const db=supabase()!;const r=await loadStudents(db,filter);let error=r.error||(!r.v27?t(MIGRATION_HINT):'');const ids=r.data.map(s=>s.id);
   if(!ids.length){if(!cancelled)setD({...EMPTY,students:r.data,error,loaded:true});return}
-  const [l,a]=await Promise.all([db.from('lesson_entries').select('student_id,lesson_date,words').in('student_id',ids),db.from('assignments').select('id,student_id,title,published_at').in('student_id',ids)]);
+  const [l,a,ss]=await Promise.all([db.from('lesson_entries').select('student_id,lesson_date,words').in('student_id',ids),db.from('assignments').select('id,student_id,title,published_at').in('student_id',ids),db.from('lesson_sessions').select('id,student_id,lesson_date,started_at,ended_at,joint_seconds,registered_at,lesson_id,recording_id,language').in('student_id',ids).order('started_at',{ascending:false}).limit(2000)]);
+  const sessions=ss.error?null:(ss.data||[]) as SessionLike[];// v43: null = migration not run yet → old count per lesson day
   if(l.error&&!isMissingMigration(l.error))error=l.error.message;
   const A=(a.data||[]) as Dash['assignments'];const pub=A.filter(x=>x.published_at).map(x=>x.id);
   const s=pub.length?await db.from('homework_submissions').select('assignment_id').in('assignment_id',pub):{data:[]};
   let v28:V28={vocab:[],progress:[],practice:[],analyses:[],summaries:[]};
-  if(r.v28){const [vv,pp,pr,an]=await Promise.all([db.from('vocab_items').select('student_id,status,due_at,translation').in('student_id',ids),db.from('student_goal_progress').select('student_id,status,goal_id,curriculum_goals(level)').in('student_id',ids),db.from('practice_sessions').select('student_id,kind,score,total,created_at').in('student_id',ids).order('created_at',{ascending:false}).limit(500),filter.teacherId?db.from('lesson_analyses').select('*').in('student_id',ids).in('status',['ready','processing','failed']).order('created_at',{ascending:false}):Promise.resolve({data:[]})]);
+  if(r.v28){const [vv,pp,pr,an]=await Promise.all([db.from('vocab_items').select('student_id,status,due_at,translation,term').in('student_id',ids),db.from('student_goal_progress').select('student_id,status,goal_id,curriculum_goals(level)').in('student_id',ids),db.from('practice_sessions').select('student_id,kind,score,total,created_at').in('student_id',ids).order('created_at',{ascending:false}).limit(500),filter.teacherId?db.from('lesson_analyses').select('*').in('student_id',ids).in('status',['ready','processing','failed']).order('created_at',{ascending:false}):Promise.resolve({data:[]})]);
    v28={vocab:(vv.data||[]) as V28['vocab'],progress:(pp.data||[]) as unknown as V28['progress'],practice:(pr.data||[]) as V28['practice'],analyses:(an.data||[]) as V28['analyses'],summaries:filter.userId?(await Promise.all(ids.map(id=>db.rpc('student_lesson_summaries',{sid:id}).then(x=>((x.data||[]) as Omit<V28['summaries'][number],'student_id'>[]).map(s=>({...s,student_id:id})))))).flat():[]};}
-  if(!cancelled)setD({students:r.data,lessons:(l.data||[]) as LessonLike[],assignments:A,submissions:(s.data||[]) as Dash['submissions'],error,loaded:true,...v28});
+  if(!cancelled)setD({students:r.data,lessons:mergeLessons((l.data||[]) as LessonLike[],sessions),sessions,assignments:A,submissions:(s.data||[]) as Dash['submissions'],error,loaded:true,...v28});
  })();return()=>{cancelled=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
  return d;
 }
@@ -70,7 +71,7 @@ function TeacherHome(){
   </div>
   {review.length>0&&<section className="panel review-panel"><div className="panelheader"><div><h2><Sparkles size={18}/> {t("AI-analyses")}</h2><p>{t("Concepten die op jouw controle wachten; leerlingen zien niets tot jij goedkeurt")}</p></div></div><div className="studentrows">{review.map(a=><div className="studentrow" key={a.id}><div className="avatar">{nameOf.name(a.student_id)[0]?.toUpperCase()||'?'}</div><Link className="studentrow-main" href={'/leerlingen?student='+a.student_id+'&tab=analyses'}><strong>{nameOf.name(a.student_id)}</strong><small>{t("Les van")} {new Date(a.lesson_date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'long'})}</small></Link>{(a as {is_test?:boolean}).is_test&&<span className="test-badge">{'TEST'}</span>}<StatusChip status={a.status as AnalysisStatus}/></div>)}</div></section>}
   <div className="chart-grid">
-   <ChartCard className="span2" title={t("Lesactiviteit")} subtitle={t("Gegeven lessen per maand, afgelopen 6 maanden")} empty={d.loaded&&isEmptySeries(perMonth)} emptyText={t("Nog geen lessen opgeslagen. Lessen verschijnen hier zodra je in het live klaslokaal notities, woorden of huiswerk vastlegt.")} table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
+   <ChartCard className="span2" title={t("Lesactiviteit")} subtitle={t("Gegeven lessen per maand, afgelopen 6 maanden")} empty={d.loaded&&isEmptySeries(perMonth)} emptyText={t("Nog geen lessen. Een les telt automatisch zodra jij en je leerling minstens 2 minuten samen in het klaslokaal zijn.")} table={perMonth}><BarChart data={perMonth} color={CHART.teal}/></ChartCard>
    <ChartCard title={t("Huiswerkvoortgang")} subtitle={t("Ingeleverd van gepubliceerd")} empty={d.loaded&&hw.pct===null} emptyText={t("Nog geen gepubliceerd huiswerk.")}>{hw.pct!==null&&<ProgressRing pct={hw.pct} label={t("ingeleverd")} detail={t("{0} van {1} opdrachten ingeleverd", hw.submitted, hw.published)}/>}</ChartCard>
    <ChartCard className="span2" title={t("Nieuwe woorden")} subtitle={t("Woorden toegevoegd per maand, alle leerlingen")} empty={d.loaded&&isEmptySeries(words)} emptyText={t("Nog geen woorden vastgelegd.")} table={words}><LineChart data={words} color={CHART.violet}/></ChartCard>
    <ChartCard title={t("Lessen per vak")} subtitle={t("Totaal")} empty={d.loaded&&!bySubject.length} emptyText={t("Nog geen lessen.")} table={bySubject}><HBars data={bySubject} color={CHART.teal}/></ChartCard>
@@ -89,13 +90,17 @@ function StudentHome(){
  const {user,studentLinks,role,refresh}=useAuth();const d=useDashboard(user?{userId:user.id}:null);
  const subjectOf=useMemo(()=>{const m=new Map(d.students.map(s=>[s.id,s.subject]));return (id:string)=>m.get(id)||''},[d.students]);
  const perMonth=lessonsPerMonth(d.lessons,6),growth=cumulativeWords(d.lessons,6),hw=homeworkProgress(d.assignments,d.submissions),bySubject=groupCount(d.lessons,subjectOf,5);
- const words=d.lessons.reduce((n,l)=>n+(Array.isArray(l.words)?l.words.length:0),0);
+ const words=d.vocab.length?distinctWords(d.vocab):d.lessons.reduce((n,l)=>n+(Array.isArray(l.words)?l.words.length:0),0);// v43: real stored words, never counted twice
  const last=d.lessons.map(l=>l.lesson_date).sort().pop();
  const perWeek=sessionsPerWeek(d.practice,8);const vstat=[{key:'new',label:t("Nieuw"),value:d.vocab.filter(v=>v.status==='new').length},{key:'practicing',label:t("Aan het oefenen"),value:d.vocab.filter(v=>v.status==='practicing').length},{key:'mastered',label:t("Beheerst"),value:d.vocab.filter(v=>v.status==='mastered').length}];
  const perLevel=['A0','A1','A2','B1','B2','C1','C2'].map(l=>({key:l,label:l,value:d.progress.filter(p=>p.curriculum_goals?.level===l&&(p.status==='covered'||p.status==='mastered')).length})).filter(x=>x.value>0);
  const catCount=new Map<string,number>();d.summaries.forEach(s=>(s.final?.corrections||[]).filter(c=>c.certainty!=='uncertain').forEach(c=>{const k=CATEGORY_LABEL[(c.category||'other') as CorrectionCategory];catCount.set(k,(catCount.get(k)||0)+1)}));
  const errorsByCat=Array.from(catCount.entries()).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({key:k,label:k,value:v}));
  const speaking=d.summaries.filter(s=>s.final?.student_speaking_seconds!=null).sort((a,b)=>a.lesson_date<b.lesson_date?-1:1).slice(-8).map(s=>({key:s.lesson_date,label:new Date(s.lesson_date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'}),value:Math.round((s.final.student_speaking_seconds||0)/60)}));
+ // v43: the student can end the link with a teacher (server-side check in student_leave_teacher: only their own link; nothing is deleted)
+ const [unlinkMsg,setUnlinkMsg]=useState('');
+ async function leave(id:string,name:string){if(!confirm(t("Weet je zeker dat je deze docent wilt ontkoppelen?")+'\n\n'+name+'\n'+t("Er wordt niets verwijderd. Je ziet de lessen van deze docent niet meer en kunt niet meer in dit klaslokaal. Je docent kan je later opnieuw uitnodigen.")))return;
+  const {error}=await supabase()!.rpc('student_leave_teacher',{target:id});setUnlinkMsg(error?error.message:t("Koppeling beëindigd."));if(!error)await refresh()}
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
  return <><PendingLinks/><NextLessonPanel mode="student"/>
   <ReadyForYou items={d.loaded?readyFor(d):null} relations={studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);return {id:s.id,label:[s.subject||t("Les"),s.teacher_name].filter(Boolean).join(' · '),lang:rec?langOf(rec):undefined,level:rec?.level||null,teacher:s.teacher_name||undefined}})}/>
@@ -119,9 +124,10 @@ function StudentHome(){
    <ChartCard title={t("Leerdoelen per niveau")} subtitle={t("Behandeld of beheerst · docentbeoordeling")} empty={d.loaded&&!perLevel.length} emptyText={t("Je docent heeft nog geen leerdoelen bijgehouden.")} table={perLevel}><HBars data={perLevel} color={CHART.ochre}/></ChartCard>
    <ChartCard title={t("Voortgang per taal of vak")} subtitle={t("Aantal lessen")} empty={d.loaded&&!bySubject.length} emptyText={t("Nog geen lessen.")} table={bySubject}><HBars data={bySubject} color={CHART.ochre}/></ChartCard>
   </div>
-  <section className="panel"><div className="panelheader"><div><h2>{t("Mijn docenten")}</h2><p>{t("Alleen jij en je docent zien deze gegevens")}</p></div></div>
+  <section className="panel"><div className="panelheader"><div><h2>{t("Mijn docenten")}</h2><p>{t("Alleen jij en je docent zien deze gegevens")}</p></div></div>{unlinkMsg&&<p className="muted" role="status">{unlinkMsg}</p>}
    {studentLinks.length===0?<div className="emptystate"><BookOpen size={30}/><strong>{t("Nog geen leerlingprofiel gekoppeld")}</strong><p>{t("Vraag je docent om je toe te voegen met het e-mailadres van dit account. De uitnodiging verschijnt dan hierboven.")}</p></div>:
-   <div className="studentrows">{studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);const lang=rec?langOf(rec):'';return <div className="studentrow" key={s.id}><Avatar userId={rec?.teacher_id} name={s.teacher_name||'D'} size={40}/><Link className="studentrow-main" href={'/mijn-profiel?'+(lang?'taal='+lang+'&':'')+'student='+s.id}><strong>{s.teacher_name||t("Docent")}</strong><small>{lang&&<Flag code={lang} size={16}/>} {lang?languageName(lang):(s.subject||t("Les"))}{rec?.level?' · '+rec.level:''}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> {t("Naar de les")}</Link></div>})}</div>}
+   <div className="studentrows">{studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);const lang=rec?langOf(rec):'';return <div className="studentrow" key={s.id}><Avatar userId={rec?.teacher_id} name={s.teacher_name||'D'} size={40}/><Link className="studentrow-main" href={'/mijn-profiel?'+(lang?'taal='+lang+'&':'')+'student='+s.id}><strong>{s.teacher_name||t("Docent")}</strong><small>{lang&&<Flag code={lang} size={16}/>} {lang?languageName(lang):(s.subject||t("Les"))}{rec?.level?' · '+rec.level:''}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> {t("Naar de les")}</Link>
+    <button className="iconbtn" title={t("Ontkoppelen")} aria-label={t("Ontkoppelen")} onClick={()=>void leave(s.id,s.teacher_name||t("Docent"))}><Unlink size={16}/></button></div>})}</div>}
   </section>
   {(role==='student'||role==='rejected_teacher'||role==='pending_teacher')&&<section className="panel soft"><h2>{t("Zelf lesgeven?")}</h2><p className="muted">{role==='pending_teacher'?t("Je aanvraag voor een docentprofiel wacht op goedkeuring door de beheerder."):role==='rejected_teacher'?t("Je vorige aanvraag is niet goedgekeurd. Je kunt opnieuw een aanvraag indienen."):t("Vraag een docentprofiel aan. Na goedkeuring gebruik je hetzelfde account als docent én als leerling.")}</p>{role!=='pending_teacher'&&<button className="button" onClick={async()=>{const {error}=await supabase()!.rpc('request_teacher_access');if(error)alert(error.message);else await refresh()}}>{t("Docentprofiel aanvragen")}</button>}</section>}
   <p className="small-print muted"><Mic size={12}/> {t("Opnames van je lessen vind je bij Mijn lessen → Opnames.")}</p></>

@@ -15,6 +15,8 @@ import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegac
 export type TeachyBridge = {
   /** v42: planned start of the lesson in the agenda (ISO), used for the lesson timer; null without a planned lesson */
   lessonStartsAt?: string | null;
+  /** v43 teacher only: heartbeat with the joint presence (seconds) of this classroom session; the server registers the lesson. */
+  presence?(p: {key: string; joint: number}): Promise<{registered?: boolean; threshold?: number; expired?: boolean; error?: string}>;
   version: 1;
   role: 'teacher' | 'student';
   studentId: string;
@@ -152,6 +154,13 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       return putState(k.kind, k.studentId, value);
     },
     async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
+    async presence(p) {
+      // v43: one small RPC about every 30 s while teacher and student are both connected (never per second)
+      const r = await db.rpc('lesson_presence', {sid: opts.studentId, skey: p.key, joint: Math.max(0, Math.round(p.joint)), planned: opts.lessonId || null, day: localDate()});
+      if (r.error) return /SESSION_EXPIRED/.test(r.error.message) ? {expired: true} : {error: isMissingMigration(r.error) || /lesson_presence/.test(r.error.message) ? 'migration' : r.error.message};
+      const d = (r.data || {}) as {registered?: boolean; threshold?: number};
+      return {registered: !!d.registered, threshold: d.threshold};
+    },
     iceServers: () => fetchIceServers(db, opts.studentId),
     iceStatus: () => iceStatusValue,
     switchStudent(id) { if (allowed.has(id) && id !== opts.studentId) opts.onSwitch(id); },

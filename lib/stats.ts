@@ -67,3 +67,36 @@ export function activeStudents(lessons: LessonLike[], days = 30, now = new Date(
 }
 
 export const isEmptySeries = (p: Point[]) => p.every(x => x.value === 0);
+
+/** v43: a registered lesson (joint presence ≥ threshold) from lesson_sessions. */
+export type SessionLike = {id: string; student_id: string; lesson_date: string; started_at: string; ended_at?: string; joint_seconds: number; registered_at: string | null; lesson_id?: string | null; recording_id?: string | null; language?: string | null};
+/** Lesson-day rows (notes/words/homework) written before v43 count as history; from then on only real joint presence counts. */
+export const LEGACY_UNTIL = '2026-11-19';
+export type MergedLesson = LessonLike & {session?: SessionLike; legacy?: boolean};
+
+/**
+ * v43: the lessons that count, without double counting:
+ * - every registered session is one lesson (two separate lessons on one day = two);
+ * - the words of a lesson day (lesson_entries) are attached once, to the last lesson of that day;
+ * - an old lesson day (≤ LEGACY_UNTIL) without a registered session still counts as one lesson;
+ * - a lesson day after that without joint presence (teacher alone, only notes) does not count.
+ * `sessions === null` = migration v43 not run yet → the old behaviour (one lesson per lesson day).
+ */
+export function mergeLessons(entries: LessonLike[], sessions: SessionLike[] | null): MergedLesson[] {
+  if (!sessions) return entries.map(e => ({...e, legacy: true}));
+  const reg = sessions.filter(s => s.registered_at).sort((a, b) => (a.started_at < b.started_at ? -1 : 1));
+  const byDay = new Map<string, LessonLike>(entries.map(e => [e.student_id + '|' + e.lesson_date, e]));
+  const lastOfDay = new Map<string, string>();
+  for (const s of reg) lastOfDay.set(s.student_id + '|' + s.lesson_date, s.id);
+  const out: MergedLesson[] = reg.map(s => {
+    const k = s.student_id + '|' + s.lesson_date, e = byDay.get(k);
+    return {student_id: s.student_id, lesson_date: s.lesson_date, words: lastOfDay.get(k) === s.id && e ? e.words : [], session: s};
+  });
+  for (const e of entries) if (e.lesson_date <= LEGACY_UNTIL && !lastOfDay.has(e.student_id + '|' + e.lesson_date)) out.push({...e, legacy: true});
+  return out.sort((a, b) => (a.lesson_date < b.lesson_date ? -1 : a.lesson_date > b.lesson_date ? 1 : (a.session?.started_at || '') < (b.session?.started_at || '') ? -1 : 1));
+}
+
+/** Distinct words a student really has (personal word list), never counted twice across lessons. */
+export function distinctWords(vocab: {student_id: string; term?: string | null}[]): number {
+  return new Set(vocab.map(v => v.student_id + '|' + String(v.term || '').trim().toLowerCase()).filter(k => !k.endsWith('|'))).size;
+}

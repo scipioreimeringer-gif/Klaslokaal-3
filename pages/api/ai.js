@@ -33,11 +33,21 @@ Antwoord ALLEEN met geldige JSON, zonder uitleg, in precies deze vorm:
 {"werkwoorden":[{"infinitief":"","verleden":"ik-vorm verleden tijd, meervoud","hulpwerkwoord":"hebben of zijn of hebben/zijn","voltooid":"voltooid deelwoord","onregelmatig":true,"betekenis":""}],
  "zelfstandig":[{"woord":"","lidwoord":"de of het","meervoud":"","betekenis":""}],
  "bijvoeglijk":[{"woord":"","vergrotend":"","overtreffend":"","betekenis":""}],
- "overig":[{"woord":"","soort":"bijvoorbeeld bijwoord, voorzetsel, voegwoord, uitdrukking","betekenis":""}]}
-Regels: zet werkwoorden in de infinitief, zelfstandig naamwoorden in het enkelvoud en bijvoeglijk naamwoorden in de basisvorm (mooie → mooi). Laat namen en dubbele woorden weg.
+ "overig":[{"woord":"","soort":"precies een van: bijwoord, voorzetsel, voegwoord, uitdrukking, voorbeeldzin, overig","betekenis":""}]}
+Regels: zet werkwoorden in de infinitief, zelfstandig naamwoorden in het enkelvoud en bijvoeglijk naamwoorden in de basisvorm (mooie → mooi). Bijwoorden (vaak, morgen), voorzetsels (naar, op) en voegwoorden (omdat, maar) gaan naar overig met die soort. Laat namen en dubbele woorden weg.
 "betekenis" is een korte Engelse vertaling (1 tot 4 woorden). Als de docent al een uitleg gaf, gebruik die.
 Bij een vaste uitdrukking (bijvoorbeeld "zin hebben in", "ik heb honger"): zet die bij overig met soort "uitdrukking".
 Bij een korte, nuttige voorbeeldzin (bijvoorbeeld "Hoe gaat het?"): zet die bij overig met soort "voorbeeldzin", precies zoals geschreven.`;
+// v43: one entry per word (across all groups) and one fixed word class per 'overig' item, so the canvas can group them
+const SOORT = [['bijwoord', /bijwoord|adverb|adv[ée]rbio|adverbe/i], ['voorzetsel', /voorzetsel|preposi/i], ['voegwoord', /voegwoord|conjun|conjon|konjunktion/i],
+  ['uitdrukking', /uitdrukking|expression|express[ãa]o|expresi[óo]n|ausdruck|idiom/i], ['voorbeeldzin', /zin|sentence|frase|phrase|satz/i]];
+function normalizeSort(result) {
+  const seen = new Set();
+  const keyOf = (w) => String(w.infinitief || w.woord || '').trim().toLowerCase();
+  for (const k of ['werkwoorden', 'zelfstandig', 'bijvoeglijk', 'overig']) result[k] = result[k].filter((w) => { const key = keyOf(w || {}); if (!key || seen.has(key)) return false; seen.add(key); return true; });
+  result.overig = result.overig.map((w) => { const hit = SOORT.find(([, re]) => re.test(String(w.soort || ''))); return { ...w, soort: hit ? hit[0] : 'overig' }; });
+  return result;
+}
 // v40: conjugations and comparisons only from A2; at A0/A1 the learner first needs the base form
 function trimForLevel(result, level) {
   if (!/^A[01]$/.test(level)) return result;
@@ -89,11 +99,11 @@ module.exports = async (req, res) => {
       } else if (b.text) {
         input = "Haal uit deze lestekst de woorden die de leerling (niveau " + level + ") moet leren, maximaal 40, en sorteer ze:\n\n" + String(b.text).slice(0, 8000);
       } else return res.status(400).json({ error: "geen woorden" });
-      const system = lessonLanguage === 'Dutch' ? SORT_SYSTEM : `You are a language teacher specializing in ${lessonLanguage}. Sort the supplied vocabulary into grammatical categories. Reply ONLY as JSON with these exact keys: werkwoorden (array of objects with infinitief, verleden, hulpwerkwoord, voltooid, onregelmatig, betekenis), zelfstandig (array of objects with woord, lidwoord, meervoud, betekenis), bijvoeglijk (array of objects with woord, vergrotend, overtreffend, betekenis), overig (array of objects with woord, soort, betekenis). Use grammar appropriate to ${lessonLanguage}: verbs in the infinitive, nouns in the singular with the definite article of ${lessonLanguage} (empty if the language has none), adjectives in their base form. Fixed expressions go to overig with soort "uitdrukking", short useful example sentences to overig with soort "voorbeeldzin" exactly as written. Where a field is not relevant, use an empty string. For betekenis give a short English translation. Do not invent vocabulary.`;
+      const system = lessonLanguage === 'Dutch' ? SORT_SYSTEM : `You are a language teacher specializing in ${lessonLanguage}. Sort the supplied vocabulary into grammatical categories. Reply ONLY as JSON with these exact keys: werkwoorden (array of objects with infinitief, verleden, hulpwerkwoord, voltooid, onregelmatig, betekenis), zelfstandig (array of objects with woord, lidwoord, meervoud, betekenis), bijvoeglijk (array of objects with woord, vergrotend, overtreffend, betekenis), overig (array of objects with woord, soort, betekenis). Use grammar appropriate to ${lessonLanguage}: verbs in the infinitive, nouns in the singular with the definite article of ${lessonLanguage} (empty if the language has none), adjectives in their base form. Adverbs go to overig with soort "bijwoord", prepositions with soort "voorzetsel", conjunctions with soort "voegwoord"; fixed expressions go to overig with soort "uitdrukking", short useful example sentences to overig with soort "voorbeeldzin" exactly as written. Never list the same word twice. Where a field is not relevant, use an empty string. For betekenis give a short English translation. Do not invent vocabulary.`;
       const out = await claude(system, input, 3000);
       const result = parseJSON(out);
       ["werkwoorden", "zelfstandig", "bijvoeglijk", "overig"].forEach((k) => { if (!Array.isArray(result[k])) result[k] = []; });
-      return res.status(200).json({ result: trimForLevel(result, level) });
+      return res.status(200).json({ result: trimForLevel(normalizeSort(result), level) });
     }
     if (b.task === "report") {
       const words = (Array.isArray(b.words) ? b.words : []).slice(0, 30).map((w) => w.nl + (w.uit ? " = " + w.uit : "")).join("\n");

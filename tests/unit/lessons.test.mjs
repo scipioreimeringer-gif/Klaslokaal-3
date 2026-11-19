@@ -48,13 +48,18 @@ test('grouping per day and next lesson (running lesson counts, cancelled skipped
 test('countdown and readable planning errors (translated)', async () => {
   await loadMessages();
   setCurrentLang('nl');
-  assert.equal(countdown('2026-11-20T18:42:00Z', now), 'Over 12 min');
-  assert.equal(countdown('2026-11-20T21:50:00Z', now), 'Over 3 u 20 min');
+  // v43 wording
+  assert.equal(countdown('2026-11-20T18:42:00Z', now), 'Over 12 minuten');
+  assert.equal(countdown('2026-11-20T21:50:00Z', now), 'Over 3 uur en 20 min');
+  assert.equal(countdown('2026-11-21T00:00:00Z', now), 'Over 5 uur en 30 min');
+  assert.equal(countdown('2026-11-21T20:30:00Z', now), 'Over 1 dag en 2 uur');
   assert.equal(countdown('2026-11-23T18:30:00Z', now), 'Over 3 dagen');
-  assert.equal(countdown('2026-11-20T18:00:00Z', now), 'Nu bezig');
+  assert.equal(countdown('2026-11-20T18:31:00Z', now), 'Over 1 minuut');
+  assert.equal(countdown('2026-11-20T18:00:00Z', now), 'Les bezig');
   assert.match(planningError('DOUBLE_BOOKING_STUDENT 2026-11-20 15:30'), /andere docent/);
   setCurrentLang('en');
   assert.match(planningError('DOUBLE_BOOKING_TEACHER 2026-11-20 15:30'), /^Double booking: you already have a lesson on .*15:30\.$/);
-  assert.equal(countdown('2026-11-20T18:42:00Z', now), 'In 12 min');
+  assert.equal(countdown('2026-11-20T18:42:00Z', now), 'In 12 minutes');
+  assert.equal(countdown('2026-11-21T20:30:00Z', now), 'In 1 day and 2 hours');
   setCurrentLang('nl');
 });
