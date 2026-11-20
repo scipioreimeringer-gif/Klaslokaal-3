@@ -45,7 +45,8 @@ export function verifyState(state: string, uid: string) {
 export function authUrl(redirectUri: string, state: string) {
   need();
   const p = new URLSearchParams({client_id: process.env.GOOGLE_CLIENT_ID!, redirect_uri: redirectUri, response_type: 'code', scope: GCAL_SCOPES.join(' '),
-    access_type: 'offline', prompt: 'consent', include_granted_scopes: 'false', state});
+    // v52: select_account → Google always lets the teacher choose the account (never silently the old one)
+    access_type: 'offline', prompt: 'select_account consent', include_granted_scopes: 'false', state});
   return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
 }
 
@@ -67,7 +68,12 @@ export async function exchangeCode(code: string, redirectUri: string) {
   if (!GCAL_SCOPES.every(s => granted.includes(s))) throw new HttpError(400, 'Geef TeachyRooms toegang tot je agenda’s en afspraken (beide vinkjes) om te synchroniseren.');
   return {access: j.access_token!, refresh: j.refresh_token};
 }
-export async function accessToken(refreshEnc: string) { need(); return (await tokenCall({refresh_token: decrypt(refreshEnc), grant_type: 'refresh_token'})).access_token!; }
+export async function accessToken(refreshEnc: string) {
+  need();
+  let plain: string;
+  try { plain = decrypt(refreshEnc); } catch { throw new RevokedError('unreadable'); } // v52: a token we cannot read is as good as revoked
+  return (await tokenCall({refresh_token: plain, grant_type: 'refresh_token'})).access_token!;
+}
 export async function revoke(refreshEnc: string) { try { await fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(decrypt(refreshEnc)), {method: 'POST'}); } catch { /* best effort */ } }
 
 async function g<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {

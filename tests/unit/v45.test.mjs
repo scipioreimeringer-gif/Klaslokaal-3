@@ -65,7 +65,7 @@ test('OAuth: only the two calendar scopes, separate consent, offline access, sig
   assert.match(s, /GCAL_SCOPES = \['https:\/\/www\.googleapis\.com\/auth\/calendar\.calendarlist\.readonly', 'https:\/\/www\.googleapis\.com\/auth\/calendar\.events'\]/);
   const code = s.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!/auth\/calendar'|auth\/calendar"|gmail|drive|contacts|userinfo/i.test(code), 'no broader scopes');
-  assert.match(s, /access_type: 'offline', prompt: 'consent', include_granted_scopes: 'false'/);
+  assert.match(s, /access_type: 'offline', prompt: 'select_account consent', include_granted_scopes: 'false'/);
   assert.match(s, /if \(!GCAL_SCOPES\.every\(s => granted\.includes\(s\)\)\)/, 'partial consent is refused with a clear message');
   assert.match(s, /return s\.u === uid && s\.e > Date\.now\(\);/, 'state bound to the user and time-limited');
   assert.match(s, /timingSafeEqual/);
