@@ -17,10 +17,9 @@ const langLabel=(l:string)=>l?languageName(l):tt('Lestaal');
 import {t as tt} from '../lib/i18n';
 
 type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidden:string[]};
-type Msg={t:'game';k:'state';s:GameState}|{t:'game';k:'act';a:Action|{a:'newround'}};
+type Msg={t:'game';k:'state';s:GameState}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'}};
 const frame=()=>document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;
 function send(m:unknown){try{(frame()?.contentWindow as unknown as {__klasGameSend?:(m:unknown)=>void}|null)?.__klasGameSend?.(m)}catch{/* classroom not ready */}}
-const bridge=()=>(window as unknown as {teachyBridge?:{onGame?:(m:unknown)=>void;onPeerHello?:()=>void}}).teachyBridge;
 const KIND_LABEL:Record<Kind,string>={flash:'Flashcards',thirty:'30 Seconds',taboo:'Taboe'};
 const KIND_ICON:Record<Kind,ReactNode>={flash:<Brain size={18}/>,thirty:<Timer size={18}/>,taboo:<Target size={18}/>};
 const KIND_HINT:Record<Kind,string>={flash:'Omdraaien en oefenen',thirty:'Leg zoveel mogelijk woorden uit',taboo:'Uitleggen zonder verboden woorden'};
@@ -64,19 +63,24 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  const opened=useRef('');
  // v47: teacher reloaded during a game → the restored game opens its panel again (and therefore at the student too)
  useEffect(()=>{if(host&&mount&&ref.current&&ref.current.phase!=='ended'&&!opened.current){opened.current='restored';onOpen()}},[host,mount,onOpen]);
- useEffect(()=>{const b=bridge();if(!b)return;
-  b.onGame=(raw:unknown)=>{const m=raw as Msg;if(!m||m.t!=='game')return;
-   if(host&&m.k==='act'){if((m.a as {a:string}).a==='newround')void newRound.current();else apply(m.a as Action,'student')}
+ // v47 fix: messages arrive as window events from the classroom (works whatever bridge object exists, and after a
+ // classroom reload); the student asks for the current state itself when it has none (opened later, missed a message)
+ useEffect(()=>{
+  const onMsg=(e:Event)=>{const m=(e as CustomEvent).detail as Msg;if(!m||m.t!=='game')return;
+   if(host&&m.k==='act'){const a=(m.a as {a:string}).a;if(a==='sync')broadcast(ref.current);else if(a==='newround')void newRound.current();else apply(m.a as Action,'student')}
    // v47: open the panel at the student once per game/round (not on every state update: a panel the student closed
    // on purpose must not jump open again with every timer tick); the timer always follows the host's state
    if(!host&&m.k==='state'){const s=fromWire(m,Date.now());setState(s);const k=s.id+':'+s.round+':'+(s.phase==='ended'?'end':'on');if(s.phase!=='ended'&&opened.current!==k){opened.current=k;onOpen()}if(s.phase==='ended')opened.current=k}};
-  if(host)b.onPeerHello=()=>broadcast(ref.current); // student (re)connected: send the current state again
-  return()=>{if(b.onGame)b.onGame=undefined;if(host)b.onPeerHello=undefined}},[host,apply,broadcast,onOpen]);
+  const onHello=()=>{if(host)broadcast(ref.current)}; // student (re)connected: send the current state again
+  window.addEventListener('teachy-game',onMsg);window.addEventListener('teachy-peer-hello',onHello);
+  return()=>{window.removeEventListener('teachy-game',onMsg);window.removeEventListener('teachy-peer-hello',onHello)}},[host,apply,broadcast,onOpen]);
+ // student without a state: ask the teacher (now and every 3 s, at most 10 times) until the game state arrives
+ useEffect(()=>{if(host||state)return;let n=0;const ask=()=>{if(n++<10)send({t:'game',k:'act',a:{a:'sync'}})};ask();const id=setInterval(ask,3000);return()=>clearInterval(id)},[host,state]);
 
  /* ---------- timer ---------- */
  // v47: one timer — the host's start/end. The host re-sends the state every 4 s while the clock runs, so the student's
  // display is corrected continuously (latency, a hidden tab, a reconnect) instead of drifting on its own.
- useEffect(()=>{let last=0;const id=setInterval(()=>{const t=Date.now();setNow(t);if(host&&ref.current?.phase==='running'){apply({a:'tick'},'teacher');if(t-last>4000){last=t;broadcast(ref.current)}}},250);return()=>clearInterval(id)},[host,apply,broadcast]);
+ useEffect(()=>{let last=0;const id=setInterval(()=>{const t=Date.now();setNow(t);if(host&&ref.current?.phase==='running')apply({a:'tick'},'teacher');if(host&&ref.current&&ref.current.phase!=='ended'&&t-last>(ref.current.phase==='running'?4000:8000)){last=t;broadcast(ref.current)}},250);return()=>clearInterval(id)},[host,apply,broadcast]);
 
  /* ---------- teacher: words + suggestions ---------- */
  const loadWords=useCallback(async()=>{const db=supabase()!;

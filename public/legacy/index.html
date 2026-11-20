@@ -1133,7 +1133,9 @@ var params = new URLSearchParams(location.search);
 function bridge(){ try{ return (window.parent !== window && window.parent.teachyBridge) || null; }catch(e){ return null; } }
 var SB = params.get("sb") === "1" && !!bridge();
 /* v35: word games run in the app (parent page); they use this data channel. Only the explaining player ever loads cards. */
-window.__klasGameSend = function(m){ if(m && m.t === "game") send(m); };
+window.__klasGameSend = function(m){ if(m && m.t === "game") sendBig(m); }; /* v47 fix: large game states (flashcards) are split like other large messages */
+/* v47 fix: game messages reach the app through ONE window event (does not depend on which bridge object exists) */
+function gameEvent(name, m){ try{ var w = window.parent && window.parent !== window ? window.parent : window; w.dispatchEvent(new w.CustomEvent(name, {detail:m})); }catch(e){} }
 window.__klasOnline = function(){ return online(); };
 if(SB){ document.documentElement.setAttribute("data-theme", "light"); }
 var isT = params.get("rol") !== "leerling";
@@ -1240,8 +1242,8 @@ function onMessage(m){
   switch(m.t){
     case "bye": if(!isT){ removeRemote("docent"); status("Je docent heeft de les verlaten", "Zodra je docent de les weer start, ga je vanzelf verder."); } break;
     case "lstart": if(!isT && m.at && m.at <= Date.now() + 60000) lessonStart = +m.at; break; /* v42: the teacher's lesson start */
-    case "hello": if(isT){ sendState(); if(lessonStart) send({t:"lstart", at:lessonStart}); var gh = bridge(); if(gh && gh.onPeerHello) try{ gh.onPeerHello(); }catch(e){} } break;
-    case "game": var gb = bridge(); if(gb && gb.onGame) try{ gb.onGame(m); }catch(e){} break;
+    case "hello": if(isT){ sendState(); if(lessonStart) send({t:"lstart", at:lessonStart}); gameEvent("teachy-peer-hello", null); } break;
+    case "game": gameEvent("teachy-game", m); break;
     case "slide": incomingSlide(m); break;
     case "chunk": incomingChunk(m); break;
     case "show": SL.show(m.k, true); markNew("sl"); break;

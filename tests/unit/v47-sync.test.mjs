@@ -17,13 +17,22 @@ test('games: the panel follows the teacher (open/close, also after a reconnect);
 });
 test('games: the student opens once per game/round (a closed panel does not jump open on every tick); host timer resent', () => {
   assert.match(games, /const k=s\.id\+':'\+s\.round\+':'\+\(s\.phase==='ended'\?'end':'on'\);if\(s\.phase!=='ended'&&opened\.current!==k\)\{opened\.current=k;onOpen\(\)\}/);
-  assert.match(games, /if\(t-last>4000\)\{last=t;broadcast\(ref\.current\)\}/, 'one timer (the host), corrected every 4 s');
-  assert.match(games, /if\(host\)b\.onPeerHello=\(\)=>broadcast\(ref\.current\);/, 'a reconnecting student gets the current state');
+  assert.match(games, /t-last>\(ref\.current\.phase==='running'\?4000:8000\)\)\{last=t;broadcast\(ref\.current\)\}/, 'one timer (the host), state resent in every phase');
+  assert.match(games, /const onHello=\(\)=>\{if\(host\)broadcast\(ref\.current\)\};/, 'a reconnecting student gets the current state');
   assert.match(games, /if\(host&&mount&&ref\.current&&ref\.current\.phase!=='ended'&&!opened\.current\)\{opened\.current='restored';onOpen\(\)\}/);
   // hidden cards stay hidden: never in the shared state; only the explainer reads them (RLS) and only a guessing teacher gets none from the API
   assert.match(read('lib/games/state.ts'), /The shared state NEVER contains the cards/);
   assert.match(games, /from\('game_rounds'\)\.select\('cards'\)\.eq\('id',rid\)/);
   assert.match(read('app/api/games/round/route.ts'), /\.\.\.\(explainer === 'teacher' \? \{cards\} : \{\}\)/);
+});
+test('games fix: student without state asks for it; delivery via window events and split large messages', () => {
+  assert.match(html, /window\.__klasGameSend = function\(m\)\{ if\(m && m\.t === "game"\) sendBig\(m\); \};/);
+  assert.match(html, /case "game": gameEvent\("teachy-game", m\); break;/);
+  assert.match(html, /gameEvent\("teachy-peer-hello", null\);/);
+  assert.match(games, /window\.addEventListener\('teachy-game',onMsg\)/);
+  assert.match(games, /if\(a==='sync'\)broadcast\(ref\.current\)/, 'the host answers a sync request');
+  assert.match(games, /if\(host\|\|state\)return;let n=0;const ask=\(\)=>\{if\(n\+\+<10\)send\(\{t:'game',k:'act',a:\{a:'sync'\}\}\)\}/, 'limited, stops once the state is there');
+  assert.ok(!/b\.onGame=/.test(games), 'no second delivery path');
 });
 test('screen sharing: students too, same screen-call type, shown in the existing Scherm panel; one sharer at a time', () => {
   assert.match(html, /if\(c\.metadata && c\.metadata\.type === "screen"\)\{\s*c\.answer\(\); inScr\[c\.peer\] = c;/, 'teacher receives a student screen (no second video system)');
