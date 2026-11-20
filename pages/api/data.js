@@ -31,7 +31,8 @@ function authed(req) {
   return !!p && req.headers["x-klas-pass"] === p;
 }
 
-module.exports = async (req, res) => {
+// v45 fix: ESM default export (Next.js 15 did not recognise module.exports)
+export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const conf = redisConf();
   if (req.method === "GET" && req.query && req.query.ping !== undefined) {
