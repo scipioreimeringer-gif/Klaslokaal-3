@@ -42,6 +42,8 @@ export const DYNAMIC = [
   'Mijn lessen', 'Voortgang', 'Leerpad', 'Meer', 'Privé', 'Grammatica', 'Woorden', 'Schrijven', 'Lezen', 'Concept', 'Klaar voor controle', 'Gepubliceerd', 'Ingeleverd', 'Feedback gegeven', 'Open', 'Te laat',
   // v46 phase 2: main error categories (lib/analysis/core.ts ERROR_TYPE_LABEL)
   'Grammatica', 'Werkwoordvervoegingen', 'Woordvolgorde en zinsbouw', 'Verkeerd woordgebruik', 'Ontbrekende woorden', 'Lidwoorden', 'Voorzetsels', 'Uitspraak', 'Overig',
+  // v46 phase 3: daily practice question texts (lib/daily.ts, shown with t(q.sub))
+  'Wat betekent dit?', 'Welk woord past?', 'Schrijf een korte zin met dit woord', 'Vul het ontbrekende woord in', 'Vul in zoals het goed is', 'Zeg de zin goed', 'Verbeter de zin', 'Welke zin is goed?',
 ];
 
 function sourceFiles() {
