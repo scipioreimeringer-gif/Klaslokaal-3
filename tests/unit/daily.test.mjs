@@ -40,7 +40,9 @@ test('spaced repetition: due, difficult and repeated items first; just-practised
 });
 test('variety: several exercise types; A0/A1 no free writing; mistakes become correct/choose/fill/speak tasks', () => {
   const kinds = new Set(); for (let d = 1; d <= 14; d++) buildDaily({...base, day: `2026-11-${String(d).padStart(2, '0')}`, level: 'B1'}).questions.forEach(q => kinds.add(q.kind));
-  for (const k of ['mc', 'flash', 'correct']) assert.ok(kinds.has(k), k);
+  for (const k of ['mc', 'fill', 'correct']) assert.ok(kinds.has(k), k); // v51: from A2 words are practised in context, rarely as bare flashcards
+  const a1 = new Set(); for (let d = 1; d <= 14; d++) buildDaily({...base, day: `2026-11-${String(d).padStart(2, '0')}`, level: 'A1'}).questions.forEach(q => a1.add(q.kind));
+  for (const k of ['mc', 'flash']) assert.ok(a1.has(k), 'A1 ' + k);
   for (let d = 1; d <= 14; d++) assert.ok(!buildDaily({...base, day: `2026-11-${String(d).padStart(2, '0')}`, level: 'A1'}).questions.some(q => q.kind === 'write'));
   const mq = buildDaily(base).questions.filter(q => q.source === 'mistake');
   assert.ok(mq.every(q => q.answers[0].length > 0 && ['correct', 'mc', 'fill', 'speak'].includes(q.kind)));

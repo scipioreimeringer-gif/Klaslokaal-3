@@ -189,14 +189,18 @@ for (const minutes of [5, 15, 30, 50, 60]) {
     assert.equal(doc.homework.assignment_id, 'hw-1');
     // v46 phase 2: EVERY verified error is registered (examples stay limited to 2 for the summary)
     const errs = doc.errors;
-    assert.equal(errs.filter(e => e.category_key === 'inversion').length, planted.inversion, 'every inversion error registered once per student line');
-    if (planted.auxiliary) assert.equal(errs.filter(e => e.category_key === 'auxiliary').length, planted.auxiliary, 'duplicate report in the same line merged');
+    // v51: identical errors are listed ONCE with how often they were made — the total still counts every student line
+    const inv = errs.filter(e => e.category_key === 'inversion');
+    assert.equal(inv.reduce((n, e) => n + e.repeats, 0), planted.inversion, 'every inversion error counted once per student line');
+    assert.ok(inv.length < planted.inversion || planted.inversion <= 2, 'repeated identical sentences are not listed again and again');
+    assert.ok(inv.every(e => e.times.length === e.repeats), 'the moments are kept');
+    if (planted.auxiliary) assert.equal(errs.filter(e => e.category_key === 'auxiliary').reduce((n, e) => n + e.repeats, 0), planted.auxiliary, 'duplicate report in the same line merged');
     assert.ok(errs.every(e => e.status === 'pending'), 'waits for the teacher');
     assert.ok(!errs.some(e => /Niet gisteren/.test(e.original)) && errs.every(e => e.utterance_id), 'never a teacher line');
     assert.ok(!errs.some(e => e.category_key === 'articles'), 'invented quotes never become errors');
     assert.ok(errs.every(e => ['grammar', 'conjugation', 'word_order', 'word_choice', 'missing_word', 'article', 'preposition', 'pronunciation', 'other'].includes(e.type)));
     const gis = errs.filter(e => e.corrected === 'gisteren ben ik');
-    assert.ok(gis.length && gis.every(e => e.type === 'word_order' && e.repeats === gis.length), 'the same mistake in several lines = one pattern with its count');
+    assert.ok(gis.length === 1 && gis[0].type === 'word_order' && gis[0].repeats >= 1 && gis[0].repeats === gis[0].times.length, 'the same mistake in several lines = ONE entry with its count (v51)');
     assert.equal(new Set(errs.map(e => e.id)).size, errs.length, 'stable unique ids');
     assert.equal(doc.corrections.length, errs.filter(e => !e.later).length, 'legacy list = all non-"later" errors');
   });

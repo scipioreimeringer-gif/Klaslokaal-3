@@ -44,6 +44,8 @@ export const DYNAMIC = [
   'Grammatica', 'Werkwoordvervoegingen', 'Woordvolgorde en zinsbouw', 'Verkeerd woordgebruik', 'Ontbrekende woorden', 'Lidwoorden', 'Voorzetsels', 'Uitspraak', 'Overig',
   // v46 phase 3: daily practice question texts (lib/daily.ts, shown with t(q.sub))
   'Wat betekent dit?', 'Welk woord past?', 'Schrijf een korte zin met dit woord', 'Vul het ontbrekende woord in', 'Vul in zoals het goed is', 'Zeg de zin goed', 'Verbeter de zin', 'Welke zin is goed?',
+  // v51: daily practice — production tasks (lib/daily.ts)
+  'Schrijf een zin met dit woord in de verleden tijd', 'Beantwoord de vraag in een hele zin',
 ];
 
 function sourceFiles() {

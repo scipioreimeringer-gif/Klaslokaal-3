@@ -1141,6 +1141,9 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .dp-feedback.ok{background:#e7f5ec}.dp-feedback.bad{background:#fdece7}
 .dp-feedback p{margin:0}.dp-feedback .button{justify-self:start}
 .dp-right b{color:#1f7a4a}
+/* v51: why the answer is right (and the other options wrong); a conversation question */
+.dp-notes{margin:0;padding-left:18px;display:grid;gap:3px;font-size:13.5px;color:#3b4a48}
+.dp-prompt.ask{font-weight:600;color:#0f5f63}
 .dp-restart{justify-self:center;font-size:12.5px}
 .dp-end{display:grid;gap:12px;justify-items:center;text-align:center;padding:10px 0}
 .dp-end h2{margin:0;font-size:20px}

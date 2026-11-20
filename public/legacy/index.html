@@ -724,7 +724,46 @@ body.sl-ink .slbar{opacity:1}
 .cvsel-layer .r{position:absolute;border-radius:3px;background:var(--sel-c,rgba(74,127,212,.22));outline:1px solid var(--sel-o,rgba(74,127,212,.45))}
 .cvsel-layer .who{position:absolute;transform:translateY(-100%);font-size:10px;font-weight:700;color:#fff;background:var(--sel-o,#4a7fd4);padding:1px 6px;border-radius:6px 6px 6px 0;white-space:nowrap}
 .cv mark.hl{background:#ffe58f;border-radius:3px;padding:0 1px;cursor:pointer}
-.cv mark.hl[data-by="s"]{background:#c9f0e3}</style>
+.cv mark.hl[data-by="s"]{background:#c9f0e3}
+/* v51: settings menu + student link popover — in a top layer (portal), never under the video or cut off */
+#moreMenu.v51>.menu-pop{display:none!important}
+.v51-layer{position:fixed;inset:0;pointer-events:none;z-index:2147483000}
+.v51-pop{position:fixed;pointer-events:auto;display:none;width:min(340px,calc(100vw - 16px));overflow:auto;overscroll-behavior:contain;background:#fff;color:#0f2a2e;border:1px solid #dfe9e7;border-radius:16px;box-shadow:0 18px 44px rgba(10,40,44,.18),0 2px 6px rgba(10,40,44,.08);padding:8px;font-size:14px;line-height:1.4}
+.v51-pop.on{display:block;animation:v51in .14s ease-out}
+@keyframes v51in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.v51-pop.on{animation:none}}
+.v51-sec{padding:4px 2px 6px}.v51-sec+.v51-sec{border-top:1px solid #edf3f2;margin-top:2px;padding-top:8px}
+.v51-sec h3{display:flex;align-items:center;gap:6px;margin:2px 6px 6px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#0f7c78}
+.v51-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;min-height:38px}
+.v51-row:hover{background:#f1f8f7}
+.v51-ic{display:inline-flex;color:#0f7c78;flex:none}
+.v51-row>label{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;padding:0;background:none;font-size:14px;color:inherit;cursor:pointer}
+.v51-row>label.v51-field span{display:inline!important}
+.v51-row select{min-width:132px;max-width:160px;height:32px;padding:0 28px 0 10px;border:1px solid #d5e3e1;border-radius:9px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230f7c78' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;-webkit-appearance:none;appearance:none;font:inherit;font-size:13.5px;color:inherit}
+.v51-row select:focus-visible,.v51-pop button:focus-visible,.v51-pop input:focus-visible,.v51-linkbtn:focus-visible{outline:2px solid #14a39a;outline-offset:2px}
+/* checkboxes as switches (same input, same stored value) */
+.v51-switch{flex-direction:row-reverse;justify-content:space-between!important}
+.v51-switch input{-webkit-appearance:none;appearance:none;flex:none;width:36px;height:20px;border-radius:999px;background:#cfdcda;position:relative;cursor:pointer;transition:background .15s;margin:0}
+.v51-switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
+.v51-switch input:checked{background:#14a39a}.v51-switch input:checked::after{transform:translateX(16px)}
+.v51-acts{display:grid;gap:2px}
+.v51-pop .v51-act{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:7px 10px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.v51-pop .v51-act:hover{background:#f1f8f7}.v51-pop .v51-act svg{width:16px;height:16px;color:#0f7c78;flex:none}
+/* student link */
+.v51-linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:999px;border:1px solid #bfe1dd;background:#e8f6f4;color:#0b6763;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.v51-linkbtn:hover{background:#d6efeb}.v51-linkbtn[aria-expanded="true"]{background:#14a39a;border-color:#14a39a;color:#fff}
+@media (max-width:760px){.v51-linkbtn .lbl{display:none}.v51-linkbtn{padding:0 9px}}
+.v51-link{padding:14px}
+.v51-link .v51-t{margin:0;font-weight:700;font-size:15px}.v51-link .v51-d{margin:2px 0 10px;color:#5a706d;font-size:13px}
+.v51-url input{width:100%;height:36px;padding:0 10px;border:1px solid #d5e3e1;border-radius:10px;background:#f6faf9;font:inherit;font-size:12.5px;color:#24403e;text-overflow:ellipsis}
+.v51-btns{display:flex;gap:8px;margin-top:10px}
+.v51-btns button{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:10px;border:1px solid #d5e3e1;background:#fff;color:#0b6763;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+.v51-btns .v51-copy{background:#14a39a;border-color:#14a39a;color:#fff;flex:1;justify-content:center}
+.v51-btns .v51-copy.done{background:#1f8a55;border-color:#1f8a55}
+html[data-theme="dark"] .v51-pop{background:#131f1e;color:#e6eeeb;border-color:#24403e}
+html[data-theme="dark"] .v51-row:hover,html[data-theme="dark"] .v51-pop .v51-act:hover{background:#16302d}
+html[data-theme="dark"] .v51-row select,html[data-theme="dark"] .v51-url input{background-color:#0f1a19;color:#e6eeeb;border-color:#24403e}
+</style>
 </head><body>
 
 <header class="top">
@@ -3999,6 +4038,106 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   });
   setInterval(function(){ if(sel) place(); }, 700);
   window.__cvImages = {ok:ok, insert:insertImage};
+})();
+
+/* =================================================================== v51: SETTINGS MENU + STUDENT LINK
+   The ⋯ menu becomes a compact panel in three sections (Lesinstellingen · Opname en AI-analyse · Overige acties) with the
+   SAME controls (moved, so their listeners and stored values keep working; checkboxes look like switches).
+   "Link voor leerling" becomes a clear button with a small popover: the link of THIS lesson, "Kopieer link" →
+   "Gekopieerd", and share where the device can. Both popovers are placed in a layer on top of everything (a portal in
+   <body>, fixed position, highest z-index): never behind or under the video, never cut off by a container, flipped
+   or moved when there is not enough room, scrollable on small laptops, and they never move the camera layout.
+   Click outside or Escape closes them. Camera, microphone and WebRTC are not touched. */
+(function(){
+  var gear = $("moreMenu"), pop = $("morePop"); if(!gear || !pop) return;
+  var font = (function(){ try{ return getComputedStyle(window.parent.document.body).fontFamily || ""; }catch(e){ return ""; } })();
+  var layer = document.createElement("div"); layer.className = "v51-layer"; if(font) layer.style.fontFamily = font; document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){ e.stopPropagation(); }); /* a click inside a popover is never "outside" */
+  var SVG = function(p){ return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var IC = {lang:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>', book:'<path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7"/>',
+    rec:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/>', ai:'<path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+    link:'<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>', copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'};
+
+  /* ---------- placement: under (or above) the trigger, inside the screen, never shifting anything ---------- */
+  function place(box, trigger, alignRight){
+    var r = trigger.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, m = 8;
+    box.style.maxHeight = ""; box.style.left = "0px"; box.style.top = "0px";
+    var w = Math.min(box.offsetWidth || 320, vw - 2 * m), h = box.offsetHeight;
+    var left = alignRight ? r.right - w : r.left; left = Math.max(m, Math.min(left, vw - w - m));
+    var below = vh - r.bottom - m, above = r.top - m, top;
+    if(h <= below || below >= above){ top = r.bottom + 6; box.style.maxHeight = Math.max(160, below - 6) + "px"; }
+    else { var hh = Math.min(h, above - 6); top = r.top - 6 - hh; box.style.maxHeight = Math.max(160, above - 6) + "px"; }
+    box.style.left = left + "px"; box.style.top = Math.max(m, top) + "px";
+  }
+  var openBox = null, openTrig = null, onClose = null;
+  function close(){ if(!openBox) return; var f = onClose; openBox.classList.remove("on"); openBox = null; openTrig = null; onClose = null; if(f) f(); }
+  function open(box, trigger, alignRight, closeFn){ if(openBox && openBox !== box) close(); openBox = box; openTrig = trigger; onClose = closeFn || null; box.classList.add("on"); place(box, trigger, alignRight); }
+  document.addEventListener("click", function(e){ if(openBox && openTrig && !openTrig.contains(e.target)) close(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && openBox){ var t = openTrig; close(); if(gear.open) gear.open = false; try{ t && t.focus(); }catch(x){} } });
+  window.addEventListener("resize", function(){ if(openBox && openTrig) place(openBox, openTrig, openBox === menuBox); });
+
+  /* ---------- the ⋯ menu: same controls, three sections ---------- */
+  var menuBox = document.createElement("div"); menuBox.className = "v51-pop v51-menu"; menuBox.setAttribute("role", "dialog"); menuBox.setAttribute("aria-label", "Instellingen");
+  layer.appendChild(menuBox);
+  function section(title, icon){ var s = document.createElement("section"); s.className = "v51-sec"; var h = document.createElement("h3"); h.innerHTML = SVG(icon) + '<span></span>'; h.querySelector("span").textContent = title; s.appendChild(h); menuBox.appendChild(s); return s; }
+  function row(sec, el, icon){ if(!el) return; var r = document.createElement("div"); r.className = "v51-row"; if(icon){ var i = document.createElement("span"); i.className = "v51-ic"; i.innerHTML = SVG(icon); r.appendChild(i); } r.appendChild(el); sec.appendChild(r); }
+  function build(){
+    menuBox.innerHTML = "";
+    var les = section("Lesinstellingen", IC.book);
+    var ui = $("uiLanguage") && $("uiLanguage").closest("label"), ll = $("lessonLanguage") && $("lessonLanguage").closest("label");
+    [ui, isT ? ll : null].forEach(function(l){ if(l){ l.classList.add("v51-field"); row(les, l, l === ui ? IC.lang : IC.book); } });
+    var boxes = Array.prototype.slice.call(pop.querySelectorAll('label > input[type="checkbox"]')).map(function(i){ return i.parentNode; });
+    if(boxes.length){ var rec = section("Opname en AI-analyse", IC.rec); boxes.forEach(function(l, n){ l.classList.add("v51-switch"); row(rec, l, n ? IC.ai : IC.rec); }); }
+    var acts = Array.prototype.slice.call(pop.children).filter(function(x){ return x.tagName === "BUTTON" && x.id !== "copyLink"; });
+    if(acts.length){ var ov = section("Overige acties", IC.ai); var list = document.createElement("div"); list.className = "v51-acts"; acts.forEach(function(a){ a.classList.add("v51-act"); list.appendChild(a); }); ov.appendChild(list); }
+  }
+  /* the native <details> stays the trigger (keyboard, aria); its own popup is replaced by the layer */
+  gear.classList.add("v51");
+  var built = false;
+  gear.addEventListener("toggle", function(){
+    if(gear.open){ if(!built){ build(); built = true; } open(menuBox, gear.querySelector("summary"), true, function(){ if(gear.open) gear.open = false; }); }
+    else if(openBox === menuBox) close();
+  });
+  /* items still close the menu as before (they set gear.open = false) → the layer follows via "toggle" */
+
+  /* ---------- student link: a button + popover ---------- */
+  var cl = $("copyLink");
+  if(isT && cl){
+    var tbr = document.querySelector(".top .tb-right");
+    var btn = document.createElement("button"); btn.type = "button"; btn.id = "v51Link"; btn.className = "v51-linkbtn";
+    btn.innerHTML = SVG(IC.link) + '<span class="lbl">Leerlinglink</span>'; btn.title = "Link voor je leerling kopiëren of delen"; btn.setAttribute("aria-haspopup", "dialog"); btn.setAttribute("aria-expanded", "false");
+    if(tbr) tbr.insertBefore(btn, gear); else document.body.appendChild(btn);
+    cl.hidden = true; /* kept for its handler; replaced by the button */
+    var box = document.createElement("div"); box.className = "v51-pop v51-link"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Link voor je leerling");
+    box.innerHTML = '<p class="v51-t"></p><p class="v51-d"></p><div class="v51-url"><input type="text" readonly aria-label="Link voor je leerling"></div><div class="v51-btns"><button type="button" class="v51-copy"></button><button type="button" class="v51-share" hidden></button></div>';
+    box.querySelector(".v51-t").textContent = "Link voor je leerling";
+    box.querySelector(".v51-d").textContent = SB ? "Je leerling logt in en komt direct in deze les." : "Stuur deze link naar je leerling.";
+    layer.appendChild(box);
+    var input = box.querySelector("input"), copyB = box.querySelector(".v51-copy"), shareB = box.querySelector(".v51-share");
+    function url(){ return SB ? (bridge() && bridge().liveUrl) || location.href : location.origin + location.pathname + "?rol=leerling&kamer=" + ROOM; }
+    function label(done){ copyB.innerHTML = SVG(done ? IC.check : IC.copy) + '<span></span>'; copyB.querySelector("span").textContent = done ? "Gekopieerd" : "Kopieer link"; copyB.classList.toggle("done", !!done); }
+    label(false);
+    shareB.innerHTML = SVG(IC.share) + '<span></span>'; shareB.querySelector("span").textContent = "Delen";
+    var canShare = !!(navigator.share); shareB.hidden = !canShare;
+    var tm = null;
+    copyB.addEventListener("click", function(){
+      var u = url(); var done = function(){ label(true); clearTimeout(tm); tm = setTimeout(function(){ label(false); }, 1600); };
+      (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(done, function(){ input.focus(); input.select(); try{ if(document.execCommand("copy")) done(); }catch(e){} });
+    });
+    shareB.addEventListener("click", function(){ try{ navigator.share({title:"TeachyRooms", url:url()}).catch(function(){}); }catch(e){} });
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if(openBox === box){ close(); return; }
+      if(gear.open) gear.open = false;
+      input.value = url(); label(false);
+      open(box, btn, true, function(){ btn.setAttribute("aria-expanded", "false"); });
+      btn.setAttribute("aria-expanded", "true");
+      setTimeout(function(){ try{ copyB.focus(); }catch(x){} }, 30);
+    });
+    input.addEventListener("focus", function(){ input.select(); });
+  }
+  window.__v51 = {place:place, close:close};
 })();
 
 /* =================================================================== v47: SCREEN SHARE BUTTON (both roles) + PICTURE-IN-PICTURE */

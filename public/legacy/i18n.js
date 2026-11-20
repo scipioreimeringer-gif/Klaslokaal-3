@@ -481,4 +481,15 @@ window.KLAS_I18N = {
 "Zwevend venster opent automatisch bij een ander tabblad":["The floating window opens automatically when you switch tabs","A janela flutuante abre automaticamente ao trocar de aba","La ventana flotante se abre automáticamente al cambiar de pestaña","La fenêtre flottante s’ouvre automatiquement quand vous changez d’onglet","Das schwebende Fenster öffnet sich automatisch beim Tabwechsel"],
 "Zwevend venster alleen nog via de knop":["Floating window only via the button","Janela flutuante apenas pelo botão","Ventana flotante solo con el botón","Fenêtre flottante uniquement via le bouton","Schwebendes Fenster nur noch über die Schaltfläche"],
 "Een zwevend videovenster is in deze browser niet beschikbaar.":["A floating video window is not available in this browser.","Uma janela de vídeo flutuante não está disponível neste navegador.","Una ventana de vídeo flotante no está disponible en este navegador.","Une fenêtre vidéo flottante n’est pas disponible dans ce navigateur.","Ein schwebendes Videofenster ist in diesem Browser nicht verfügbar."],
-"Docent":["Teacher","Professor","Profesor","Enseignant","Lehrkraft"]};
+"Docent":["Teacher","Professor","Profesor","Enseignant","Lehrkraft"],
+"Lesinstellingen":["Lesson settings","Configurações da aula","Ajustes de la clase","Paramètres du cours","Unterrichtseinstellungen"],
+"Opname en AI-analyse":["Recording and AI analysis","Gravação e análise por IA","Grabación y análisis con IA","Enregistrement et analyse IA","Aufnahme und KI-Analyse"],
+"Overige acties":["Other actions","Outras ações","Otras acciones","Autres actions","Weitere Aktionen"],
+"Leerlinglink":["Student link","Link do aluno","Enlace del alumno","Lien de l’élève","Schülerlink"],
+"Link voor je leerling kopiëren of delen":["Copy or share the link for your student","Copiar ou compartilhar o link para o seu aluno","Copiar o compartir el enlace para tu alumno","Copier ou partager le lien pour votre élève","Link für deine Schüler:in kopieren oder teilen"],
+"Link voor je leerling":["Link for your student","Link para o seu aluno","Enlace para tu alumno","Lien pour votre élève","Link für deine Schüler:in"],
+"Je leerling logt in en komt direct in deze les.":["Your student logs in and goes straight into this lesson.","Seu aluno faz login e entra direto nesta aula.","Tu alumno inicia sesión y entra directamente en esta clase.","Votre élève se connecte et arrive directement dans ce cours.","Deine Schüler:in meldet sich an und kommt direkt in diese Stunde."],
+"Stuur deze link naar je leerling.":["Send this link to your student.","Envie este link para o seu aluno.","Envía este enlace a tu alumno.","Envoyez ce lien à votre élève.","Schick diesen Link an deine Schüler:in."],
+"Kopieer link":["Copy link","Copiar link","Copiar enlace","Copier le lien","Link kopieren"],
+"Gekopieerd":["Copied","Copiado","Copiado","Copié","Kopiert"],
+"Delen":["Share","Compartilhar","Compartir","Partager","Teilen"]};

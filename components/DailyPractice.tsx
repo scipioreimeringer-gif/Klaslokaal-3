@@ -17,7 +17,7 @@ type Session = {created_at: string; score: number; total: number; details: {day?
 export type DailyData = {set: DailySet; sessions: Session[]; streak: number; doneToday: Session | null; hasMaterial: boolean; migration: boolean};
 
 /** Loads only this student's material (RLS) and builds today's set. */
-export function useDaily(studentId: string, level?: string | null) {
+export function useDaily(studentId: string, level?: string | null, lang?: string) {
   const [d, setD] = useState<DailyData | null>(null);
   const load = useCallback(async () => {
     const db = supabase()!, day = today();
@@ -39,10 +39,10 @@ export function useDaily(studentId: string, level?: string | null) {
     const words = (v.data || []) as Word[];
     const sessions = (ps.error ? [] : ps.data || []) as Session[];
     const days = sessions.map(x => x.details?.day || x.created_at.slice(0, 10));
-    const set = buildDaily({studentId, day, level, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[]});
+    const set = buildDaily({studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[]});
     setD({set, sessions, streak: streakOf(days, day), doneToday: sessions.find(x => (x.details?.day || x.created_at.slice(0, 10)) === day) || null,
       hasMaterial: !set.empty, migration: !st.error && !ps.error});
-  }, [studentId, level]);
+  }, [studentId, level, lang]);
   useEffect(() => { void load(); }, [load]);
   return {d, reload: load};
 }
@@ -68,7 +68,7 @@ function speechApi(): (new () => SR) | null { const w = window as unknown as {Sp
 
 /** The practice itself: one question at a time, progress bar, feedback after every answer, summary at the end. */
 export function DailyPlayer({studentId, level, lang, userId}: {studentId: string; level?: string | null; lang: string; userId: string}) {
-  const {d, reload} = useDaily(studentId, level);
+  const {d, reload} = useDaily(studentId, level, lang);
   const key = 'teachy-daily-' + studentId + '-' + today();
   const [i, setI] = useState(0); const [res, setRes] = useState<{q: Question; ok: boolean}[]>([]);
   const [given, setGiven] = useState(''); const [fb, setFb] = useState<{state: 'correct' | 'accent' | 'wrong'; text?: string; corrected?: string} | null>(null);
@@ -83,7 +83,7 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
   async function record(qq: Question, ok: boolean) {
     const db = supabase()!;
     if (qq.source === 'word') await db.rpc('record_vocab_practice', {item: qq.ref, correct: ok});
-    else await db.rpc('record_practice_item', {p_student: studentId, p_key: qq.ref, p_kind: qq.source === 'mistake' ? 'error' : 'homework', p_label: qq.label, p_correct: ok});
+    else await db.rpc('record_practice_item', {p_student: studentId, p_key: qq.ref, p_kind: qq.source === 'mistake' ? 'error' : qq.source === 'grammar' ? 'grammar' : 'homework', p_label: qq.label, p_correct: ok});
   }
   function answer(ok: boolean, info?: {state: 'correct' | 'accent' | 'wrong'; text?: string; corrected?: string}) {
     if (!q || fb) return;
@@ -98,7 +98,7 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
   }
   async function aiCheck(text: string) {
     if (!q || !text.trim()) return; setBusy(true);
-    try { const r = await authedPost<{ok: boolean; corrected: string; feedback: string}>(supabase()!, '/api/practice/check', {studentId, word: q.answers[0], sentence: text});
+    try { const r = await authedPost<{ok: boolean; corrected: string; feedback: string}>(supabase()!, '/api/practice/check', q.kind === 'answer' ? {studentId, question: q.prompt, grammar: q.topic, sentence: text} : {studentId, word: q.answers[0], grammar: q.topic, sentence: text});
       answer(r.ok, {state: r.ok ? 'correct' : 'wrong', text: r.feedback, corrected: r.ok ? undefined : r.corrected}); }
     catch (e) { setFb({state: 'wrong', text: e instanceof Error ? e.message : String(e)}); }
     setBusy(false);
@@ -106,7 +106,7 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
   function listen() {
     const Api = speechApi(); if (!Api) return;
     const r = new Api(); rec.current = r; r.lang = lang === 'pt' ? 'pt-BR' : lang === 'nl' ? 'nl-NL' : lang; r.interimResults = false;
-    r.onresult = e => { const txt = e.results[0][0].transcript; setGiven(txt); if (q?.kind === 'speak') check(txt); else void aiCheck(txt); };
+    r.onresult = e => { const txt = e.results[0][0].transcript; setGiven(txt); if (q?.kind === 'speak') check(txt); else void aiCheck(txt); }; // write / answer
     r.onerror = () => setListening(false); r.onend = () => setListening(false);
     setListening(true); r.start();
   }
@@ -139,24 +139,26 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
     <div className="dp-top"><div className="dp-bar big" role="progressbar" aria-valuemin={0} aria-valuemax={qs.length} aria-valuenow={i} aria-label={t('Vraag {0} van {1}', i + 1, qs.length)}><span style={{width: pct + '%'}}/></div><small className="muted">{i + 1}/{qs.length}</small></div>
     <div className={'dp-q k-' + q.kind} key={q.id}>
       {q.sub && <p className="dp-sub">{t(q.sub)}</p>}
-      {q.prompt && <p className={'dp-prompt' + (q.kind === 'correct' || q.kind === 'speak' ? ' wrong' : '')}>{q.prompt}</p>}
+      {q.prompt && <p className={'dp-prompt' + (q.kind === 'correct' || q.kind === 'speak' ? ' wrong' : q.kind === 'answer' ? ' ask' : '')}>{q.prompt}</p>}
       {q.hint && <p className="dp-hint">{q.kind === 'fill' && q.source === 'mistake' ? <><s>{q.hint}</s></> : q.hint}</p>}
       {q.kind === 'mc' && <div className="dp-options">{(q.options || []).map(o => { const right = q.answers.includes(o); const cls = fb ? (right ? ' right' : given === o ? ' wrongpick' : '') : '';
         return <button key={o} type="button" className={'dp-opt' + cls} disabled={!!fb} onClick={() => { setGiven(o); answer(right); }}>{o}</button>; })}</div>}
       {q.kind === 'flash' && (!flipped ? <button type="button" className="button dp-flip" onClick={() => setFlipped(true)}><Eye size={15}/> {t('Toon antwoord')}</button>
         : <><p className="dp-flipped">{q.flip}</p>{!fb && <div className="dp-options two"><button type="button" className="dp-opt" onClick={() => answer(false)}>{t('Nog niet')}</button><button type="button" className="dp-opt good" onClick={() => answer(true)}>{t('Ik wist het')}</button></div>}</>)}
-      {(q.kind === 'fill' || q.kind === 'correct' || q.kind === 'write' || q.kind === 'speak') && !fb && <form className="dp-input" onSubmit={e => { e.preventDefault(); if (q.kind === 'write') void aiCheck(given); else check(); }}>
+      {(q.kind === 'fill' || q.kind === 'correct' || q.kind === 'write' || q.kind === 'speak' || q.kind === 'answer') && !fb && <form className="dp-input" onSubmit={e => { e.preventDefault(); if (q.kind === 'write' || q.kind === 'answer') void aiCheck(given); else check(); }}>
         {q.kind === 'fill' ? <input className="field" autoFocus value={given} onChange={e => setGiven(e.target.value)} placeholder={t('Jouw antwoord')} aria-label={t('Jouw antwoord')}/>
-          : <textarea className="field" rows={2} autoFocus value={given} onChange={e => setGiven(e.target.value)} placeholder={q.kind === 'speak' ? t('Spreek in, of typ de zin') : t('Jouw zin')} aria-label={t('Jouw antwoord')}/>}
-        <div className="row">{(q.kind === 'speak' || q.kind === 'write') && SpeechOk && <button type="button" className={'button secondary' + (listening ? ' rec' : '')} onClick={() => listening ? rec.current?.stop() : listen()}>{listening ? <MicOff size={15}/> : <Mic size={15}/>} {listening ? t('Stop') : t('Inspreken')}</button>}
+          : <textarea className="field" rows={2} autoFocus value={given} onChange={e => setGiven(e.target.value)} placeholder={q.kind === 'speak' ? t('Spreek in, of typ de zin') : q.kind === 'answer' ? t('Jouw antwoord in een hele zin') : t('Jouw zin')} aria-label={t('Jouw antwoord')}/>}
+        <div className="row">{(q.kind === 'speak' || q.kind === 'write' || q.kind === 'answer') && SpeechOk && <button type="button" className={'button secondary' + (listening ? ' rec' : '')} onClick={() => listening ? rec.current?.stop() : listen()}>{listening ? <MicOff size={15}/> : <Mic size={15}/>} {listening ? t('Stop') : t('Inspreken')}</button>}
           <button type="submit" className="button" disabled={!given.trim() || busy}>{busy ? t('Bezig…') : t('Controleren')}</button>
-          {q.kind !== 'write' && <button type="button" className="linklike" onClick={() => answer(false, {state: 'wrong'})}>{t('Weet ik niet')}</button>}</div>
-        {(q.kind === 'speak' || q.kind === 'write') && !SpeechOk && <small className="muted">{t('Spraakherkenning is in deze browser niet beschikbaar: typ je antwoord.')}</small>}
+          {q.kind !== 'write' && q.kind !== 'answer' && <button type="button" className="linklike" onClick={() => answer(false, {state: 'wrong'})}>{t('Weet ik niet')}</button>}</div>
+        {(q.kind === 'speak' || q.kind === 'write' || q.kind === 'answer') && !SpeechOk && <small className="muted">{t('Spraakherkenning is in deze browser niet beschikbaar: typ je antwoord.')}</small>}
       </form>}
       {fb && <div className={'dp-feedback ' + (fb.state === 'wrong' ? 'bad' : 'ok')} role="status">
         <b>{fb.state === 'correct' ? t('Goed!') : fb.state === 'accent' ? t('Bijna goed — let op de accenten.') : t('Nog niet helemaal.')}</b>
         {fb.text && <p>{fb.text}</p>}
-        {fb.state !== 'correct' && q.kind !== 'flash' && <p className="dp-right">{t('Goed is:')} <b>{fb.corrected || q.answers[0]}</b></p>}
+        {fb.state !== 'correct' && q.kind !== 'flash' && q.kind !== 'answer' && <p className="dp-right">{t('Goed is:')} <b>{fb.corrected || q.answers[0]}</b></p>}
+        {q.kind === 'answer' && fb.corrected && <p className="dp-right">{t('Beter:')} <b>{fb.corrected}</b></p>}
+        {!!q.notes?.length && <ul className="dp-notes">{(fb.state === 'correct' ? q.notes.slice(0, 1) : q.notes).map((n, k) => <li key={k}>{t(n.k, ...(n.a || []))}</li>)}</ul>}
         {q.explain && fb.state !== 'correct' && <p className="muted small">{q.explain}</p>}
         <button type="button" className="button" autoFocus onClick={next}>{i + 1 < qs.length ? <>{t('Doorgaan')} <ArrowRight size={15}/></> : t('Afronden')}</button>
       </div>}

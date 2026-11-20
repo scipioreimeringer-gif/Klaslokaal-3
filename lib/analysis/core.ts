@@ -72,7 +72,8 @@ export function errorType(given: unknown, category: string): ErrorType {
  *  approved errors are used for practice. */
 export type ErrorItem = {id: string; utterance_id: string; original: string; corrected: string; why: string; type: ErrorType; category: string; category_key: string;
   topic_id: string | null; start: number | null; certainty: 'certain' | 'uncertain'; kind: 'error' | 'slip'; repeats: number; later: boolean;
-  word: string | null; word_en: string | null; status: 'pending' | 'approved' | 'rejected'; edited?: boolean};
+  word: string | null; word_en: string | null; status: 'pending' | 'approved' | 'rejected'; edited?: boolean;
+  /** v51: one entry per unique error — the moments it was made (repeats = how often) and the merged entries */ times?: (number | null)[]; ids?: string[]};
 const shortHash = (s: string) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
 export type RawChunk = {errors: RawError[]; covered: {topic_id: string | null; label: string}[]; positives: {utterance_id: string; note: string}[]; new_words: {term: string; translation: string; status?: WordStatus}[]};
 export type WordStatus = 'introduced' | 'practised' | 'difficult';
@@ -213,14 +214,12 @@ export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topic
   // v46: ALL verified errors (not only 2 examples per category); the same correction in different sentences = a pattern
   const relOf = new Map(categories.map(c => [c.key, c.relevance]));
   const list = kept.filter(e => e.kind !== 'self_correction');
-  const patternKey = (e: typeof kept[number]) => errorType(e.type, e.category) + '|' + norm(e.corrected);
-  const repeats = new Map<string, number>(); for (const e of list) repeats.set(patternKey(e), (repeats.get(patternKey(e)) || 0) + 1);
-  const errors: ErrorItem[] = list.map(e => { const {key, label} = categoryKey(e.category); return {
+  const errors: ErrorItem[] = dedupeErrors(list.map(e => { const {key, label} = categoryKey(e.category); return {
     id: 'e_' + e.utterance_id + '_' + shortHash(norm(e.original) + '|' + key), utterance_id: e.utterance_id, original: e.original.trim(), corrected: e.corrected.trim(),
     why: String(e.why || '').trim().slice(0, 200), type: errorType(e.type, e.category), category: label, category_key: key, topic_id: e.topic_id && topics.has(e.topic_id) ? e.topic_id : null,
-    start: e.start, certainty: e.certainty, kind: (e.kind === 'slip' ? 'slip' : 'error') as ErrorItem['kind'], repeats: repeats.get(patternKey(e)) || 1, later: relOf.get(key) === 'later',
+    start: e.start, certainty: e.certainty, kind: (e.kind === 'slip' ? 'slip' : 'error') as ErrorItem['kind'], repeats: 1, later: relOf.get(key) === 'later',
     word: e.word ? String(e.word).trim().slice(0, 120) || null : null, word_en: e.word_en ? String(e.word_en).trim().slice(0, 200) || null : null, status: 'pending' as const}; })
-    .sort((a, b) => (a.start ?? 1e9) - (b.start ?? 1e9) || a.utterance_id.localeCompare(b.utterance_id, undefined, {numeric: true}));
+    .sort((a, b) => (a.start ?? 1e9) - (b.start ?? 1e9) || a.utterance_id.localeCompare(b.utterance_id, undefined, {numeric: true})));
   return {categories, errors, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 30), dropped, separated, studentUtterances: studentUtts};
 }
 
@@ -260,12 +259,38 @@ export function legacyCategory(key: string): 'grammar' | 'conjugation' | 'word_o
    already approved by the teacher, so their examples count as approved. */
 export function errorsOf(doc: {errors?: ErrorItem[]; categories?: Category[]} | null | undefined): ErrorItem[] {
   if (!doc) return [];
-  if (Array.isArray(doc.errors)) return doc.errors;
+  if (Array.isArray(doc.errors)) return dedupeErrors(doc.errors); // v51: also older reports show each error once
   return (doc.categories || []).flatMap(c => c.examples.map(e => ({id: 'e_' + e.utterance_id + '_' + shortHash(norm(e.original) + '|' + c.key), utterance_id: e.utterance_id, original: e.original, corrected: e.corrected,
     why: c.explanation || '', type: errorType(null, c.label), category: c.label, category_key: c.key, topic_id: c.topic_ids[0] || null, start: e.start, certainty: e.certainty,
     kind: 'error' as const, repeats: 1, later: c.relevance === 'later', word: null, word_en: null, status: 'approved' as const})));
 }
 /** Errors per main category in the fixed order, for the report. */
 export function groupErrors(list: ErrorItem[]) {
-  return ERROR_TYPES.map(t => ({type: t, label: ERROR_TYPE_LABEL[t], items: list.filter(e => e.type === t)})).filter(g => g.items.length);
+  // v51: within a category the errors made most often first, then in the order of the lesson
+  return ERROR_TYPES.map(t => ({type: t, label: ERROR_TYPE_LABEL[t], items: list.filter(e => e.type === t).sort((a, b) => b.repeats - a.repeats || (a.start ?? 1e9) - (b.start ?? 1e9))})).filter(g => g.items.length);
+}
+/* v51: DEDUPLICATION. A student who says "Ik heb gisteren naar school gegaan" five times made ONE error five times:
+   it is listed once with its count and moments. The same error = the same category AND the same sentence (capitals and
+   punctuation do not matter) or nearly the same sentence with nearly the same correction (a word more or less).
+   Two different sentences with the same grammar problem ("… naar school gegaan" / "… naar huis gegaan") stay separate
+   examples under the same category. Idempotent: running it again on its own result changes nothing. */
+const words = (s: string) => new Set(norm(s).split(' ').filter(Boolean));
+function overlap(a: string, b: string) { const A = words(a), B = words(b); if (!A.size || !B.size) return 0; let n = 0; for (const x of A) if (B.has(x)) n++; return n / (A.size + B.size - n); }
+export function sameError(a: Pick<ErrorItem, 'original' | 'corrected' | 'category_key'>, b: Pick<ErrorItem, 'original' | 'corrected' | 'category_key'>) {
+  if (a.category_key !== b.category_key) return false;
+  if (norm(a.original) === norm(b.original)) return true;
+  return overlap(a.original, b.original) >= 0.8 && overlap(a.corrected, b.corrected) >= 0.8;
+}
+export function dedupeErrors(list: ErrorItem[]): ErrorItem[] {
+  const groups: ErrorItem[][] = [];
+  for (const e of list) { const g = groups.find(x => sameError(x[0], e)); if (g) g.push(e); else groups.push([e]); }
+  return groups.map(g => {
+    if (g.length === 1 && g[0].times) return g[0];
+    const rep = g.find(x => x.edited) || g.find(x => x.status === 'approved') || g[0];
+    const times = g.flatMap(x => x.times || [x.start]);
+    const status: ErrorItem['status'] = g.some(x => x.status === 'approved') ? 'approved' : g.every(x => x.status === 'rejected') ? 'rejected' : 'pending';
+    const starts = times.filter((t): t is number => t != null);
+    return {...rep, id: g[0].id, start: starts.length ? Math.min(...starts) : rep.start, times, repeats: times.length,
+      certainty: g.some(x => x.certainty === 'certain') ? 'certain' : 'uncertain', status, ids: [...new Set(g.flatMap(x => x.ids || [x.id]))]};
+  });
 }

@@ -25,8 +25,8 @@ function Row({e, teacher, onChange}: {e: ErrorItem; teacher: boolean; onChange?:
     <div className="er-pair"><s className="er-wrong">{e.original}</s><span aria-hidden>→</span><b className="er-right">{e.corrected}</b></div>
     {e.why && !edit && <p className="er-why">{e.why}</p>}
     <div className="er-meta">
-      {e.start != null && <span title={tt('Tijd in de opname')}><Clock3 size={12} aria-hidden/> {clock(e.start)}</span>}
-      {e.repeats > 1 && <span className="tag recurring"><Repeat2 size={12} aria-hidden/> {tt('{0}× in deze les', e.repeats)}</span>}
+      {(() => { const ts = (e.times || [e.start]).filter((x): x is number => x != null); return ts.length ? <span title={tt('Tijd in de opname')}><Clock3 size={12} aria-hidden/> {ts.slice(0, 4).map(clock).join(', ')}{ts.length > 4 ? ` +${ts.length - 4}` : ''}</span> : null; })()}
+      {e.repeats > 1 && <span className="tag recurring" title={tt('Aantal keer gemaakt')}><Repeat2 size={12} aria-hidden/> {tt('{0}× in deze les', e.repeats)}</span>}
       {e.certainty === 'uncertain' && <span className="tag uncertain">{tt('onzeker')}</span>}
       {e.kind === 'slip' && <span className="tag">{tt('verspreking')}</span>}
       {teacher && e.later && <span className="tag">{tt('voor later')}</span>}
