@@ -8,6 +8,7 @@ import {useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'reac
 import {createPortal} from 'react-dom';
 import {X,Pause,Play,Repeat2,Check,Ban,Sparkles,ChevronLeft,ChevronRight,RotateCcw,Square,Brain,Timer,Target,Dices,BookOpen,GraduationCap,Users,Layers,SkipForward} from 'lucide-react';
 import {supabase} from '../lib/supabase';
+import type {RealtimeChannel} from '@supabase/supabase-js';
 import {authedPost} from '../lib/learning';
 import {newGame,reduce,remaining,wire,fromWire,flashSummary,type Action,type GameState,type Kind,type Role} from '../lib/games/state';
 import {selectWords,type Selection,type Word} from '../lib/vocab/core';
@@ -17,10 +18,19 @@ const langLabel=(l:string)=>l?languageName(l):tt('Lestaal');
 import {t as tt} from '../lib/i18n';
 
 type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidden:string[]};
-type Msg={t:'game';k:'state';s:GameState}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'}};
+type Msg=({t:'game';k:'state';s:GameState;at?:number}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'};aid?:string});
 const frame=()=>document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;
-function send(m:unknown){try{(frame()?.contentWindow as unknown as {__klasGameSend?:(m:unknown)=>void}|null)?.__klasGameSend?.(m)}catch{/* classroom not ready */}}
-function online(){try{return !!(frame()?.contentWindow as unknown as {__klasOnline?:()=>boolean}|null)?.__klasOnline?.()}catch{return false}}
+// v50: every game message goes over TWO independent routes: the classroom's data channel (peer-to-peer) AND a Supabase
+// Realtime broadcast channel between the two apps (part of the existing Supabase project; no new service). Whichever
+// arrives first is used; duplicates are ignored (states carry the host's time, actions an id). The shared state never
+// contains the cards, so nothing hidden travels over either route.
+let rt:RealtimeChannel|null=null;let rtOn=false;
+function send(m:unknown){
+ try{(frame()?.contentWindow as unknown as {__klasGameSend?:(m:unknown)=>void}|null)?.__klasGameSend?.(m)}catch{/* classroom not ready */}
+ if(rt&&rtOn)void rt.send({type:'broadcast',event:'g',payload:m}).catch(()=>{});
+}
+function peerOnline(){try{return !!(frame()?.contentWindow as unknown as {__klasOnline?:()=>boolean}|null)?.__klasOnline?.()}catch{return false}}
+function online(){return peerOnline()||rtOn}
 const KIND_LABEL:Record<Kind,string>={flash:'Flashcards',thirty:'30 Seconds',taboo:'Taboe'};
 const KIND_ICON:Record<Kind,ReactNode>={flash:<Brain size={18}/>,thirty:<Timer size={18}/>,taboo:<Target size={18}/>};
 const KIND_HINT:Record<Kind,string>={flash:'Omdraaien en oefenen',thirty:'Leg zoveel mogelijk woorden uit',taboo:'Uitleggen zonder verboden woorden'};
@@ -66,19 +76,33 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  useEffect(()=>{if(host&&mount&&ref.current&&ref.current.phase!=='ended'&&!opened.current){opened.current='restored';onOpen()}},[host,mount,onOpen]);
  // v47 fix: messages arrive as window events from the classroom (works whatever bridge object exists, and after a
  // classroom reload); the student asks for the current state itself when it has none (opened later, missed a message)
- useEffect(()=>{
-  const onMsg=(e:Event)=>{const m=(e as CustomEvent).detail as Msg;if(!m||m.t!=='game')return;
-   if(host&&m.k==='act'){const a=(m.a as {a:string}).a;if(a==='sync')broadcast(ref.current);else if(a==='newround')void newRound.current();else apply(m.a as Action,'student')}
+ const seen=useRef<Set<string>>(new Set());const lastAt=useRef<{id:string;at:number}|null>(null);
+ const handle=useRef<(m:Msg)=>void>(()=>{});
+ handle.current=(m:Msg)=>{if(!m||m.t!=='game')return;
+   if(host&&m.k==='act'){if(m.aid){if(seen.current.has(m.aid))return;seen.current.add(m.aid);if(seen.current.size>300)seen.current=new Set([...seen.current].slice(-150))}
+    const a=(m.a as {a:string}).a;if(a==='sync')broadcast(ref.current);else if(a==='newround')void newRound.current();else apply(m.a as Action,'student')}
+   if(!host&&m.k==='state'){const L=lastAt.current;if(m.at&&L&&L.id===m.s.id&&m.at<L.at)return; // an older copy over the slower route
+    if(m.at)lastAt.current={id:m.s.id,at:m.at}}
+   handleState(m)};
+ // Realtime route (one channel per student classroom; only the two apps of this lesson subscribe)
+ useEffect(()=>{const db=supabase();if(!db)return;const c=db.channel('teachy-game-'+studentId,{config:{broadcast:{self:false}}});
+  c.on('broadcast',{event:'g'},({payload})=>handle.current(payload as Msg));
+  c.subscribe(st=>{rtOn=st==='SUBSCRIBED';if(rtOn&&host)broadcast(ref.current)});rt=c;
+  return()=>{if(rt===c){rt=null;rtOn=false}void db.removeChannel(c)}},[studentId,host,broadcast]);
+ const handleState=(m:Msg)=>{
+   if(!host&&m.k==='state'){
    // v47: open the panel at the student once per game/round (not on every state update: a panel the student closed
    // on purpose must not jump open again with every timer tick); the timer always follows the host's state
-   if(!host&&m.k==='state'){const s=fromWire(m,Date.now());setState(s);const k=s.id+':'+s.round+':'+(s.phase==='ended'?'end':'on');if(s.phase!=='ended'&&opened.current!==k){opened.current=k;onOpen()}if(s.phase==='ended')opened.current=k}};
+   const s=fromWire(m,Date.now());setState(s);const k=s.id+':'+s.round+':'+(s.phase==='ended'?'end':'on');if(s.phase!=='ended'&&opened.current!==k){opened.current=k;onOpen()}if(s.phase==='ended')opened.current=k}};
+ useEffect(()=>{
+  const onMsg=(e:Event)=>handle.current((e as CustomEvent).detail as Msg);
   const onHello=()=>{if(host)broadcast(ref.current)}; // student (re)connected: send the current state again
   window.addEventListener('teachy-game',onMsg);window.addEventListener('teachy-peer-hello',onHello);
   return()=>{window.removeEventListener('teachy-game',onMsg);window.removeEventListener('teachy-peer-hello',onHello)}},[host,apply,broadcast,onOpen]);
  // student without a state: ask the teacher every 4 s while connected (a few bytes) until the game state arrives,
  // so a game started before the student joined, or a lost message, never leaves the student waiting
  const [linked,setLinked]=useState(true);
- useEffect(()=>{if(host||state)return;const ask=()=>{const on=online();setLinked(on);if(on)send({t:'game',k:'act',a:{a:'sync'}})};ask();const id=setInterval(ask,4000);return()=>clearInterval(id)},[host,state]);
+ useEffect(()=>{if(host||state)return;const ask=()=>{const on=online();setLinked(on);if(on)send({t:'game',k:'act',a:{a:'sync'},aid:crypto.randomUUID()})};ask();const id=setInterval(ask,4000);return()=>clearInterval(id)},[host,state]);
 
  /* ---------- timer ---------- */
  // v47: one timer — the host's start/end. The host re-sends the state every 4 s while the clock runs, so the student's
@@ -130,7 +154,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
   catch(e){apply({a:'error',message:e instanceof Error?e.message:String(e)},'teacher')}setBusy(false)};
 
  /* ---------- actions (host applies directly, student asks the host) ---------- */
- const act=(a:Action|{a:'newround'})=>{if(host){if(a.a==='newround')void newRound.current();else apply(a as Action,'teacher')}else send({t:'game',k:'act',a})};
+ const act=(a:Action|{a:'newround'})=>{if(host){if(a.a==='newround')void newRound.current();else apply(a as Action,'teacher')}else send({t:'game',k:'act',a,aid:crypto.randomUUID()})};
  const me:Role=role;const explaining=!!state&&state.kind!=='flash'&&state.explainer===me;
 
  /* ---------- explainer: load the round's cards (RLS: only the explainer can read them) ---------- */

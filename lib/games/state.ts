@@ -81,7 +81,7 @@ export function reduce(s: GameState, act: Action, actor: Role, now: number): Gam
 
 /** What is sent to the other player: the state with the timer as "remaining now" (no clock sync needed).
  *  Contains no card content for 30 Seconds / Taboo (by construction: the state never holds it). */
-export function wire(s: GameState, now: number) { return {t: 'game' as const, k: 'state' as const, s: {...s, remainingMs: remaining(s, now), runningSince: s.runningSince === null ? null : 0}}; }
+export function wire(s: GameState, now: number) { return {t: 'game' as const, k: 'state' as const, at: now, s: {...s, remainingMs: remaining(s, now), runningSince: s.runningSince === null ? null : 0}}; }
 /** Receiver: turn the wire state into a local state (timer continues from the moment of receipt). */
 export function fromWire(w: {s: GameState}, now: number): GameState { return {...w.s, runningSince: w.s.runningSince === null ? null : now}; }
 

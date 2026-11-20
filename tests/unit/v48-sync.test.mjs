@@ -26,7 +26,8 @@ test('send queue: normal messages go out at once; no waiting on throttled timers
   assert.ok(!/setTimeout\(pump, \(m\.t/.test(p));
 });
 test('games: student asks for the state while connected and shows whether it is connected', () => {
-  assert.match(games, /function online\(\)\{try\{return !!\(frame\(\)\?\.contentWindow/);
+  assert.match(games, /function peerOnline\(\)\{try\{return !!\(frame\(\)\?\.contentWindow/);
+  assert.match(games, /function online\(\)\{return peerOnline\(\)\|\|rtOn\}/);
   assert.match(games, /const id=setInterval\(ask,4000\)/);
   assert.match(games, /linked\?tt\('Je docent start zo een spel\.'\):tt\('Nog niet verbonden met je docent\. Het spel verschijnt zodra de verbinding er is\.'\)/);
 });

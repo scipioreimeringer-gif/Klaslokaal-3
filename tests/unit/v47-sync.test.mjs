@@ -30,7 +30,7 @@ test('games fix: student without state asks for it; delivery via window events a
   assert.match(html, /gameEvent\("teachy-peer-hello", null\);/);
   assert.match(games, /window\.addEventListener\('teachy-game',onMsg\)/);
   assert.match(games, /if\(a==='sync'\)broadcast\(ref\.current\)/, 'the host answers a sync request');
-  assert.match(games, /if\(host\|\|state\)return;const ask=\(\)=>\{const on=online\(\);setLinked\(on\);if\(on\)send\(\{t:'game',k:'act',a:\{a:'sync'\}\}\)\}/, 'only while connected, stops once the state is there');
+  assert.match(games, /if\(host\|\|state\)return;const ask=\(\)=>\{const on=online\(\);setLinked\(on\);if\(on\)send\(\{t:'game',k:'act',a:\{a:'sync'\},aid:crypto\.randomUUID\(\)\}\)\}/, 'only while connected, stops once the state is there');
   assert.ok(!/b\.onGame=/.test(games), 'no second delivery path');
 });
 test('screen sharing: students too, same screen-call type, shown in the existing Scherm panel; one sharer at a time', () => {
