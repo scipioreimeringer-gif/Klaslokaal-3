@@ -40,6 +40,8 @@ export const DYNAMIC = [
   'Zelfstandige naamwoorden', 'Bijvoeglijke naamwoorden', 'Bijwoorden', 'Voegwoorden', 'Uitdrukkingen', 'Voorbeeldzinnen',
   // v44: workspace tabs (components/StudentData.tsx), homework kinds and statuses (app/huiswerk-client.tsx)
   'Mijn lessen', 'Voortgang', 'Leerpad', 'Meer', 'Privé', 'Grammatica', 'Woorden', 'Schrijven', 'Lezen', 'Concept', 'Klaar voor controle', 'Gepubliceerd', 'Ingeleverd', 'Feedback gegeven', 'Open', 'Te laat',
+  // v46 phase 2: main error categories (lib/analysis/core.ts ERROR_TYPE_LABEL)
+  'Grammatica', 'Werkwoordvervoegingen', 'Woordvolgorde en zinsbouw', 'Verkeerd woordgebruik', 'Ontbrekende woorden', 'Lidwoorden', 'Voorzetsels', 'Uitspraak', 'Overig',
 ];
 
 function sourceFiles() {

@@ -65,8 +65,12 @@ export function LessonDetail({card,studentId,viewer,entries,lang,level,onBack,on
  const entry=entries.find(e=>e.lesson_date===card.date);const L=card.language||lang;
  useEffect(()=>{let off=false;const db=supabase()!;void(async()=>{
   // the word list of this lesson = rows of the ONE central word list with this lesson date (no copy)
-  const v=await db.from('vocab_items').select('term,translation,pos').eq('student_id',studentId).eq('lesson_date',card.date).order('created_at');
-  const central=(v.error?[]:(v.data||[])) as LessonWord[];
+  const v=await db.from('vocab_items').select('id,term,translation,pos').eq('student_id',studentId).eq('lesson_date',card.date).order('created_at');
+  const central=(v.error?[]:(v.data||[])) as (LessonWord&{id:string})[];
+  // v46: words that came back in this lesson (linked through vocab_lessons; same rows of the central list)
+  const lk=await db.from('vocab_lessons').select('vocab_id').eq('student_id',studentId).eq('lesson_date',card.date);
+  const extraIds=lk.error?[]:((lk.data||[]) as {vocab_id:string}[]).map(x=>x.vocab_id).filter(id=>!central.some(c=>c.id===id));
+  if(extraIds.length){const ex=await db.from('vocab_items').select('id,term,translation,pos').in('id',extraIds.slice(0,300));if(!ex.error)central.push(...((ex.data||[]) as (LessonWord&{id:string})[]))}
   const legacy=(entry?.words||[]).map(w=>({term:w.nl,translation:w.uit||''}));
   let a=await db.from('assignments').select('id,title,published_at,lesson_id,analysis_id,due_at').eq('student_id',studentId);
   if(a.error&&/due_at|column/.test(a.error.message))a=await db.from('assignments').select('id,title,published_at,lesson_id,analysis_id').eq('student_id',studentId) as typeof a;

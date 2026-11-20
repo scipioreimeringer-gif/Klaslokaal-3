@@ -24,10 +24,11 @@ test('old deep links keep working: analyses → Lessen, doelen → Voortgang for
 });
 test('a lesson page: errors → grammar → this lesson\'s words → deeper look → summary and assignments; notes and homework of the lesson', () => {
   const r = read('components/LessonReport.tsx');
-  const order = ['"Mijn fouten"', '"Grammaticale aandachtspunten"', '"Woordenlijst van deze les"', '"Verdieping"', '"Samenvatting en opdrachten"'].map(k => r.indexOf(k));
+  const order = ['"Fouten en verbeteringen"', '"Grammaticale aandachtspunten"', '"Woordenlijst van deze les"', '"Verdieping"', '"Samenvatting en opdrachten"'].map(k => r.indexOf(k));
   assert.ok(order.every((v, i) => v > 0 && (!i || v > order[i - 1])));
   const lc = read('components/LessonCards.tsx');
-  assert.match(lc, /from\('vocab_items'\)\.select\('term,translation,pos'\)\.eq\('student_id',studentId\)\.eq\('lesson_date',card\.date\)/, 'the lesson word list = the central list (no copy)');
+  assert.match(lc, /from\('vocab_items'\)\.select\('id,term,translation,pos'\)\.eq\('student_id',studentId\)\.eq\('lesson_date',card\.date\)/, 'the lesson word list = the central list (no copy)');
+  assert.match(lc, /from\('vocab_lessons'\)\.select\('vocab_id'\)\.eq\('student_id',studentId\)\.eq\('lesson_date',card\.date\)/, 'v46: + words that came back in this lesson');
   assert.match(lc, /\(card\.lessonId&&x\.lesson_id===card\.lessonId\)\|\|\(card\.analysis&&x\.analysis_id===card\.analysis\.id\)/, 'homework of this lesson');
   assert.match(lc, /<TeacherAnalyses studentId=\{studentId\} focusId=\{card\.analysis\.id\} onlyId=\{card\.analysis\.id\}/, 'teacher approval inside the lesson (existing component)');
   assert.match(lc, /\(viewer==='teacher'\|\|card\.status==='approved'\)/, 'students only see approved reports');

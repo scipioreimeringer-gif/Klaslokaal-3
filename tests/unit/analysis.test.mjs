@@ -187,7 +187,18 @@ for (const minutes of [5, 15, 30, 50, 60]) {
     assert.ok(hw.items.every(i => i.type !== 'multiple_choice' ? i.options.length === 0 : true));
     assert.deepEqual(doc.checklist_suggestions.map(x => [x.topic_id, x.to]), [['t-aux', 'covered']], '"mastered" on one sentence refused');
     assert.equal(doc.homework.assignment_id, 'hw-1');
-    assert.ok(doc.corrections.length <= doc.categories.length * 2, 'legacy list also limited');
+    // v46 phase 2: EVERY verified error is registered (examples stay limited to 2 for the summary)
+    const errs = doc.errors;
+    assert.equal(errs.filter(e => e.category_key === 'inversion').length, planted.inversion, 'every inversion error registered once per student line');
+    if (planted.auxiliary) assert.equal(errs.filter(e => e.category_key === 'auxiliary').length, planted.auxiliary, 'duplicate report in the same line merged');
+    assert.ok(errs.every(e => e.status === 'pending'), 'waits for the teacher');
+    assert.ok(!errs.some(e => /Niet gisteren/.test(e.original)) && errs.every(e => e.utterance_id), 'never a teacher line');
+    assert.ok(!errs.some(e => e.category_key === 'articles'), 'invented quotes never become errors');
+    assert.ok(errs.every(e => ['grammar', 'conjugation', 'word_order', 'word_choice', 'missing_word', 'article', 'preposition', 'pronunciation', 'other'].includes(e.type)));
+    const gis = errs.filter(e => e.corrected === 'gisteren ben ik');
+    assert.ok(gis.length && gis.every(e => e.type === 'word_order' && e.repeats === gis.length), 'the same mistake in several lines = one pattern with its count');
+    assert.equal(new Set(errs.map(e => e.id)).size, errs.length, 'stable unique ids');
+    assert.equal(doc.corrections.length, errs.filter(e => !e.later).length, 'legacy list = all non-"later" errors');
   });
 }
 test('pipeline: a failed chunk → partial; retry analyses ONLY that chunk, same totals (no duplicates)', async () => {

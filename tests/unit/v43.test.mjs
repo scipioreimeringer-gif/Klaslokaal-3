@@ -63,7 +63,7 @@ test('grammar groups: Dutch and Brazilian Portuguese topics, counts summed, "Ove
 });
 test('report order: errors first … homework last; "Oefen dit onderwerp" only after a click; teacher approval kept', () => {
   const r = read('components/LessonReport.tsx');
-  const order = ['"Mijn fouten"', '"Grammaticale aandachtspunten"', '"Woordenlijst van deze les"', '"Verdieping"', '"Samenvatting en opdrachten"'].map(k => r.indexOf(k)); // v44 order
+  const order = ['"Fouten en verbeteringen"', '"Grammaticale aandachtspunten"', '"Woordenlijst van deze les"', '"Verdieping"', '"Samenvatting en opdrachten"'].map(k => r.indexOf(k)); // v44 order
   assert.ok(order.every(i => i > 0) && order.every((v, i) => !i || v > order[i - 1]), 'sections in the required order');
   assert.match(r, /practise\?<div className="lr-practise"><SelfPractice studentId=\{studentId\} level=\{level\} topic=\{c\.label\}\/><\/div>/);
   assert.ok(!/authedPost|\/api\/ai|useEffect/.test(r), 'opening a report calls no AI');

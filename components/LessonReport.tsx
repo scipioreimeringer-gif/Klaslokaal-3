@@ -8,6 +8,7 @@ import {t as tt} from '../lib/i18n';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import {groupCategories} from '../lib/analysis/groups';
 import {SelfPractice} from './Learning';
+import {ErrorList} from './ErrorReview';
 
 type Cat=AnalysisV2['categories'][number];
 export type ReportError={original:string;corrected:string;why:string;label:string};
@@ -45,16 +46,15 @@ export function LessonWords({words}:{words:LessonWord[]}){
 
 /** v44 order inside a lesson: 1 Fouten · 2 Grammatica · 3 Woordenlijst van deze les · 4 Verdieping · 5 Samenvatting en opdrachten. */
 export function LessonReport({doc,studentId,level,lessonLang,teacher=false,words,extra}:{doc:AnalysisV2;studentId?:string;level?:string|null;lessonLang?:string;teacher?:boolean;words?:LessonWord[];extra?:React.ReactNode}){
- const r=doc.report;const errors=reportErrors(doc);
+ const r=doc.report;
  const cats=(doc.categories||[]).filter(c=>c.relevance!=='later'&&(c.count>0||c.examples.some(e=>e.certainty!=='uncertain')));
  const groups=groupCategories(cats,lessonLang);
  const list=words&&words.length?words:(doc.vocabulary||[]).filter(v=>v.term);
  const well=[...(r?.went_well||[]),...(doc.positives||[]).map(p=>p.note||p.text).filter(Boolean)].slice(0,6);
  return <div className="lesson-report">
-  <Section n={1} icon={XCircle} title={tt("Mijn fouten")} tone="coral">
-   {errors.length?<ol className="lr-errors">{errors.map((e,i)=><li key={i}>
-    <div className="lr-pair"><span className="lr-wrong"><span className="sr-only">{tt("Gezegd:")}</span><s>{e.original}</s></span><span className="lr-arrow" aria-hidden>→</span><span className="lr-right"><span className="sr-only">{tt("Beter:")}</span>{e.corrected}</span></div>
-    {e.why&&<p className="lr-why"><b>{tt("Waarom:")}</b> {e.why}</p>}</li>)}</ol>:<p className="muted">{tt("Geen belangrijke fouten in de stof van deze les. Goed gedaan!")}</p>}
+  <Section n={1} icon={XCircle} title={tt("Fouten en verbeteringen")} tone="coral">
+   {/* v46 phase 2: every registered error, grouped per main category, details on request (teacher-removed errors hidden) */}
+   <ErrorList doc={doc}/>
   </Section>
   <Section n={2} icon={ListTree} title={tt("Grammaticale aandachtspunten")} tone="blue">
    {groups.length?<ul className="lr-groups">{groups.map(g=><li key={g.group}><span>{tt(g.group)}</span>{g.count>0&&<b className="lr-count">{tt("{0}×",g.count)}</b>}<small className="muted">{g.categories.map(c=>c.label).join(' · ')}</small></li>)}</ul>:<p className="muted small">{tt("Geen grammaticale aandachtspunten in deze les.")}</p>}

@@ -51,7 +51,29 @@ export function chunkText(chunk: Chunk, byId: Map<string, Utterance>) {
 }
 
 /* ---------------- verification & merging ---------------- */
-export type RawError = {utterance_id: string; original: string; corrected: string; category: string; topic_id: string | null; kind: 'error' | 'slip' | 'self_correction'; certainty: 'certain' | 'uncertain'};
+export type RawError = {utterance_id: string; original: string; corrected: string; category: string; topic_id: string | null; kind: 'error' | 'slip' | 'self_correction'; certainty: 'certain' | 'uncertain';
+  /* v46 phase 2 (optional so older stored parts keep working) */ type?: ErrorType; why?: string; word?: string; word_en?: string};
+
+/* v46: every error also gets ONE main category (fixed list) next to its finer grammar topic. */
+export type ErrorType = 'grammar' | 'conjugation' | 'word_order' | 'word_choice' | 'missing_word' | 'article' | 'preposition' | 'pronunciation' | 'other';
+export const ERROR_TYPES: ErrorType[] = ['grammar', 'conjugation', 'word_order', 'word_choice', 'missing_word', 'article', 'preposition', 'pronunciation', 'other'];
+export const ERROR_TYPE_LABEL: Record<ErrorType, string> = {grammar: 'Grammatica', conjugation: 'Werkwoordvervoegingen', word_order: 'Woordvolgorde en zinsbouw', word_choice: 'Verkeerd woordgebruik',
+  missing_word: 'Ontbrekende woorden', article: 'Lidwoorden', preposition: 'Voorzetsels', pronunciation: 'Uitspraak', other: 'Overig'};
+const TYPE_OF_KEY: Record<string, ErrorType> = {inversion: 'word_order', subordinate_clause: 'word_order', word_order: 'word_order', sentence_structure: 'word_order',
+  auxiliary: 'conjugation', participle: 'conjugation', past_tense: 'conjugation', present_tense: 'conjugation', conjugation: 'conjugation', separable_verbs: 'conjugation', subjunctive: 'conjugation', ser_estar: 'conjugation',
+  articles: 'article', gender: 'article', prepositions: 'preposition', word_choice: 'word_choice', pronunciation: 'pronunciation', plural: 'grammar', adjectives: 'grammar', pronouns: 'grammar'};
+/** Main category: the model's choice when valid, otherwise derived from the grammar category. */
+export function errorType(given: unknown, category: string): ErrorType {
+  if (typeof given === 'string' && (ERROR_TYPES as string[]).includes(given)) return given as ErrorType;
+  if (/ontbre|missing|weggelaten|falta/i.test(category)) return 'missing_word';
+  return TYPE_OF_KEY[categoryKey(category).key] || 'grammar';
+}
+/** One registered error (all of them, not only examples). The teacher approves, corrects or removes it; only
+ *  approved errors are used for practice. */
+export type ErrorItem = {id: string; utterance_id: string; original: string; corrected: string; why: string; type: ErrorType; category: string; category_key: string;
+  topic_id: string | null; start: number | null; certainty: 'certain' | 'uncertain'; kind: 'error' | 'slip'; repeats: number; later: boolean;
+  word: string | null; word_en: string | null; status: 'pending' | 'approved' | 'rejected'; edited?: boolean};
+const shortHash = (s: string) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
 export type RawChunk = {errors: RawError[]; covered: {topic_id: string | null; label: string}[]; positives: {utterance_id: string; note: string}[]; new_words: {term: string; translation: string; status?: WordStatus}[]};
 export type WordStatus = 'introduced' | 'practised' | 'difficult';
 
@@ -97,7 +119,8 @@ export function verifyErrors(raw: RawError[], byId: Map<string, Utterance>, spea
     if (!u || u.speaker === 'teacher' || !e.original || !norm(u.text).includes(norm(e.original))) { dropped++; continue; }
     const dup = `${u.id}|${norm(e.original)}|${categoryKey(e.category).key}`;
     if (seen.has(dup)) continue; seen.add(dup);
-    const certainty: RawError['certainty'] = !speakersSeparated || u.speaker === 'unknown' ? 'uncertain' : e.certainty;
+    // v46: pronunciation can rarely be proven from a transcript → never 'certain'; unknown speaker → uncertain
+    const certainty: RawError['certainty'] = !speakersSeparated || u.speaker === 'unknown' || errorType(e.type, e.category) === 'pronunciation' ? 'uncertain' : e.certainty;
     kept.push({...e, certainty, start: u.start});
   }
   return {kept, dropped};
@@ -187,7 +210,18 @@ export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topic
     const prev = words.get(k);
     if (!prev) words.set(k, {term: w.term.trim(), translation: w.translation.trim(), status: st}); else if (rank[st] > rank[prev.status]) prev.status = st;
   }
-  return {categories, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 30), dropped, separated, studentUtterances: studentUtts};
+  // v46: ALL verified errors (not only 2 examples per category); the same correction in different sentences = a pattern
+  const relOf = new Map(categories.map(c => [c.key, c.relevance]));
+  const list = kept.filter(e => e.kind !== 'self_correction');
+  const patternKey = (e: typeof kept[number]) => errorType(e.type, e.category) + '|' + norm(e.corrected);
+  const repeats = new Map<string, number>(); for (const e of list) repeats.set(patternKey(e), (repeats.get(patternKey(e)) || 0) + 1);
+  const errors: ErrorItem[] = list.map(e => { const {key, label} = categoryKey(e.category); return {
+    id: 'e_' + e.utterance_id + '_' + shortHash(norm(e.original) + '|' + key), utterance_id: e.utterance_id, original: e.original.trim(), corrected: e.corrected.trim(),
+    why: String(e.why || '').trim().slice(0, 200), type: errorType(e.type, e.category), category: label, category_key: key, topic_id: e.topic_id && topics.has(e.topic_id) ? e.topic_id : null,
+    start: e.start, certainty: e.certainty, kind: (e.kind === 'slip' ? 'slip' : 'error') as ErrorItem['kind'], repeats: repeats.get(patternKey(e)) || 1, later: relOf.get(key) === 'later',
+    word: e.word ? String(e.word).trim().slice(0, 120) || null : null, word_en: e.word_en ? String(e.word_en).trim().slice(0, 200) || null : null, status: 'pending' as const}; })
+    .sort((a, b) => (a.start ?? 1e9) - (b.start ?? 1e9) || a.utterance_id.localeCompare(b.utterance_id, undefined, {numeric: true}));
+  return {categories, errors, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 30), dropped, separated, studentUtterances: studentUtts};
 }
 
 /** Categories that may get homework: only material that was taught (checklist status, today's goals, explained this lesson).
@@ -220,4 +254,18 @@ export function legacyCategory(key: string): 'grammar' | 'conjugation' | 'word_o
   if (/pronunciation/.test(key)) return 'pronunciation';
   if (/^x_/.test(key)) return 'other';
   return 'grammar';
+}
+
+/* v46: errors of a report — the full list (v46+) or, for older reports, the examples of the categories. Older reports were
+   already approved by the teacher, so their examples count as approved. */
+export function errorsOf(doc: {errors?: ErrorItem[]; categories?: Category[]} | null | undefined): ErrorItem[] {
+  if (!doc) return [];
+  if (Array.isArray(doc.errors)) return doc.errors;
+  return (doc.categories || []).flatMap(c => c.examples.map(e => ({id: 'e_' + e.utterance_id + '_' + shortHash(norm(e.original) + '|' + c.key), utterance_id: e.utterance_id, original: e.original, corrected: e.corrected,
+    why: c.explanation || '', type: errorType(null, c.label), category: c.label, category_key: c.key, topic_id: c.topic_ids[0] || null, start: e.start, certainty: e.certainty,
+    kind: 'error' as const, repeats: 1, later: c.relevance === 'later', word: null, word_en: null, status: 'approved' as const})));
+}
+/** Errors per main category in the fixed order, for the report. */
+export function groupErrors(list: ErrorItem[]) {
+  return ERROR_TYPES.map(t => ({type: t, label: ERROR_TYPE_LABEL[t], items: list.filter(e => e.type === t)})).filter(g => g.items.length);
 }

@@ -21,7 +21,7 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
  const load=useCallback(async()=>{const r=await supabase()!.from('vocab_suggestions').select('id,term,translation,example,pos,kind,lang,origin,lesson_date,lesson_id,source_page').eq('student_id',studentId).eq('status','pending').order('created_at');
   if(r.error){setRows([]);if(!/vocab_suggestions|PGRST205/.test(r.error.message))setMsg(r.error.message);return}setRows((r.data||[]) as Sug[])},[studentId]);
  useEffect(()=>{void load()},[load]);
- async function scan(){setBusy(true);setMsg('');try{const r=await authedPost<{added:number;scannedPages:number}>(supabase()!,'/api/vocab/detect',{studentId});setMsg(r.added?tt('{0} nieuwe woorden gevonden. Controleer ze hieronder.',r.added):r.scannedPages?tt('Geen nieuwe woorden gevonden op het canvas.'):tt('Het canvas is niet veranderd sinds de vorige keer.'));await load()}catch(e){setMsg(e instanceof Error?e.message:String(e))}setBusy(false)}
+ async function scan(){setBusy(true);setMsg('');try{const r=await authedPost<{added:number;scannedPages:number;direct?:boolean}>(supabase()!,'/api/vocab/detect',{studentId});setMsg(r.added?(r.direct?tt('{0} nieuwe woorden toegevoegd aan de woordenlijst. Je kunt ze hieronder aanpassen of verwijderen.',r.added):tt('{0} nieuwe woorden gevonden. Controleer ze hieronder.',r.added)):r.scannedPages?tt('Geen nieuwe woorden gevonden op het canvas.'):tt('Het canvas is niet veranderd sinds de vorige keer.'));await load();if(r.direct)onAdded()}catch(e){setMsg(e instanceof Error?e.message:String(e))}setBusy(false)}
  async function accept(list:Sug[]){setBusy(true);const db=supabase()!;let added=0;
   for(const s of list){const r=await db.from('vocab_items').insert({student_id:studentId,term:s.term.trim(),translation:s.translation.trim(),example:s.example.trim(),kind:s.kind,pos:s.pos||null,lang:s.lang,source:s.origin==='analysis'?'ai':'canvas',lesson_date:s.lesson_date,lesson_id:s.lesson_id,source_page:s.source_page});
    if(!r.error)added++;await db.from('vocab_suggestions').update({status:'accepted',decided_at:new Date().toISOString(),term:s.term.trim(),translation:s.translation.trim()}).eq('id',s.id)}
@@ -47,7 +47,10 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
  const [items,setItems]=useState<VocabItem[]|null>(null);const [err,setErr]=useState('');const [q,setQ]=useState('');const [filter,setFilter]=useState<'all'|VocabItem['status']>('all');
  const [term,setTerm]=useState('');const [tr,setTr]=useState('');const [ex,setEx]=useState('');
  const [fx,setFx]=useState<VocabFilter>({lang:'all',pos:'all',level:'all',lesson:'all'});
- const load=useCallback(async()=>{const r=await loadVocab(supabase()!,studentId);if(r.error)setErr(/vocab_items/.test(r.error)?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):r.error);setItems(r.items)},[studentId]);
+ const [links,setLinks]=useState<Map<string,string[]>>(new Map());
+ const load=useCallback(async()=>{const db=supabase()!;const r=await loadVocab(db,studentId);if(r.error)setErr(/vocab_items/.test(r.error)?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):r.error);setItems(r.items)
+  // v46: every lesson a word appeared in (v47 table; without it: the word's own lesson date)
+  const l=await db.from('vocab_lessons').select('vocab_id,lesson_date').eq('student_id',studentId);const m=new Map<string,string[]>();if(!l.error)for(const x of (l.data||[]) as {vocab_id:string;lesson_date:string}[])m.set(x.vocab_id,[...(m.get(x.vocab_id)||[]),x.lesson_date]);setLinks(m)},[studentId]);
  useEffect(()=>{void load()},[load]);
  const canEdit=(v:VocabItem)=>viewer==='teacher'||v.source==='student';
  async function add(){if(!term.trim())return;const r=await addVocab(supabase()!,studentId,[{term,translation:tr,example:ex}],viewer==='teacher'?'teacher':'student');if(!r.added)setErr(tt("Dit woord staat al in de lijst."));else{setErr('');setTerm('');setTr('');setEx('')}await load()}
@@ -56,8 +59,9 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
  if(!items)return <div className="loader small"/>;
  const counts={new:items.filter(i=>i.status==='new').length,practicing:items.filter(i=>i.status==='practicing').length,mastered:items.filter(i=>i.status==='mastered').length};
  // v44: filters on the ONE central word list (same rows as the word list of a lesson; one row per word)
- const facets=vocabFacets(items);
- const shown=filterVocab(items,{...fx,status:filter,q});
+ const rows=items.map(i=>({...i,lesson_dates:links.get(i.id)||(i.lesson_date?[i.lesson_date]:[])}));
+ const facets=vocabFacets(rows);
+ const shown=filterVocab(rows,{...fx,status:filter,q});
  return <div>
   {err&&<div className="notice">{err}</div>}
   {viewer==='teacher'&&<Suggestions studentId={studentId} onAdded={()=>void load()}/>}
@@ -73,14 +77,14 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
   <form className="row vocab-add" onSubmit={e=>{e.preventDefault();void add()}}><input className="field" placeholder={tt("Woord of uitdrukking")} value={term} onChange={e=>setTerm(e.target.value)}/><input className="field" placeholder={tt("Betekenis")} value={tr} onChange={e=>setTr(e.target.value)}/><input className="field grow" placeholder={tt("Voorbeeldzin (optioneel)")} value={ex} onChange={e=>setEx(e.target.value)}/><button className="button small" type="submit"><Plus size={15}/> {tt("Toevoegen")}</button></form>
   <label className="searchbox"><Search size={16}/><input placeholder={tt("Zoeken…")} value={q} onChange={e=>setQ(e.target.value)}/></label>
   {!shown.length?<p className="muted">{tt("Nog geen woorden. Woorden uit de live les, goedgekeurde AI-analyses en woorden die je hier toevoegt, komen in deze lijst.")}</p>:
-  <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Les")}</th><th>{tt("Bron")}</th><th/></tr></thead><tbody>{shown.map(v=><tr key={v.id}>
+  <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Les")}</th><th>{tt("Bron")}</th><th/></tr></thead>{/* v46: grouped per word class */}{POS_GROUP_ORDER.map(k=>[k,shown.filter(v=>posKindOf(v.pos)===k)] as const).filter(([,g])=>g.length).map(([k,g])=><tbody key={k}><tr className="pos-group"><th colSpan={7}>{posIcon(g[0].pos)} {tt(POS_GROUP_TITLE[k])} <small className="muted">{g.length}</small></th></tr>{g.map(v=><tr key={v.id}>
    <td>{canEdit(v)?<input className="cell" value={v.term} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,term:e.target.value}:i)||null)} onBlur={e=>void patch(v,{term:e.target.value})}/>:<b>{v.term}</b>}</td>
    <td>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
    <td className="muted">{canEdit(v)?<input className="cell" value={v.example} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,example:e.target.value}:i)||null)} onBlur={e=>void patch(v,{example:e.target.value})}/>:v.example}</td>
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
-   <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.pos?<small className="block">{(posIcon(v.pos)+' '+v.pos).trim()}</small>:null}</td>
+   <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.lesson_dates.length>1&&<small className="block">{tt('in {0} lessen',v.lesson_dates.length)}</small>}{v.pos?<small className="block">{(posIcon(v.pos)+' '+v.pos).trim()}</small>:null}</td>
    <td><span className="tag">{v.source==='lesson'?tt("les"):v.source==='ai'?tt("AI · goedgekeurd"):v.source==='canvas'?tt("canvas"):v.source==='student'?tt("zelf"):tt("docent")}</span>{v.difficult&&<span className="tag uncertain">{tt('moeilijk')}</span>}{viewer==='teacher'&&<button className="iconbtn" title={v.difficult?tt('Niet meer als moeilijk markeren'):tt('Markeren als moeilijk')} onClick={()=>void patch(v,{difficult:!v.difficult})}><Flag size={13}/></button>}</td>
-   <td>{canEdit(v)&&<button className="iconbtn danger" title={tt("Verwijderen")} onClick={()=>void del(v)}><Trash2 size={14}/></button>}</td></tr>)}</tbody></table>}
+   <td>{canEdit(v)&&<button className="iconbtn danger" title={tt("Verwijderen")} onClick={()=>void del(v)}><Trash2 size={14}/></button>}</td></tr>)}</tbody>)}</table>}
  </div>
 }
 
