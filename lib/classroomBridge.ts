@@ -15,6 +15,9 @@ import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegac
 export type TeachyBridge = {
   /** v42: planned start of the lesson in the agenda (ISO), used for the lesson timer; null without a planned lesson */
   lessonStartsAt?: string | null;
+  /** v46: images in the shared Canvas (private Storage bucket; the Canvas only stores the path). Teacher and linked student. */
+  uploadCanvasImage?(file: Blob): Promise<{path?: string; error?: string}>;
+  canvasImageUrl?(path: string): Promise<string | null>;
   /** v43 teacher only: heartbeat with the joint presence (seconds) of this classroom session; the server registers the lesson. */
   presence?(p: {key: string; joint: number}): Promise<{registered?: boolean; threshold?: number; expired?: boolean; error?: string}>;
   version: 1;
@@ -75,6 +78,43 @@ function translator(db: SupabaseClient) {
 declare global { interface Window { teachyBridge?: TeachyBridge } }
 
 const LESSON_COLS = 'student_id,lesson_date,notes,homework,words,sorted';
+
+/* v46: Canvas images. Validated here (type by content, max 5 MB) and again by Storage (bucket limits) and RLS (path =
+   student folder). Name = SHA-256 of the content → the same image is stored once; signed URLs are cached briefly. */
+export const CANVAS_IMG_MAX = 5 * 1024 * 1024;
+export function sniffImage(b: Uint8Array): 'png' | 'jpg' | 'webp' | 'gif' | null {
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'gif';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'webp';
+  return null;
+}
+const MIME = {png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif'} as const;
+function canvasImages(db: SupabaseClient, studentId: string) {
+  const urls = new Map<string, {url: string; until: number}>();
+  return {
+    async uploadCanvasImage(file: Blob) {
+      if (!file || file.size === 0) return {error: t('Lege afbeelding')};
+      if (file.size > CANVAS_IMG_MAX) return {error: t('Afbeelding is te groot (max. 5 MB)')};
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const ext = sniffImage(buf);
+      if (!ext) return {error: t('Alleen JPG, PNG, WebP of GIF')};
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(x => x.toString(16).padStart(2, '0')).join('');
+      const path = `${studentId}/${hash}.${ext}`;
+      const up = await db.storage.from('canvas-images').upload(path, new Blob([buf], {type: MIME[ext]}), {contentType: MIME[ext], upsert: false});
+      if (up.error && !/exist|duplicate|409/i.test(up.error.message)) return {error: /bucket/i.test(up.error.message) ? t('Afbeeldingen zijn nog niet ingesteld: voer supabase/v46.sql uit.') : up.error.message};
+      return {path};
+    },
+    async canvasImageUrl(path: string) {
+      if (!new RegExp('^' + studentId + '/[0-9a-f]{64}\\.(png|jpg|webp|gif)$').test(path)) return null; // only this student's images
+      const c = urls.get(path); if (c && c.until > Date.now()) return c.url;
+      const r = await db.storage.from('canvas-images').createSignedUrl(path, 3600);
+      if (r.error || !r.data) return null;
+      urls.set(path, {url: r.data.signedUrl, until: Date.now() + 50 * 60e3});
+      return r.data.signedUrl;
+    },
+  };
+}
 
 /** TURN credentials are never in the classroom code: fetched once per page from /api/turn (logged-in users only). */
 let icePromise: Promise<{urls: string | string[]; username?: string; credential?: string}[]> | null = null;
@@ -202,6 +242,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       catch (e) { return {ok: true, analysis: t('Analyse niet gestart: {0}', e instanceof Error ? e.message : e)}; }
     },
     translate: translator(db),
+    ...canvasImages(db, opts.studentId),
     tidy: blocks => postJson(db, '/api/ai/tidy', {studentId: opts.studentId, blocks}),
     async previewImport(backup) {
       if (!students.length) await loadNotes();
@@ -246,6 +287,7 @@ export function createStudentBridge(db: SupabaseClient, opts: {studentId: string
     switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),
     previewImport: async () => [], importBackup: refuse,
     translate: translator(db),
+    ...canvasImages(db, opts.studentId),
     tidy: async () => { throw new Error(t('Alleen de docent kan het canvas ordenen')); },
   };
 }

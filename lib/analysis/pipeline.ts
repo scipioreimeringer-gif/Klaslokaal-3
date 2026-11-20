@@ -2,8 +2,8 @@
 // so the whole pipeline is testable without Supabase or OpenAI. One analysis = small bounded calls:
 //   chunk analyses (fast model, compact) → deterministic merge → one synthesis → one homework draft.
 import {z} from 'zod';
-import {chunkUtterances, chunkText, mergeChunks, homeworkCategories, guardSuggestions, legacyCategory, levelIndex,
-  type Utterance, type RawChunk, type Topic, type HistoryItem, type Category, type Suggestion} from './core.ts';
+import {chunkUtterances, chunkText, mergeChunks, homeworkCategories, guardSuggestions, legacyCategory, levelIndex, ERROR_TYPES,
+  type Utterance, type RawChunk, type Topic, type HistoryItem, type Category, type Suggestion, type ErrorItem} from './core.ts';
 
 export const PIPELINE_VERSION = 2;
 export type Stage = 'collect' | 'chunks' | 'merge' | 'synthesis' | 'homework' | 'done' | 'partial_failed' | 'failed';
@@ -18,7 +18,11 @@ export const ChunkSchema = z.object({
     topic: z.string().nullable().describe('topic alias like "T7" from the topic list if it fits, else null'),
     kind: z.enum(['error', 'slip', 'self_correction']).describe('slip = one-off speech error; self_correction = student corrected it'),
     certainty: z.enum(['certain', 'uncertain']),
-  })).describe('max 40, only real mistakes of the student'),
+    type: z.enum(ERROR_TYPES as [string, ...string[]]).describe('main category: grammar, conjugation (verb forms), word_order (word order/sentence structure), word_choice (wrong word), missing_word, article, preposition, pronunciation (only when the transcript makes it unmistakable), other'),
+    why: z.string().describe('one short reason, max 15 words, in the explanation language'),
+    word: z.string().describe('for word_choice/article/preposition/missing_word: the correct word or expression the student needed (with article for nouns), else empty'),
+    word_en: z.string().describe('English meaning of \word\, else empty'),
+  })).describe('ALL real mistakes of the student in this part (max 60), each mistake once per line'),
   covered: z.array(z.object({topic: z.string().nullable(), label: z.string()})).describe('max 6: topics the teacher explained or practised in this part'),
   positives: z.array(z.object({utterance_id: z.string(), note: z.string()})).describe('max 3: strong or correct student utterances worth praising'),
   new_words: z.array(z.object({term: z.string().describe('exact spelling as used in the lesson'), translation: z.string(), status: z.enum(['introduced', 'practised', 'difficult']).describe('introduced = new word explained by the teacher; practised = a word used again; difficult = the student clearly struggled with it (asked, could not recall, used it wrongly)')}))
@@ -48,6 +52,8 @@ export const HomeworkSchema = z.object({
 /* ---------------- the analysis document (v2), stored in lesson_analyses.draft / final ---------------- */
 export type AnalysisV2 = {
   version: 2;
+  /** v46: every verified error (teacher approves/corrects/removes); older reports only have category examples */
+  errors?: ErrorItem[];
   report: z.infer<typeof SynthesisSchema>['report'] | null;
   categories: Category[];
   later_note: string;
@@ -120,7 +126,9 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       'errors: ONLY mistakes in LEERLING lines (ONBEKEND only if you are sure it is the student; then certainty "uncertain"). Never use DOCENT lines.',
       '"original" must be copied EXACTLY from that line. Do not invent quotes. Do not flag correct, natural informal speech.',
       'kind: "slip" for an obvious one-off speech error, "self_correction" when the student immediately corrected it themselves, otherwise "error".',
-      'No explanations. Keep it compact. Lines marked as context must not be analysed.',
+      'Register EVERY demonstrable mistake of the student in this part (not just examples), each mistake once per line; the same mistake in another line is registered again (that shows a pattern).',
+      `"why": one short reason (max 15 words) in ${explainIn}. Keep everything else compact. Lines marked as context must not be analysed.`,
+      'Pronunciation only when the transcript makes it unmistakable (e.g. the transcriber clearly wrote another word); never guess from spelling.',
       `Topic list (use the alias in "topic" when a mistake or covered topic belongs to it):\n${topicList || '(none)'}`,
       // v42: word translations are always English (the default flashcard back side), whatever the interface language
       'new_words: translations in English (natural meaning; for expressions the idiomatic English meaning, not word for word). status "difficult" only with evidence in the student lines.',
@@ -133,7 +141,8 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
         try {
           const r = await ask('chunk', ChunkSchema, system, `Part ${c.index + 1} of ${chunks.length}:\n${chunkText(c, byId)}`, 3500);
           const raw: RawChunk = {
-            errors: r.errors.slice(0, 40).map(e => ({utterance_id: e.utterance_id, original: e.original, corrected: e.corrected, category: e.category, topic_id: e.topic ? toId.get(e.topic) || null : null, kind: e.kind, certainty: e.certainty}))
+            errors: r.errors.slice(0, 60).map(e => ({utterance_id: e.utterance_id, original: e.original, corrected: e.corrected, category: e.category, topic_id: e.topic ? toId.get(e.topic) || null : null, kind: e.kind, certainty: e.certainty,
+              type: e.type as RawChunk['errors'][number]['type'], why: e.why, word: e.word, word_en: e.word_en}))
               .filter(e => c.ids.includes(e.utterance_id)), // never count context lines twice
             covered: r.covered.slice(0, 6).map(x => ({topic_id: x.topic ? toId.get(x.topic) || null : null, label: x.label})),
             positives: r.positives.slice(0, 3).filter(p => c.ids.includes(p.utterance_id)), new_words: r.new_words.slice(0, 8),
@@ -154,7 +163,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
     await store.stage('merge', {total: chunks.length});
     const merged = mergeChunks(done.sort((a, b) => a.index - b.index).map(p => p.result!), utts, {topics: ctx.topics, studentLevel: ctx.level, todayTopicIds: ctx.lessonGoals.map(g => g.topic_id).filter(Boolean) as string[], history: ctx.history, knownWords: ctx.knownWords});
     draft = {
-      version: 2, report: null, categories: merged.categories, later_note: '', covered: merged.covered,
+      version: 2, report: null, categories: merged.categories, errors: merged.errors, later_note: '', covered: merged.covered,
       positives: merged.positives.map(p => ({utterance_id: p.utterance_id, text: byId.get(p.utterance_id)?.text || '', note: p.note})),
       vocabulary: merged.vocabulary, checklist_suggestions: [], homework: null,
       speakers_separated: merged.separated, student_utterances: merged.studentUtterances, chunks: chunks.length, dropped_unverified: merged.dropped,
@@ -201,7 +210,9 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       draft.steps.synthesis = true;
       // legacy fields for older screens and the practice games
       draft.summary = s.report.summary;
-      draft.corrections = draft.categories.filter(c => c.relevance !== 'later').flatMap(c => c.examples.map(e => ({original: e.original, corrected: e.corrected, explanation: c.explanation, category: legacyCategory(c.key), certainty: e.certainty})));
+      const why = new Map(draft.categories.map(c => [c.key, c.explanation]));
+      draft.corrections = draft.errors && draft.errors.length ? draft.errors.filter(e => !e.later).map(e => ({original: e.original, corrected: e.corrected, explanation: e.why || why.get(e.category_key) || '', category: legacyCategory(e.category_key), certainty: e.certainty}))
+        : draft.categories.filter(c => c.relevance !== 'later').flatMap(c => c.examples.map(e => ({original: e.original, corrected: e.corrected, explanation: c.explanation, category: legacyCategory(c.key), certainty: e.certainty})));
       await store.saveDraft(draft);
     } catch (e) { await store.fail('synthesis', e instanceof Error ? e.message : String(e), true); return {state: 'partial_failed'}; }
   }

@@ -9,6 +9,8 @@ import {t as tt} from '../lib/i18n';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import type {Category,Suggestion} from '../lib/analysis/core';
 import {LessonReport} from './LessonReport';
+import {ErrorList} from './ErrorReview';
+import {legacyCategory} from '../lib/analysis/core';
 import {proposeTopics,type LessonTopics} from '../lib/analysis/material';
 import {ListChecks} from 'lucide-react';
 
@@ -122,6 +124,8 @@ export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>
 
   {!a.is_test&&<details className="compact-preview"><summary><b>{tt("Zo ziet de leerling het verslag")}</b></summary><LessonReport doc={doc} teacher lessonLang={lessonLang}/></details>}
 
+  {/* v46 phase 2: the teacher checks every registered error first; only approved errors are used for practice */}
+  {<><h4>{tt("Fouten en verbeteringen")}</h4><ErrorList doc={doc} teacher onChange={errs=>{const next={...doc,errors:errs,corrections:errs.filter(e=>e.status!=="rejected"&&!e.later).map(e=>({original:e.original,corrected:e.corrected,explanation:e.why,category:legacyCategory(e.category_key),certainty:e.certainty}))};setDoc(next);void save(next,tt("Fouten bijgewerkt."))}}/></>}
   <h4>{tt("Kort lesverslag")}</h4>
   <label className="stack"><span className="label">{tt("Samenvatting")}</span><textarea className="field" rows={4} value={rep?.summary||''} onChange={e=>setReport({summary:e.target.value})}/></label>
   <div className="grid2">

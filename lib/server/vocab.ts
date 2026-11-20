@@ -1,5 +1,5 @@
 import 'server-only';
-// Server side of the word list: canvas recognition → teacher-reviewed suggestions, taboo cards (cached).
+// Server side of the word list: canvas recognition → the central word list (v47; before: teacher-reviewed suggestions), taboo cards (cached).
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {z} from 'zod';
 import {askFast, langName, type UsageCtx} from './ai';
@@ -28,6 +28,15 @@ export async function detectCanvasVocab(db: SupabaseClient, student: StudentCtx,
     ask: (schema, system, user) => askFast(schema, system, user, {maxTokens: 3000, effort: 'low', log}) as never,
   });
   let added = 0;
+  // v46 phase 2: canvas words go straight into the central word list (one row per word, linked to the lesson)
+  if (res.suggestions.length) {
+    const m = await db.rpc('vocab_merge', {p_student: student.id, p_source: 'canvas', p_lesson_date: opts.lessonDate || new Date().toISOString().slice(0, 10), p_lesson_id: opts.lessonId || null,
+      p_items: res.suggestions.map(w => ({term: w.term, translation: w.translation, example: w.example, pos: w.pos || null, kind: w.kind, lang: subject.length === 2 ? subject : null}))});
+    if (!m.error) {
+      for (const h of res.hashes) await db.from('vocab_canvas_scans').upsert({student_id: student.id, page_hash: h.hash, found: h.found, scanned_at: new Date().toISOString()}, {onConflict: 'student_id,page_hash'});
+      return {added: (m.data as {added?: number} | null)?.added || 0, scannedPages: res.hashes.length, aiCalls: res.aiCalls, direct: true};
+    }
+  }
   for (const w of res.suggestions) {
     const r = await db.from('vocab_suggestions').insert({student_id: student.id, term: w.term, translation: w.translation, example: w.example, pos: w.pos || null, kind: w.kind, lang: subject.length === 2 ? subject : null,
       origin: 'canvas', lesson_date: opts.lessonDate || new Date().toISOString().slice(0, 10), lesson_id: opts.lessonId || null, source_page: w.page.slice(0, 120) || null});

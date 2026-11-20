@@ -148,6 +148,18 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
  *  (priority in flashcards and games; never "mastered"); new typed words on the canvas → suggestions too. */
 async function syncVocabulary(db: SupabaseClient, student: StudentCtx, doc: AnalysisV2, o: {userId: string; ui: string; lessonDate: string; lessonId: string | null; known: string[]}) {
   const known = new Set(o.known.map(normTerm)); const subject = subjectCode(student);
+  // v46 phase 2: words go straight into the ONE central word list (no duplicates, linked to this lesson); the teacher can
+  // still edit or delete them. Words the student needed in a (certain) mistake are added too, marked difficult.
+  const lang = /^[a-z]{2}$/.test(subject) ? subject : null;
+  const base = {p_student: student.id, p_lesson_date: o.lessonDate, p_lesson_id: o.lessonId};
+  const merged = await db.rpc('vocab_merge', {...base, p_source: 'ai', p_items: (doc.vocabulary || []).map(v => ({term: v.term, translation: v.translation, difficult: v.status === 'difficult', lang}))});
+  if (!merged.error) {
+    const errWords = (doc.errors || []).filter(e => e.word && e.certainty === 'certain' && !e.later).map(e => ({term: e.word, translation: e.word_en || '', difficult: true, lang}));
+    if (errWords.length) await db.rpc('vocab_merge', {...base, p_source: 'error', p_items: errWords});
+    await detectCanvasVocab(db, student, {userId: o.userId, ui: o.ui, lessonDate: o.lessonDate, lessonId: o.lessonId});
+    return;
+  }
+  // database update v47 not run yet: the previous behaviour (suggestions for the teacher)
   for (const v of doc.vocabulary || []) {
     if (v.status === 'difficult' && known.has(normTerm(v.term))) await db.from('vocab_items').update({difficult: true, due_at: new Date().toISOString(), updated_at: new Date().toISOString()}).eq('student_id', student.id).ilike('term', v.term.replace(/[%_\\]/g, '\\$&'));
     else if (!known.has(normTerm(v.term))) await db.from('vocab_suggestions').insert({student_id: student.id, term: v.term.slice(0, 120), translation: v.translation.slice(0, 300), kind: /\s/.test(v.term.trim()) ? 'expression' : 'word', lang: subject.length === 2 ? subject : null, origin: 'analysis', lesson_date: o.lessonDate, lesson_id: o.lessonId});

@@ -13,6 +13,7 @@ import {StatusChip} from '../components/Analysis';
 import {MyLanguages} from '../components/Languages';
 import {NextLessonPanel} from '../components/Agenda';
 import {ReadyForYou} from '../components/ReadyForYou';
+import {DailyCard} from '../components/DailyPractice';
 import {readyFor} from '../lib/ready';
 import {Avatar} from '../components/Avatar';
 import {Flag} from '../components/Flag';
@@ -103,6 +104,8 @@ function StudentHome(){
   const {error}=await supabase()!.rpc('student_leave_teacher',{target:id});setUnlinkMsg(error?error.message:t("Koppeling beëindigd."));if(!error)await refresh()}
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
  return <><PendingLinks/><NextLessonPanel mode="student"/>
+  {/* v46 phase 3: daily practice per lesson relation (own material only) */}
+  {studentLinks.length>0&&<div className="dp-grid">{studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);return <DailyCard key={s.id} studentId={s.id} level={rec?.level||null} label={studentLinks.length>1?[rec?languageName(langOf(rec)):s.subject,s.teacher_name].filter(Boolean).join(" · "):undefined}/>})}</div>}
   <ReadyForYou items={d.loaded?readyFor(d):null} relations={studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);return {id:s.id,label:[s.subject||t("Les"),s.teacher_name].filter(Boolean).join(' · '),lang:rec?langOf(rec):undefined,level:rec?.level||null,teacher:s.teacher_name||undefined}})}/>
   <div className="hero mint"><div><div className="eyebrow">{t("LEERLINGDASHBOARD")}</div><h1>{t("Mijn lessen")}</h1><p>{t("Je voortgang, woorden en huiswerk bij al je docenten op één plek.")}</p><div className="heroactions"><Link className="button light" href="/mijn-profiel"><BookOpen size={17}/> {t("Mijn lessen")}</Link><Link className="button ghost-light" href="/portugees"><Languages size={17}/> {t("Portugees voorbereiden")}</Link></div></div><div className="hero-art" aria-hidden><BookOpen size={76}/></div></div>
   {d.error&&<div className="notice">{d.error}</div>}

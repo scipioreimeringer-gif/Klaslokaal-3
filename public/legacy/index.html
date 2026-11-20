@@ -681,8 +681,42 @@ body.wb-max #pWb[hidden]{display:flex!important}
 body.wb-max #ws{z-index:79!important;position:relative} /* the panel lives in the workspace stacking context: lift it above the top bar and the video window */
 @media(max-width:640px){body.wb-max #pWb{inset:0!important;border-radius:0}}
 </style>
-</head>
-<body>
+<style id="v46css">
+/* v46: two equal camera tiles (stacked when docked left/right or floating, side by side when full/centre) */
+body.cam-duo .vbody{display:flex;flex-direction:column;gap:3px;background:#0b1514}
+body.cam-duo.cam-full .vbody,body.cam-duo.cam-center .vbody{flex-direction:row}
+body.cam-duo .vbody .remotes{position:relative;inset:auto;flex:1 1 0;min-height:0;min-width:0}
+body.cam-duo .vbody .remotes video,body.cam-full.cam-duo .vbody .remotes video{object-fit:cover!important}
+body.cam-duo .vbody .selfv{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;flex:1 1 0;width:100%!important;height:100%;max-width:none!important;min-height:0;min-width:0;aspect-ratio:auto;border:0;border-radius:0;object-fit:cover;cursor:default}
+body.cam-duo.cam-full .vbody .selfv,body.cam-duo.cam-center .vbody .selfv{width:auto!important}
+body.cam-solo-self .vbody .selfv{inset:0!important;width:100%!important;height:100%;max-width:none!important;aspect-ratio:auto;border:0;border-radius:0}
+.vname{position:absolute;left:8px;top:8px;z-index:4;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 9px;border-radius:999px;background:rgba(8,24,28,.62);color:#fff;font-size:12px;font-weight:650;pointer-events:none}
+body.cam-duo .vname-s{top:calc(50% + 6px)}
+body.cam-duo.cam-full .vname-s,body.cam-duo.cam-center .vname-s{top:8px;left:calc(50% + 8px)}
+/* v46: drawing on slides off = the drawing layer lets everything through (scroll, select, zoom, drag) */
+body:not(.sl-ink) #slSurf .dc{pointer-events:none;cursor:default}
+.slbar .slink{display:inline-flex;align-items:center;gap:5px;width:auto;padding:0 9px;border-radius:9px;font-size:.76rem;font-weight:700}
+.slbar .slink[aria-pressed="true"]{background:#13A89E;color:#fff}
+.slbar .slink.ro{opacity:.85;cursor:default}
+body.sl-ink .slbar{opacity:1}
+/* v46: images in the Canvas */
+.cv .b[data-t="img"]{padding:4px 0;line-height:0;user-select:none}
+.cv img[data-img]{display:block;max-width:100%;height:auto;border-radius:10px;margin:2px 0;background:#eef3f2;min-height:24px;cursor:pointer;transition:box-shadow .15s ease}
+.cv img[data-img].sel{box-shadow:0 0 0 3px #13A89E}
+.cv img[data-img].missing{min-height:60px;outline:1px dashed #b9c9c6}
+.cv.img-drop{outline:2px dashed #13A89E;outline-offset:6px}
+.cv.img-busy{cursor:progress}
+.cvimg-ctl{position:fixed;z-index:60;border:2px solid #13A89E;border-radius:10px;cursor:grab;touch-action:none;background:transparent}
+.cvimg-ctl.moving{cursor:grabbing;opacity:.85}
+.cvimg-ctl .h{position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #13A89E;touch-action:none}
+.cvimg-ctl .tl{left:-9px;top:-9px;cursor:nwse-resize}.cvimg-ctl .br{right:-9px;bottom:-9px;cursor:nwse-resize}
+.cvimg-ctl .tr{right:-9px;top:-9px;cursor:nesw-resize}.cvimg-ctl .bl{left:-9px;bottom:-9px;cursor:nesw-resize}
+.cvimg-ctl .bar{position:absolute;right:6px;top:6px;display:flex;gap:4px}
+.cvimg-ctl .bar button{width:30px;height:30px;border:0;border-radius:8px;background:rgba(8,24,28,.72);color:#fff;font-size:14px;cursor:pointer}
+.cvimg-ctl .bar button[data-a="del"]:hover{background:#c0392b}
+@media(pointer:coarse){.cvimg-ctl .h{width:24px;height:24px}.cvimg-ctl .tl,.cvimg-ctl .bl{left:-13px}.cvimg-ctl .tr,.cvimg-ctl .br{right:-13px}.cvimg-ctl .tl,.cvimg-ctl .tr{top:-13px}.cvimg-ctl .bl,.cvimg-ctl .br{bottom:-13px}}
+</style>
+</head><body>
 
 <header class="top">
   <div class="brand"><span class="dot"></span>Klas <small id="roleLabel">docent</small> <small class="version-tag">v27</small></div>
@@ -1212,6 +1246,8 @@ function onMessage(m){
     case "mode": setMode(m.m, true); markNew("wb"); break;
     case "cvb": cvApplyBlock(m); break;
     case "cvo": cvApplyOrder(m.ids); break;
+    case "cvopen": if(window.__cvRemote) window.__cvRemote(m); break;   /* v46: shared Canvas open/close (newest decision wins) */
+    case "slink": if(window.__slInkRemote) window.__slInkRemote(m); break;  /* v46: drawing on slides on/off (teacher decides) */
     case "scr": if(!m.on) hideScreen(); break;
     case "cvpage": var pl = $("cvPageLbl"); if(pl){ pl.textContent = String(m.title || "").slice(0, 40) + " (" + m.i + "/" + m.n + ")"; } break;
     case "recask": if(!isT){ $("recAiWrap").hidden = !m.ai; $("recAiS").checked = false; $("recOv").hidden = false; } break;
@@ -1531,7 +1567,7 @@ function connectTeacher(){
   if(!peer || peer.destroyed) return;
   status("Verbinden", "Verbinden met les " + ROOM + "...");
   tConn = peer.connect(TEACHER_ID, {reliable:true, metadata:{naam:myName}});
-  tConn.on("open", function(){ joinedAt = Date.now(); send({t:"hello"}); if(!$("remotes").children.length) status("Verbonden", "Wachten op het beeld van je docent..."); });
+  tConn.on("open", function(){ joinedAt = Date.now(); send({t:"hello"}); if(window.__cvShare) window.__cvShare(); if(!$("remotes").children.length) status("Verbonden", "Wachten op het beeld van je docent..."); });
   tConn.on("data", onMessage);
   setTimeout(function(){ if(tConn) watchIce(tConn, "data"); }, 500);
   tConn.on("close", function(){ tConn = null; removeRemote("docent"); retry(); });
@@ -1805,7 +1841,7 @@ var slides = [], pdfDoc = null;
   }, {passive:false});
   /* v42: drag with the mouse (left button) to move through a zoomed SHARED SCREEN (slides keep Shift+drag, so drawing stays possible) */
   body.addEventListener("pointerdown", function(e){
-    if(scale <= 1 || !SL.screen || e.pointerType !== "mouse" || e.button !== 0 || e.shiftKey || active) return;
+    if(scale <= 1 || !(SL.screen || !document.body.classList.contains("sl-ink")) || e.pointerType !== "mouse" || e.button !== 0 || e.shiftKey || active) return; /* v46: also slides while drawing is off */
     e.preventDefault(); e.stopPropagation();
     active = {id:e.pointerId, x:e.clientX, y:e.clientY};
     body.setPointerCapture(e.pointerId); body.classList.add("is-panning");
@@ -1855,7 +1891,7 @@ function readPdf(f){
   var rd = new FileReader();
   rd.onload = function(){
     pdfjsLib.getDocument({data:new Uint8Array(rd.result)}).promise.then(function(doc){
-      pdfDoc = doc; var id = uid(); slides = [];
+      pdfDoc = doc; var id = (doc.fingerprints && doc.fingerprints[0]) ? String(doc.fingerprints[0]).replace(/[^a-z0-9]/gi, "").slice(0, 24) : uid(); slides = []; /* v46: same PDF = same slide keys, so saved annotations return */
       for(var n = 1; n <= doc.numPages; n++) slides.push("p:" + id + ":" + n);
       if(!panels.pSl){ panels.pSl = true; layout(); }
       toast(doc.numPages + " slides geladen"); goSlide(slides[0]);
@@ -1911,7 +1947,10 @@ function incomingChunk(m){
 function sendState(){
   if(!online()) return;
   send({t:"perm", draw:canDraw});
-  send({t:"mode", m:mode});
+  /* v46: no "mode" here any more: it opened the board at the student on every (re)connect. Which panels are open is
+     shared explicitly (Canvas: cvopen); the teacher opening the board still sends "mode" from the button. */
+  if(window.__cvShare) window.__cvShare();
+  if(window.__slInkSend) window.__slInkSend();
   cvSendAll();
   if(window.sendCvPage) window.sendCvPage();
   send({t:"wb", k:WB.key, list:WB.list});
@@ -2016,7 +2055,7 @@ function bindDraw(S){
     drawing.p.push(p[0], p[1]); S.redrawObjs();
     if(Date.now() - lastSent > 60) flush();
   });
-  function end(){ if(!drawing || drawing.S !== S) return; if(!drawing.erase) flush(); drawing = null; if(S === WB) wbTouched(WB.key); }
+  function end(){ if(!drawing || drawing.S !== S) return; if(!drawing.erase) flush(); drawing = null; wbTouched(S.key); }
   dc.addEventListener("pointerup", end); dc.addEventListener("pointercancel", end);
 }
 function clean(o){ var c = {}; for(var k in o) if(k !== "S" && k !== "k") c[k] = o[k]; return c; }
@@ -2032,7 +2071,7 @@ function sendObjWhole(k, o){
   for(var from = 0; from < o.p.length; from += 598)
     send({t:"obj", k:k, id:o.id, c:o.c, sz:o.sz, p:o.p.slice(from ? from - 2 : 0, from + 600), a:from > 0});
 }
-function wbTouched(k){ if(isT && window.wbDirty && String(k || "").indexOf("wb:") === 0) window.wbDirty(); }
+function wbTouched(k){ if(isT && window.wbDirty && /^(wb|p):/.test(String(k || ""))) window.wbDirty(); }
 function remoteObj(m){
   if(!objs[m.k]) objs[m.k] = [];
   var list = objs[m.k], o = null;
@@ -2093,7 +2132,7 @@ function startText(S, p){
     S.d.font = "600 " + Math.round(S.dc.width * 0.034) + "px Karla, system-ui, sans-serif";
     var wpx = Math.max.apply(null, txt.split("\n").map(function(l){ return S.d.measureText(l).width; }));
     var o = {id:uid(), ty:"tx", c:color, x:p[0], y:p[1], txt:txt, w:Math.round(wpx / S.dc.width * 1e4)};
-    objs[S.key].push(o); mine.push({k:S.key, id:o.id}); S.redrawObjs(); if(S === WB){ wbInfo(); wbTouched(S.key); }
+    objs[S.key].push(o); mine.push({k:S.key, id:o.id}); S.redrawObjs(); if(S === WB) wbInfo(); wbTouched(S.key);
     sendObjWhole(S.key, o);
   }
   inp.addEventListener("input", function(){ inp.style.height = "auto"; inp.style.height = inp.scrollHeight + "px"; });
@@ -2155,11 +2194,26 @@ var OK_STYLE = {
   "font-weight": /^(bold|bolder|normal|[4-9]00)$/,
   "font-style": /^(italic|normal)$/
 };
+/* v46: Canvas images. Only a reference to the private Storage file ("<student>/<sha256>.<ext>") and a width (10–100 %) are
+   kept; the temporary download link (src) is filled in locally and never sent or saved. */
+var IMG_RE = /^[0-9a-f-]{36}\/[0-9a-f]{64}\.(png|jpg|webp|gif)$/;
+function cvOut(html){
+  return String(html || "").replace(/<img\b[^>]*>/gi, function(tag){
+    var p = /data-img="([^"]+)"/.exec(tag), w = /data-w="(\d+)"/.exec(tag);
+    return p && IMG_RE.test(p[1]) ? '<img data-img="' + p[1] + '" data-w="' + Math.max(10, Math.min(100, w ? +w[1] : 60)) + '" alt="">' : "";
+  });
+}
 function safeHTML(html){
   var t = document.createElement("template"); t.innerHTML = String(html || "");
   (function walk(node){
     Array.prototype.slice.call(node.childNodes).forEach(function(c){
       if(c.nodeType === 3) return;
+      if(c.nodeType === 1 && c.tagName === "IMG"){
+        var ip = c.getAttribute("data-img") || "", iw = Math.max(10, Math.min(100, Math.round(+c.getAttribute("data-w") || 60)));
+        if(!IMG_RE.test(ip)){ c.remove(); return; }
+        Array.prototype.slice.call(c.attributes).forEach(function(a){ c.removeAttribute(a.name); });
+        c.setAttribute("data-img", ip); c.setAttribute("data-w", String(iw)); c.setAttribute("alt", ""); return;
+      }
       if(c.nodeType !== 1 || !OK_TAGS[c.tagName]){
         if(c.nodeType === 1 && !/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|SVG|MATH)$/.test(c.tagName)){ walk(c); while(c.firstChild) node.insertBefore(c.firstChild, c); }
         c.remove(); return;
@@ -2204,7 +2258,7 @@ function cvSync(){
   cvNormalize();
   var ids = [], changed = [];
   cvBlocks().forEach(function(b){
-    var id = b.getAttribute("data-id"), t = b.getAttribute("data-t"), html = b.innerHTML, key = t + "|" + html;
+    var id = b.getAttribute("data-id"), t = b.getAttribute("data-t"), html = cvOut(b.innerHTML), key = t + "|" + html;
     ids.push(id);
     if(cvLast[id] !== key){ cvLast[id] = key; changed.push({t:"cvb", id:id, bt:t, h:html}); }
   });
@@ -2247,10 +2301,10 @@ function cvApplyBlock(m){
   var b = CV.querySelector('[data-id="' + String(m.id).replace(/[^a-z0-9]/gi, "") + '"]');
   if(!b){ b = newBlock(String(m.id).replace(/[^a-z0-9]/gi, ""), m.bt); CV.appendChild(b); }
   var off = caretIn(b);
-  b.setAttribute("data-t", /^(h|h2|h3|li)$/.test(m.bt) ? m.bt : "p"); /* v40: h = Kop 1, h2, h3 */
+  b.setAttribute("data-t", /^(h|h2|h3|li|img)$/.test(m.bt) ? m.bt : "p"); /* v40: h = Kop 1, h2, h3; v46: img = image block */
   b.innerHTML = safeHTML(m.h) || "<br>";
   if(off >= 0) setCaret(b, off);
-  cvLast[m.id] = b.getAttribute("data-t") + "|" + b.innerHTML;
+  cvLast[m.id] = b.getAttribute("data-t") + "|" + cvOut(b.innerHTML);
   CV.classList.toggle("is-empty", !CV.textContent.trim() && CV.children.length <= 1);
   if(window.cvSave) window.cvSave();
 }
@@ -2271,10 +2325,10 @@ function cvApplyOrder(ids){
 }
 function cvSendAll(){
   cvNormalize();
-  cvBlocks().forEach(function(b){ sendBig({t:"cvb", id:b.getAttribute("data-id"), bt:b.getAttribute("data-t"), h:b.innerHTML}); });
+  cvBlocks().forEach(function(b){ sendBig({t:"cvb", id:b.getAttribute("data-id"), bt:b.getAttribute("data-t"), h:cvOut(b.innerHTML)}); });
   cvOrder = cvBlocks().map(function(b){ return b.getAttribute("data-id"); });
   sendBig({t:"cvo", ids:cvOrder});
-  cvBlocks().forEach(function(b){ cvLast[b.getAttribute("data-id")] = b.getAttribute("data-t") + "|" + b.innerHTML; });
+  cvBlocks().forEach(function(b){ cvLast[b.getAttribute("data-id")] = b.getAttribute("data-t") + "|" + cvOut(b.innerHTML); });
 }
 function cvLoad(html){
   var tmp = document.createElement("div"); tmp.innerHTML = html || "";
@@ -2465,7 +2519,7 @@ if(isT){
   function curPage(){ return cvDoc.pages[Math.min(cvDoc.cur, cvDoc.pages.length - 1)]; }
   function persistCv(){
     if(!cvDoc || !cvReady) return;
-    curPage().html = CV.innerHTML;
+    curPage().html = cvOut(CV.innerHTML);
     var owner = cvOwner, doc = cvDoc;
     if(!SB) try{ localStorage.setItem("klas-canvas2-" + (owner || "algemeen"), JSON.stringify(doc)); }catch(e){}
     queueCloud(cvKey(owner), function(){ return doc; });
@@ -2480,7 +2534,7 @@ if(isT){
   }
   function openPage(i){
     if(!cvDoc) return;
-    clearTimeout(cvSaveT); curPage().html = CV.innerHTML;
+    clearTimeout(cvSaveT); curPage().html = cvOut(CV.innerHTML);
     cvDoc.cur = Math.max(0, Math.min(i, cvDoc.pages.length - 1));
     cvLoad(curPage().html || ""); renderPages(); persistCv();
   }
@@ -2500,7 +2554,7 @@ if(isT){
     if(CLOUD.on) cloudGet(cvKey(cvOwner)).then(function(v){ if(v && v.pages && cvOwner === (id || null)){ setDoc(v); } else if(local && !v){ persistCv(); } }).catch(function(){});
   }
   function addPage(title, html){
-    clearTimeout(cvSaveT); curPage().html = CV.innerHTML;
+    clearTimeout(cvSaveT); curPage().html = cvOut(CV.innerHTML);
     cvDoc.pages.push({id:uid(), title:title || ("Pagina " + (cvDoc.pages.length + 1)), html:html || ""});
     openPage(cvDoc.pages.length - 1);
   }
@@ -2537,7 +2591,7 @@ if(isT){
     $("tidyCancel").addEventListener("click", function(){ $("tidyOv").hidden = true; tidyResult = null; });
     $("tidyApply").addEventListener("click", function(){
       if(!tidyResult || !cvDoc) return;
-      var page = curPage(); page.prev = CV.innerHTML; page.prevAt = new Date().toISOString();
+      var page = curPage(); page.prev = cvOut(CV.innerHTML); page.prevAt = new Date().toISOString();
       var html = tidyResult.blocks.map(function(b){ return '<div class="b" data-t="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + (tidyInline(b.text) || "<br>") + "</div>"; }).join("");
       cvLoad(html); persistCv(); $("tidyOv").hidden = true; tidyResult = null; tidyUndoState();
       toast("Pagina geordend. Met ↶ zet je de originele versie terug.");
@@ -2555,6 +2609,8 @@ if(isT){
   function boardData(){
     var d = {list:WB.list.slice(), cur:WB.key, objs:{}};
     WB.list.forEach(function(k){ d.objs[k] = (objs[k] || []).map(function(o){ var c = {}; for(var x in o) if(x !== "S" && x !== "k") c[x] = o[x]; return c; }); });
+    /* v46: annotations on PDF slides are saved too (per slide of that PDF, with this student's board) */
+    Object.keys(objs).forEach(function(k){ if(k.indexOf("p:") === 0 && (objs[k] || []).length) d.objs[k] = objs[k].map(function(o){ var c = {}; for(var x in o) if(x !== "S" && x !== "k") c[x] = o[x]; return c; }); });
     return d;
   }
   function persistBoard(){
@@ -2567,7 +2623,7 @@ if(isT){
   function applyBoard(d){
     Object.keys(objs).forEach(function(k){ if(k.indexOf("wb:") === 0) delete objs[k]; });
     if(!d || !d.list || !d.list.length) d = {list:["wb:1"], cur:"wb:1", objs:{}};
-    Object.keys(d.objs || {}).forEach(function(k){ if(k.indexOf("wb:") === 0) objs[k] = d.objs[k]; });
+    Object.keys(d.objs || {}).forEach(function(k){ if(k.indexOf("wb:") === 0 || k.indexOf("p:") === 0) objs[k] = d.objs[k]; });
     WB.list = d.list.slice();
     mine = mine.filter(function(m){ return m.k.indexOf("wb:") !== 0; });
     send({t:"wbreset"});
@@ -3321,8 +3377,18 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
 
   var ORDER = ["cv", "wb", "scr", "games"], PANEL = {cv:pCv, wb:pWb, scr:pSl, games:pGames}, lastVis = -1;
   var OPEN = store("klas-open");
-  if(!OPEN || typeof OPEN !== "object"){ var mv = store("klas-tab"); OPEN = {cv:false, wb:true, scr:mv === "sl" || mv === "both" || mv === "scr", games:false}; }
+  if(!OPEN || typeof OPEN !== "object"){ var mv = store("klas-tab"); OPEN = {cv:true, wb:false, scr:mv === "sl" || mv === "both" || mv === "scr", games:false}; } /* v46: first visit = Canvas only */
   OPEN.games = false; /* games open when a game starts or on a click */
+  /* v46: SHARED CANVAS. On entering, the Canvas is open for teacher and student. A deliberate open/close (dock button
+     or X) is stored with a timestamp and sent to the other side; the newest deliberate decision wins, also after a refresh
+     or reconnect (both sides send theirs on connecting). Changes that arrive from the other side are applied without
+     being sent back, so there are no loops; a deliberate close is never undone by the automatic opening. */
+  var CVK = "klas-cvs-" + (ROOM || "x");
+  function cvShared(){ var s = store(CVK); return s && s.at && Date.now() - s.at < 6 * 3600e3 ? s : null; }
+  var cvs0 = cvShared(); OPEN.cv = cvs0 ? !!cvs0.open : true;
+  function cvDecide(open){ var s = {open:!!open, at:Date.now()}; store(CVK, s); send({t:"cvopen", open:s.open, at:s.at}); }
+  window.__cvRemote = function(m){ var s = cvShared(), at = +m.at || 0; if(!at || (s && s.at >= at)) return; store(CVK, {open:!!m.open, at:at}); if(!!OPEN.cv !== !!m.open) setOpen("cv", !!m.open, "remote"); };
+  window.__cvShare = function(){ var s = cvShared(); if(s) send({t:"cvopen", open:s.open, at:s.at}); };
   function gamesOn(){ var b = bridge(); return !!(SB && b && b.ui && b.ui.games); }
   function save(){ store("klas-open", {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:false}); }
   function setOpen(k, on, why){
@@ -3333,7 +3399,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     OPEN[k] = !!on; save(); layout();
     if(on && window.__camWork) window.__camWork(why || "user");
   }
-  window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); };
+  window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); if(k === "cv") cvDecide(OPEN.cv); };
   window.__klasOpen = function(){ return {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:!!OPEN.games}; };
   /* compatible API for the rest of the classroom and the app: it only OPENS, never closes the others */
   window.__klasTab = function(t, why){
@@ -3420,6 +3486,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
       return;
     }
     setOpen(k, full ? true : !OPEN[k], "user");
+    if(k === "cv") cvDecide(OPEN.cv);
     if(OPEN[k] && isT && (k === "cv" || k === "wb")) send({t:"mode", m:k});
   }
   function sync(){
@@ -3461,7 +3528,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     var x = document.createElement("button"); x.type = "button"; x.className = "pclose43"; x.setAttribute("data-close", k);
     x.title = label; x.setAttribute("aria-label", label);
     x.innerHTML = SVG('<path d="M18 6 6 18M6 6l12 12"/>');
-    x.addEventListener("click", function(e){ e.stopPropagation(); if(k === "wb" && document.body.classList.contains("wb-max")) wbMax(false); if(k === "scr") { if(OPEN.scr) toggle("scr"); } else setOpen(k, false); });
+    x.addEventListener("click", function(e){ e.stopPropagation(); if(k === "wb" && document.body.classList.contains("wb-max")) wbMax(false); if(k === "scr") { if(OPEN.scr) toggle("scr"); } else { setOpen(k, false); if(k === "cv") cvDecide(false); } });
     return x;
   }
   /* placed in the toolbar each panel really shows (the v40 floating bars; the old .phead rows are hidden) */
@@ -3487,6 +3554,8 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   wbMax(false);
   document.addEventListener("keydown", function(e){ if(e.key === "Escape" && document.body.classList.contains("wb-max")) wbMax(false); });
   layout();
+  /* v46: the Canvas is open on entering → the cameras move to the right next to it (stay visible) */
+  if(OPEN.cv && window.__camWork) window.__camWork("auto");
 })();
 
 /* =================================================================== v40: NEW CANVAS TOOLBAR
@@ -3698,6 +3767,181 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   function fit(){ tb.classList.remove("narrow"); if(tb.scrollWidth > tb.clientWidth + 1) tb.classList.add("narrow"); }
   if(window.ResizeObserver) new ResizeObserver(fit).observe(tb); setTimeout(fit, 0);
   window.cvPerm && window.cvPerm();
+})();
+
+/* =================================================================== v46: CAMERAS, SLIDE INK, CANVAS IMAGES */
+/* ---- 1. Two equal camera tiles. With teacher AND student on screen both videos get the same size (stacked when the
+   cameras are docked left/right or floating, side by side when full/centre), object-fit: cover, a small name label.
+   Alone: your own camera uses the whole space. Only classes change: video elements, PeerJS calls and tracks are untouched. */
+(function(){
+  var vb = $("vbody"), rem = $("remotes"), self = $("selfV"); if(!vb || !rem || !self) return;
+  var nr = document.createElement("span"), ns = document.createElement("span");
+  nr.className = "vname vname-r"; ns.className = "vname vname-s"; nr.hidden = ns.hidden = true; vb.appendChild(nr); vb.appendChild(ns);
+  function other(){ var b = bridge(), t = ($("vTitle") && $("vTitle").textContent) || ""; if(t && t !== "Video") return t; return isT ? ((b && b.studentName) || "Leerling") : "Docent"; }
+  function upd(){
+    var hasR = rem.children.length > 0, hasS = !self.hidden && !!self.srcObject, B = document.body;
+    B.classList.toggle("cam-duo", hasR && hasS);
+    B.classList.toggle("cam-solo-self", !hasR && hasS && !!peer);
+    nr.hidden = !hasR; if(hasR) nr.textContent = other();
+    ns.hidden = !hasS || (!hasR && !peer); ns.textContent = "Jij";
+  }
+  [[rem, {childList:true}], [self, {attributes:true, attributeFilter:["hidden"]}], [$("vTitle"), {childList:true, characterData:true, subtree:true}]].forEach(function(x){ if(x[0] && window.MutationObserver) new MutationObserver(upd).observe(x[0], x[1]); });
+  self.addEventListener("loadedmetadata", upd); setInterval(upd, 1500); upd();
+  window.__camDuo = upd;
+})();
+
+/* ---- 2. Drawing on slides on/off. The teacher decides for both; default OFF. Off = the drawing layer lets every mouse and
+   touch action through (scroll, select, zoom, drag to move a zoomed slide); existing annotations stay visible and saved.
+   On = teacher and student can annotate (the existing "student may draw" permission still applies). */
+(function(){
+  var KEY = "klas-slink-" + (ROOM || "x"), s = store(KEY), on = !!(s && s.on && Date.now() - (s.at || 0) < 6 * 3600e3);
+  var bar = document.querySelector("#pSl .slbar"); if(!bar) return;
+  var b = document.createElement("button"); b.type = "button"; b.className = "ib slink"; b.id = "slInkBtn";
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span class="lbl"></span>';
+  bar.insertBefore(b, bar.firstChild);
+  function apply(){
+    document.body.classList.toggle("sl-ink", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.querySelector(".lbl").textContent = on ? "Tekenen aan" : "Tekenen uit";
+    b.title = isT ? (on ? "Tekenen op slides staat aan (voor jou en je leerling). Klik om uit te zetten." : "Tekenen op slides staat uit: scrollen, selecteren en zoomen werken normaal. Klik om aan te zetten.")
+                  : (on ? "Je docent heeft tekenen op de slides aangezet." : "Tekenen op de slides staat uit (je docent bepaalt dit).");
+    b.disabled = !isT; b.classList.toggle("ro", !isT);
+  }
+  function set(v, remote){ on = !!v; store(KEY, {on:on, at:Date.now()}); apply(); if(!remote && isT) send({t:"slink", on:on}); }
+  b.addEventListener("click", function(){ if(isT) set(!on); });
+  window.__slInkRemote = function(m){ if(!isT) set(!!m.on, true); };
+  window.__slInkSend = function(){ if(isT) send({t:"slink", on:on}); };
+  window.__slInk = function(){ return on; };
+  apply();
+})();
+
+/* ---- 3. Images in the Canvas: toolbar button, paste (Ctrl/⌘+V), drag-and-drop, and — where the website allows it — a
+   copied/dragged web image. An image is its own Canvas block between text blocks: select it, drag it up/down, resize from
+   the corners (aspect ratio kept), or delete it. Files go to private Supabase Storage; the Canvas keeps only the reference. */
+(function(){
+  var B = bridge(), ok = !!(SB && B && B.uploadCanvasImage && B.canvasImageUrl);
+  var TYPES = /^image\/(png|jpe?g|webp|gif)$/i, busy = 0;
+  /* show: fill in a temporary link for every image (never stored) */
+  function resolve(){
+    if(!ok) return;
+    CV.querySelectorAll("img[data-img]").forEach(function(img){
+      var w = Math.max(10, Math.min(100, +img.getAttribute("data-w") || 60)); img.style.width = w + "%";
+      var blk = img.closest(".b"); if(blk && blk.getAttribute("data-t") !== "img"){ blk.setAttribute("data-t", "img"); }
+      if(blk){ blk.setAttribute("contenteditable", "false"); }
+      if(img.getAttribute("src") || img.__loading) return;
+      img.__loading = true; img.draggable = false;
+      B.canvasImageUrl(img.getAttribute("data-img")).then(function(u){ img.__loading = false; if(u) img.setAttribute("src", u); else img.classList.add("missing"); }, function(){ img.__loading = false; img.classList.add("missing"); });
+    });
+  }
+  if(window.MutationObserver) new MutationObserver(function(){ resolve(); place(); }).observe(CV, {childList:true, subtree:true});
+  resolve();
+
+  function caretBlock(){ var s = window.getSelection(); if(!s.rangeCount) return null; var n = s.anchorNode; var b = n && (n.nodeType === 1 ? n : n.parentNode); b = b && b.closest ? b.closest(".b") : null; return b && CV.contains(b) ? b : null; }
+  function insertImage(path, after){
+    cvNormalize();
+    var blk = newBlock(null, "img"); blk.setAttribute("contenteditable", "false");
+    blk.innerHTML = '<img data-img="' + path + '" data-w="60" alt="">';
+    var ref = after || caretBlock();
+    if(ref && ref.parentNode === CV) CV.insertBefore(blk, ref.nextSibling); else CV.appendChild(blk);
+    if(!blk.nextElementSibling){ var p = newBlock(); p.innerHTML = "<br>"; CV.appendChild(p); } /* room to type below the image */
+    resolve(); cvSync(); select(blk.querySelector("img"));
+  }
+  function upload(files, after){
+    if(!ok){ toast("Afbeeldingen werken in het klaslokaal van TeachyRooms (ingelogd)."); return; }
+    if(!allowed()){ toast("Je docent heeft typen voor jou uitgezet"); return; }
+    files = Array.prototype.slice.call(files || []).filter(function(f){ return f && TYPES.test(f.type || ""); });
+    if(!files.length){ toast("Alleen JPG, PNG, WebP of GIF"); return; }
+    files.slice(0, 6).forEach(function(f){
+      if(f.size > 5 * 1024 * 1024){ toast("Afbeelding is te groot (max. 5 MB)"); return; }
+      busy++; CV.classList.add("img-busy");
+      B.uploadCanvasImage(f).then(function(r){
+        if(r && r.path) insertImage(r.path, after); else toast((r && r.error) || "Uploaden mislukt");
+      }, function(){ toast("Uploaden mislukt"); }).then(function(){ if(--busy <= 0){ busy = 0; CV.classList.remove("img-busy"); } });
+    });
+  }
+  /* a picture from a website: try to fetch it (works when the site allows it); otherwise explain what does work */
+  function fromUrl(url, after){
+    if(!/^https?:\/\//i.test(url)) return false;
+    fetch(url, {mode:"cors"}).then(function(r){ if(!r.ok) throw 0; return r.blob(); }).then(function(bl){
+      if(!TYPES.test(bl.type || "")) throw 0; upload([new File([bl], "web", {type:bl.type})], after);
+    }).catch(function(){ toast("Deze website staat kopiëren niet toe. Rechtsklik op de afbeelding → ‘Afbeelding kopiëren’ en plak hem dan."); });
+    return true;
+  }
+  CV.addEventListener("paste", function(e){
+    var cd = e.clipboardData; if(!cd) return;
+    var files = Array.prototype.slice.call(cd.files || []).filter(function(f){ return TYPES.test(f.type || ""); });
+    if(!files.length && cd.items) Array.prototype.slice.call(cd.items).forEach(function(it){ if(it.kind === "file" && TYPES.test(it.type)){ var f = it.getAsFile(); if(f) files.push(f); } });
+    if(files.length){ e.preventDefault(); e.stopImmediatePropagation(); upload(files); return; }
+    var html = cd.getData("text/html") || "", txt = (cd.getData("text/plain") || "").trim();
+    var m = /<img[^>]+src="(https?:[^"]+)"/i.exec(html);
+    if(m && !txt){ e.preventDefault(); e.stopImmediatePropagation(); fromUrl(m[1].replace(/&amp;/g, "&")); }
+  }, true);
+  var page = $("cvPage") || CV;
+  page.addEventListener("dragover", function(e){ if(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0 || (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "text/uri-list") >= 0)){ e.preventDefault(); CV.classList.add("img-drop"); } });
+  page.addEventListener("dragleave", function(){ CV.classList.remove("img-drop"); });
+  page.addEventListener("drop", function(e){
+    CV.classList.remove("img-drop"); var dt = e.dataTransfer; if(!dt || dragBlk) return;
+    var target = e.target && e.target.closest ? e.target.closest(".b") : null;
+    if(dt.files && dt.files.length){ e.preventDefault(); upload(dt.files, target); return; }
+    var u = (dt.getData("text/uri-list") || "").split("\n")[0].trim(), h = dt.getData("text/html") || "", m = /<img[^>]+src="(https?:[^"]+)"/i.exec(h);
+    if(m || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)){ e.preventDefault(); fromUrl((m ? m[1] : u).replace(/&amp;/g, "&"), target); }
+  });
+  /* toolbar button */
+  var tb = document.querySelector("#pCv .cvtb"), fileIn = document.createElement("input");
+  fileIn.type = "file"; fileIn.accept = "image/png,image/jpeg,image/webp,image/gif"; fileIn.multiple = true; fileIn.hidden = true; document.body.appendChild(fileIn);
+  fileIn.addEventListener("change", function(){ upload(fileIn.files); fileIn.value = ""; });
+  if(tb && ok){
+    var ib = document.createElement("button"); ib.type = "button"; ib.className = "tbb"; ib.id = "cvImgBtn"; ib.title = "Afbeelding toevoegen (of plakken / slepen)"; ib.setAttribute("aria-label", "Afbeelding toevoegen");
+    ib.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>';
+    ib.addEventListener("mousedown", function(e){ e.preventDefault(); }); /* keep the caret where the image goes */
+    ib.addEventListener("click", function(){ if(!allowed()){ toast("Je docent heeft typen voor jou uitgezet"); return; } fileIn.click(); });
+    tb.insertBefore(ib, tb.querySelector(".pclose43") || null);
+  }
+
+  /* select · resize from the corners (aspect ratio kept) · drag to move · delete */
+  var ctl = document.createElement("div"); ctl.className = "cvimg-ctl"; ctl.hidden = true;
+  ctl.innerHTML = '<span class="h tl" data-h="l"></span><span class="h tr" data-h="r"></span><span class="h bl" data-h="l"></span><span class="h br" data-h="r"></span>'
+    + '<div class="bar"><button type="button" data-a="up" title="Omhoog" aria-label="Omhoog">↑</button><button type="button" data-a="down" title="Omlaag" aria-label="Omlaag">↓</button><button type="button" data-a="del" title="Afbeelding verwijderen" aria-label="Afbeelding verwijderen">✕</button></div>';
+  document.body.appendChild(ctl);
+  var sel = null, dragBlk = null;
+  function select(img){ sel = img || null; CV.querySelectorAll("img.sel").forEach(function(i){ if(i !== sel) i.classList.remove("sel"); }); if(sel) sel.classList.add("sel"); place(); }
+  function place(){
+    if(!sel || !CV.contains(sel) || !allowed() || $("pCv").hidden){ ctl.hidden = true; if(sel && !CV.contains(sel)) sel = null; return; }
+    var r = sel.getBoundingClientRect(); if(!r.width){ ctl.hidden = true; return; }
+    ctl.hidden = false; ctl.style.left = r.left + "px"; ctl.style.top = r.top + "px"; ctl.style.width = r.width + "px"; ctl.style.height = r.height + "px";
+  }
+  window.addEventListener("resize", place); document.addEventListener("scroll", place, true);
+  CV.addEventListener("click", function(e){ var img = e.target && e.target.closest ? e.target.closest("img[data-img]") : null; select(img); });
+  document.addEventListener("mousedown", function(e){ if(sel && !ctl.contains(e.target) && !(e.target.closest && e.target.closest("img[data-img]"))) select(null); });
+  document.addEventListener("keydown", function(e){ if(sel && (e.key === "Delete" || e.key === "Backspace") && !e.target.isContentEditable && e.target.tagName !== "INPUT"){ e.preventDefault(); act("del"); } if(e.key === "Escape") select(null); });
+  function act(a){
+    if(!sel || !allowed()) return; var blk = sel.closest(".b"); if(!blk) return;
+    if(a === "del"){ if(!confirm("Deze afbeelding uit het canvas verwijderen?")) return; blk.remove(); select(null); }
+    else if(a === "up" && blk.previousElementSibling) CV.insertBefore(blk, blk.previousElementSibling);
+    else if(a === "down" && blk.nextElementSibling) CV.insertBefore(blk.nextElementSibling, blk);
+    cvSync(); place();
+  }
+  ctl.querySelectorAll("[data-a]").forEach(function(b){ b.addEventListener("click", function(){ act(b.getAttribute("data-a")); }); });
+  ctl.querySelectorAll(".h").forEach(function(h){
+    h.addEventListener("pointerdown", function(e){
+      if(!sel) return; e.preventDefault(); try{ h.setPointerCapture(e.pointerId); }catch(err){}
+      var r = sel.getBoundingClientRect(), cw = CV.getBoundingClientRect().width || 1, left = h.getAttribute("data-h") === "l";
+      function mv(ev){ var w = left ? r.right - ev.clientX : ev.clientX - r.left; var pct = Math.max(10, Math.min(100, Math.round(w / cw * 100))); sel.setAttribute("data-w", String(pct)); sel.style.width = pct + "%"; place(); }
+      function up(){ h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up); cvSync(); }
+      h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
+    });
+  });
+  /* drag the selected image up/down between the text blocks */
+  ctl.addEventListener("pointerdown", function(e){
+    if(e.target !== ctl || !sel || !allowed()) return; e.preventDefault();
+    dragBlk = sel.closest(".b"); try{ ctl.setPointerCapture(e.pointerId); }catch(err){} ctl.classList.add("moving");
+    function mv(ev){ var over = document.elementsFromPoint(ev.clientX, ev.clientY).filter(function(x){ return x.classList && x.classList.contains("b") && x.parentNode === CV && x !== dragBlk; })[0];
+      if(over){ var rr = over.getBoundingClientRect(); CV.insertBefore(dragBlk, ev.clientY < rr.top + rr.height / 2 ? over : over.nextSibling); place(); } }
+    function up(){ ctl.removeEventListener("pointermove", mv); ctl.removeEventListener("pointerup", up); ctl.removeEventListener("pointercancel", up); ctl.classList.remove("moving"); dragBlk = null; cvSync(); }
+    ctl.addEventListener("pointermove", mv); ctl.addEventListener("pointerup", up); ctl.addEventListener("pointercancel", up);
+  });
+  setInterval(function(){ if(sel) place(); }, 700);
+  window.__cvImages = {ok:ok, insert:insertImage};
 })();
 
 })();

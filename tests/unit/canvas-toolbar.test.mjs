@@ -32,7 +32,7 @@ test('formatting survives sync and saving: safe filter keeps underline, striketh
   assert.match(html, /"text-decoration-line": \/\^\(underline\|line-through\|underline line-through\|line-through underline\|none\)\$\//);
   assert.match(html, /"font-size": \/\^\(1\[0-9\]\|\[2-5\]\[0-9\]\|6\[0-4\]\)px\$\//);
   assert.ok(!/OK_STYLE = \{[^}]*(position|url|expression|behavior)/.test(html), 'no dangerous styles allowed');
-  assert.match(html, /b\.setAttribute\("data-t", \/\^\(h\|h2\|h3\|li\)\$\/\.test\(m\.bt\) \? m\.bt : "p"\)/, 'receiver accepts the new heading levels only');
+  assert.match(html, /b\.setAttribute\("data-t", \/\^\(h\|h2\|h3\|li\|img\)\$\/\.test\(m\.bt\) \? m\.bt : "p"\)/, 'receiver accepts the heading levels (+ v46 image blocks) only');
   const sd = read('components/StudentData.tsx');
   assert.match(sd, /const el=c as HTMLElement;const fs=el\.style\?\.fontSize[\s\S]{0,120}for\(const a of Array\.from\(c\.attributes\)\)c\.removeAttribute/, 'dashboard preview reads styles before stripping attributes');
 });
