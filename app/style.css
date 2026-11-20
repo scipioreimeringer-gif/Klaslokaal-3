@@ -1019,3 +1019,72 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .chart-card.is-empty.span2{grid-column:auto!important}
 .chart-card.is-empty .chart-empty{min-height:0!important;height:auto!important;flex-direction:row!important;justify-content:flex-start!important;gap:8px;padding:6px 0 0!important;text-align:left!important;font-size:12.5px;color:var(--muted,#6b7a86)}
 .chart-card.is-empty .chart-head p{display:none}
+/* v44: word list filters */
+.vocab-filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:8px 0}
+.vocab-filters .muted{margin-left:auto}
+
+/* ===== v44: five-tab navigation per role, lesson pages, Voortgang, Huiswerk cards ===== */
+.compact-ws .tabs.tabs44{overflow:visible;align-items:center}
+.compact-ws .tabs.tabs44>button,.compact-ws .tabs.tabs44 .tabs-more>button{flex:0 0 auto}
+.compact-ws .tabs .tabs-live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:9px;background:var(--teal-500);color:#fff;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;transition:background .15s ease}
+.compact-ws .tabs .tabs-live:hover{background:var(--teal-600)}
+@media(max-width:640px){
+ .compact-ws .tabs.tabs44{justify-content:space-between}
+ .compact-ws .tabs.tabs44 button{flex-direction:column;gap:2px;min-height:44px;padding:4px 6px;font-size:10.5px}
+ .compact-ws .tabs.tabs44 .tabs-live{padding:0 10px}.compact-ws .tabs.tabs44 .tabs-live .tab-lbl{display:none}
+}
+.manage-reports{margin-top:14px;border-top:1px solid var(--line,#e6ecef);padding-top:10px}
+.manage-reports>summary{cursor:pointer;font-weight:650;font-size:13.5px;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.lesson-detail{display:grid;gap:12px}
+.ld-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.ld-title{display:flex;align-items:center;gap:10px;flex:1;min-width:220px}
+.ld-title h3{margin:0;display:flex;align-items:center;gap:6px;font-size:17px}.ld-title p{margin:2px 0 0}
+.ld-edit{border:1px dashed #cfe3df;border-radius:14px;padding:6px 12px}
+.ld-edit>summary{cursor:pointer;font-weight:650;display:inline-flex;align-items:center;gap:6px;padding:4px 0}
+.lr-sec h5{display:flex;align-items:center;gap:6px;margin:10px 0 4px;font-size:13px}
+.lr-hwlist{margin:4px 0 8px!important}
+.sp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.sp-card{border:1px solid var(--line,#e6ecef);border-top:3px solid var(--sp-acc);border-radius:14px;padding:12px 14px;background:#fff}
+.sp-card h4{display:flex;align-items:center;gap:6px;margin:0 0 4px;font-size:13px;color:var(--muted,#6b7a86)}
+.sp-big{display:block;font-size:24px;line-height:1.2;letter-spacing:-.01em}
+.sp-bar{height:6px;border-radius:99px;background:#eef1f4;overflow:hidden;margin:6px 0 2px}.sp-bar>span{display:block;height:100%;background:var(--sp-acc);border-radius:99px;transition:width .3s}
+.sp-wide{grid-column:1/-1}
+.sp-teal{--sp-acc:#13A89E}.sp-violet{--sp-acc:#8a63d2}.sp-coral{--sp-acc:#e8775c}.sp-blue{--sp-acc:#4a7fd4;--lr-soft:#e8f0fc;--lr-acc:#4a7fd4}
+@media(max-width:760px){.sp-grid{grid-template-columns:1fr}}
+.hw-card44{border:1px solid var(--line,#e6ecef);border-left:4px solid var(--hw-acc);border-radius:14px;padding:12px 14px;margin:10px 0;background:#fff}
+.hwk-opdracht{--hw-acc:#e8775c;--hw-soft:#fdece7}.hwk-grammatica{--hw-acc:#4a7fd4;--hw-soft:#e8f0fc}.hwk-woorden{--hw-acc:#8a63d2;--hw-soft:#f1ebfb}.hwk-schrijven{--hw-acc:#3d9a5b;--hw-soft:#e7f5ec}.hwk-lezen{--hw-acc:#13A89E;--hw-soft:#e5f6f3}
+.hw-head44{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;margin-bottom:6px}
+.hw-ico{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--hw-soft);color:var(--hw-acc)}
+.hw-kind{font-size:11.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--hw-acc)}
+.hw-head44 h3{margin:1px 0 4px;font-size:15.5px}
+.hw-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.hw-st,.hw-due{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:650;border-radius:999px;padding:3px 9px;background:#f3f5f7;color:var(--ink-2)}
+.hw-st.st-published,.hw-st.st-open{background:#e5f6f3;color:#0b6b63}.hw-st.st-submitted{background:#e8f0fc;color:#2f5fae}.hw-st.st-feedback{background:#e7f5ec;color:#2f8550}
+.hw-st.st-review{background:#fff4e0;color:#a86400}.hw-st.st-late,.hw-due.late{background:#fdecea;color:#b33a2a}.hw-due.soon{background:#fff4e0;color:#a86400}
+.hw-due-edit{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted,#6b7a86)}
+.hw-due-edit input{font:inherit;font-size:12px;border:1px solid var(--line,#e6ecef);border-radius:8px;padding:2px 6px;background:#fff}
+.hw-prog{width:110px;display:grid;gap:2px;justify-items:end}
+.hw-prog>span{display:block;justify-self:stretch;height:6px;border-radius:99px;background:var(--hw-acc);box-shadow:0 0 0 999px #eef1f4 inset}
+.hw-prog{position:relative}.hw-prog::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;border-radius:99px;background:#eef1f4;z-index:0}.hw-prog>span{position:relative;z-index:1;box-shadow:none;justify-self:start}
+.hw-prog small{font-size:11px;color:var(--muted,#6b7a86)}
+@media(max-width:640px){.hw-head44{grid-template-columns:auto minmax(0,1fr)}.hw-prog{grid-column:1/-1;width:100%}}
+/* v45: clickable student (profile) and lesson (details) in "Volgende les" and "Daarna" */
+.who-link{display:inline-flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none;border-radius:12px;padding:2px 6px 2px 2px;margin:-2px 0 -2px -2px;transition:background .15s ease}
+.who-link:hover,.who-link:focus-visible{background:var(--teal-50)}.who-link:hover .who-name{text-decoration:underline;text-underline-offset:3px}
+.when-link{color:inherit;text-decoration:none;border-radius:8px}.when-link:hover{color:var(--teal-600);text-decoration:underline;text-underline-offset:3px}
+.after-row{grid-template-columns:minmax(0,1fr) auto auto!important;padding:4px 6px}
+.after-row .ar-lesson{display:inline-flex;align-items:center;gap:8px;color:inherit;text-decoration:none;border-radius:10px;padding:6px 8px;min-height:36px;transition:background .15s ease}
+.after-row .ar-lesson:hover,.after-row .ar-lesson:focus-visible{background:var(--teal-50)}
+.after-row .ar-open{width:36px;height:36px}
+@media(max-width:640px){.after-row .ar-lesson .ar-count{display:none}}
+
+/* ===== v45: Google Calendar status in the agenda ===== */
+.gcal-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px}
+.gcal-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #bfe5dc;border-radius:999px;background:var(--teal-50);color:#0b6b63;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:background .15s ease}
+.gcal-chip:hover{background:#d7f1ec}.gcal-chip.off{cursor:default;background:#f3f5f7;border-color:var(--line,#e6ecef);color:var(--ink-2)}
+.gcal-chip.err{background:#fff4e0;border-color:#f3d9a6;color:#8a5200}
+.gcal-sub{font-weight:550;color:var(--muted,#6b7a86);font-size:12px}
+.gcal-err{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:#8a5200}
+.gcal-err .linklike{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.gcal-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:min(420px,calc(100vw - 32px));display:grid;gap:10px;padding:14px;border:1px solid var(--line,#e6ecef);border-radius:14px;background:#fff;box-shadow:0 12px 32px rgba(15,60,70,.14)}
+.gcal-pop p{margin:0}

@@ -2333,10 +2333,17 @@ if(isT){
     var tok = SB ? bridge().token() : Promise.resolve("");
     return tok.then(function(t){
       opts.headers = Object.assign({"x-klas-pass": CLOUD.pass || ""}, t ? {"Authorization": "Bearer " + t} : {}, opts.headers || {});
-      return fetch(path, opts);
+      /* v45 fix: always from the site root. The classroom runs at /legacy/index.html, so "api/ai" used to become
+         /legacy/api/ai (404 HTML page → "Unexpected token '<' … is not valid JSON"). */
+      return fetch(path.charAt(0) === "/" ? path : "/" + path, opts);
     }).then(function(r){
       if(r.status === 401) throw new Error(SB ? "Geen toegang tot AI (alleen voor docenten)" : "wachtwoord");
-      return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ("fout " + r.status)); return j; });
+      return r.text().then(function(txt){
+        var j = null; try{ j = txt ? JSON.parse(txt) : {}; }catch(e){ j = null; }
+        if(!j) throw new Error(r.status === 404 ? "Deze functie is niet gevonden op de server (fout 404)." : r.status >= 500 ? "De server gaf een fout (" + r.status + "). Probeer het zo opnieuw." : "Onverwacht antwoord van de server (fout " + r.status + ").");
+        if(!r.ok) throw new Error(j.error || ("fout " + r.status));
+        return j;
+      });
     });
   }
   /* SB: data arrives from the parent window (another JS realm). Re-create it in this
@@ -2777,7 +2784,7 @@ if(isT){
       setSaved("online opgeslagen");
     });
   }
-  if(!SB) fetch("api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){
+  if(!SB) fetch("/api/data?ping=1").then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(p){
     if(!p || !p.ok){ $("cloudState").textContent = "alleen op deze laptop (geen server gevonden)"; return; }
     CLOUD.ai = !!p.ai;
     if(!p.storage || !p.password){ $("cloudState").textContent = "server gevonden, maar " + (!p.storage ? "opslag" : "wachtwoord") + " is nog niet ingesteld"; return; }

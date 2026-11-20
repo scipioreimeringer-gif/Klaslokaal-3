@@ -28,13 +28,13 @@ test('cards: Huiswerk, Flashcards, Laatste les, Oefenen — short labels, progre
   assert.match(css, /\.rgrid\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(css, /@media\(max-width:1000px\)\{\.rgrid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}\}/);
 });
-test('navigation: Home, Lessen, AI-verslag, Woorden, Leerpad, Taken, Oefenen, Bord, Opnames (+ Privé for the teacher), same routes', () => {
+test('navigation (v44): five main tabs per role, the rest under "Meer"; old routes still lead somewhere', () => {
   const ws = read('components/StudentData.tsx');
-  for (const [k, l] of [['overzicht', 'Home'], ['lessen', 'Lessen'], ['analyses', 'AI-verslag'], ['woorden', 'Woorden'], ['doelen', 'Leerpad'], ['huiswerk', 'Taken'], ['oefenen', 'Oefenen'], ['bord', 'Bord'], ['opnames', 'Opnames'], ['prive', 'Privé']])
-    assert.ok(ws.includes(`['${k}','${l}'`), l);
-  assert.match(ws, /data-secondary=\{primary\?undefined:''\}/);
+  assert.match(ws, /main:\[\['overzicht','Home',House\],\['lessen','Lessen',History\],\['woorden','Woorden',Languages\],\['huiswerk','Huiswerk',ClipboardList\],\['doelen','Leerpad',Route\]\]/);
+  assert.match(ws, /more:\[\['bord','Bord',PenLine\],\['opnames','Opnames',Mic\],\['prive','Privé',Lock\]\]/);
+  assert.match(ws, /main:\[\['overzicht','Home',House\],\['lessen','Mijn lessen',History\],\['woorden','Woorden',Languages\],\['huiswerk','Huiswerk',ClipboardList\],\['voortgang','Voortgang',TrendingUp\]\]/);
+  assert.match(ws, /more:\[\['oefenen','Oefenen',Gamepad2\],\['bord','Bord',PenLine\],\['opnames','Opnames',Mic\]\]/);
   assert.match(ws, /aria-haspopup="menu"/);
   const css = read('app/style.css');
   assert.match(css, /\.compact-ws \.tabs button\{[^}]*min-height:34px/);
-  assert.match(css, /@media\(max-width:640px\)\{\s*\.compact-ws \.tabs\{overflow:visible\}\s*\.compact-ws \.tabs>button\[data-secondary\]\{display:none\}/);
 });

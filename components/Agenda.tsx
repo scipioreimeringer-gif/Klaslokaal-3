@@ -8,6 +8,7 @@ import {t,locale} from '../lib/i18n';
 import {useAuth} from './Auth';
 import {Avatar} from './Avatar';
 import {Flag} from './Flag';
+import {GoogleCalendarPanel,requestCalendarSync} from './GoogleCalendar';
 import {loadStudents,type StudentRecord} from '../lib/data';
 import {languageName,relationLanguage} from '../lib/languages';
 import {LESSON_COLUMNS,type Lesson,type LessonState,type View,lessonState,stateLabel,browserTimeZone,dayKey,clock,fmtDay,fmtWhen,minutesOf,gridDays,shift,byDay,nextLesson,countdown,planningError,classroomHref,timeZones} from '../lib/lessons';
@@ -43,6 +44,10 @@ function Who({l,rel,mode,teacherName,size=36}:{l:Lesson;rel?:StudentRecord;mode:
  const name=mode==='teacher'?(rel?.name||t('Leerling')):(teacherName(l.student_id)||t('Docent'));
  return <><Avatar userId={mode==='teacher'?rel?.user_id:l.teacher_id} name={name} size={size}/><span className="who-name">{name}</span></>
 }
+/** v45: the existing profile of the relation (teacher: student profile; student: own lessons with this teacher). */
+export const profileHref=(l:Pick<Lesson,'student_id'>,mode:'teacher'|'student')=>mode==='teacher'?'/leerlingen?student='+encodeURIComponent(l.student_id):'/mijn-profiel?student='+encodeURIComponent(l.student_id);
+/** v45: the existing lesson details (agenda dialog) for one lesson. */
+export const lessonHref=(l:Pick<Lesson,'id'>)=>'/agenda?les='+encodeURIComponent(l.id);
 
 /* ---------------- dashboard: next lesson + today + this week ---------------- */
 export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
@@ -62,28 +67,27 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
   <div className="next-main">
    <div className="next-head"><p className="eyebrow-dark">{t('VOLGENDE LES')}</p><StatusChip state={lessonState(next,now)}/></div>
    <div className="next-body">
-    <div className="next-who"><Who l={next} rel={rel} mode={mode} teacherName={teacherName} size={52}/></div>
+    <Link className="next-who who-link" href={profileHref(next,mode)} title={mode==='teacher'?t('Leerlingprofiel openen'):t('Mijn lessen openen')}><Who l={next} rel={rel} mode={mode} teacherName={teacherName} size={52}/></Link>
     <div className="next-info">
      <div className="next-lang">{lang&&<Flag code={lang} size={20}/>} {lang?languageName(lang):''}{rel?.level?' · '+rel.level:''}</div>
-     <div className="next-when"><Clock size={15}/> {fmtWhen(next,tz)}</div>
+     <Link className="next-when when-link" href={lessonHref(next)} title={t('Lesdetails openen')}><Clock size={15}/> {fmtWhen(next,tz)}</Link>
      <div className="next-count">{countdown(next.starts_at,now)}</div>
     </div>
     <Link className="button next-open" href={classroomHref(next)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
    </div>
   </div>}
   {next&&after.length>0&&<div className="next-after"><h4>{t('DAARNA')}</h4><ul className="after-rows">{after.map(l=>{const r=relations.get(l.student_id);const lg=langOf(l,r);return <li key={l.id}>
-   <Link href={classroomHref(l)} className="after-row" title={t('Klaslokaal openen')}>
-    <span className="ar-who"><Who l={l} rel={r} mode={mode} teacherName={teacherName} size={26}/></span>
-    {lg&&<Flag code={lg} size={16}/>}
-    <span className="ar-when">{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})} · {clock(l.starts_at,tz)}</span>
-    <span className="ar-count">{countdown(l.starts_at,now)}</span>
-   </Link></li>})}</ul></div>}
+   <div className="after-row">
+    <Link className="ar-who who-link" href={profileHref(l,mode)} title={mode==='teacher'?t('Leerlingprofiel openen'):t('Mijn lessen openen')}><Who l={l} rel={r} mode={mode} teacherName={teacherName} size={26}/></Link>
+    <Link className="ar-lesson" href={lessonHref(l)} title={t('Lesdetails openen')}>{lg&&<Flag code={lg} size={16}/>}<span className="ar-when">{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})} · {clock(l.starts_at,tz)}</span><span className="ar-count">{countdown(l.starts_at,now)}</span></Link>
+    <Link className="iconbtn ar-open" href={classroomHref(l)} title={t('Klaslokaal openen')} aria-label={t('Klaslokaal openen')}><Video size={15}/></Link>
+   </div></li>})}</ul></div>}
   {next&&<div className="next-foot"><Link href="/agenda">{t('Naar de agenda')} →</Link></div>}
  </section>
 }
 
 /* ---------------- agenda page ---------------- */
-export function AgendaView({mode,openNew}:{mode:'teacher'|'student';openNew?:boolean}){
+export function AgendaView({mode,openNew,openId}:{mode:'teacher'|'student';openNew?:boolean;openId?:string|null}){
  const {studentLinks}=useAuth();useSyncTimeZone();const now=useNow();const tz=browserTimeZone();
  const [view,setView]=useState<View>(()=>{try{return (localStorage.getItem('teachy-agenda-view') as View)||'week'}catch{return 'week'}});
  const [anchor,setAnchor]=useState(()=>dayKey(Date.now(),browserTimeZone()));
@@ -92,6 +96,8 @@ export function AgendaView({mode,openNew}:{mode:'teacher'|'student';openNew?:boo
  const {lessons,relations,ready,error,loaded,reload}=useLessons(range,mode);
  const [open,setOpen]=useState<Lesson|null>(null);const [form,setForm]=useState<{lesson?:Lesson;day?:string}|null>(openNew&&mode==='teacher'?{}:null);
  const [showCancelled,setShowCancelled]=useState(false);
+ // v45: /agenda?les=<id> opens the existing details of that lesson (RLS decides whether it may be read)
+ useEffect(()=>{if(!openId||!/^[0-9a-f-]{36}$/i.test(openId))return;let off=false;void supabase()?.from('lessons').select(LESSON_COLUMNS).eq('id',openId).maybeSingle().then(({data})=>{if(!off&&data){setOpen(data as Lesson);setAnchor(dayKey((data as Lesson).starts_at,browserTimeZone()))}});return()=>{off=true}},[openId]);
  const teacherName=(sid:string)=>studentLinks.find(x=>x.id===sid)?.teacher_name||'';
  const groups=byDay(lessons.filter(l=>showCancelled||l.status!=='cancelled'),tz);const today=dayKey(now,tz);
  function setV(v:View){setView(v);try{localStorage.setItem('teachy-agenda-view',v)}catch{}}
@@ -101,6 +107,7 @@ export function AgendaView({mode,openNew}:{mode:'teacher'|'student';openNew?:boo
    {mode==='teacher'&&<button className="button" onClick={()=>setForm({})}><CalendarPlus size={16}/> {t('Les inplannen')}</button>}</div>
   {!ready&&<div className="notice">{t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.')}</div>}
   {error&&<div className="notice">{error}</div>}
+  {mode==='teacher'&&ready&&<GoogleCalendarPanel onSynced={reload}/>}
   <div className="agenda-bar">
    <div className="row"><button className="iconbtn" aria-label={t('Vorige')} title={t('Vorige')} onClick={()=>setAnchor(shift(anchor,view,-1))}><ChevronLeft size={18}/></button><button className="button small secondary" onClick={()=>setAnchor(today)}>{t('Vandaag')}</button><button className="iconbtn" aria-label={t('Volgende')} title={t('Volgende')} onClick={()=>setAnchor(shift(anchor,view,1))}><ChevronRight size={18}/></button><strong className="agenda-title">{title}</strong></div>
    <div className="row"><label className="row small muted"><input type="checkbox" checked={showCancelled} onChange={e=>setShowCancelled(e.target.checked)}/> {t('Geannuleerde tonen')}</label>
@@ -116,8 +123,8 @@ export function AgendaView({mode,openNew}:{mode:'teacher'|'student';openNew?:boo
    </div>})}
   </div>}
   {loaded&&ready&&!lessons.length&&<div className="emptystate"><CalendarDays size={30}/><strong>{t('Geen lessen in deze periode')}</strong>{mode==='teacher'?<button className="button small" onClick={()=>setForm({})}><CalendarPlus size={15}/> {t('Les inplannen')}</button>:<p className="muted">{t('Zodra je docent een les inplant, zie je die hier.')}</p>}</div>}
-  {open&&<LessonDetail lesson={open} rel={relations.get(open.student_id)} mode={mode} teacherName={teacherName} onClose={()=>setOpen(null)} onEdit={()=>{setForm({lesson:open});setOpen(null)}} onChanged={()=>{setOpen(null);reload()}}/>}
-  {form&&mode==='teacher'&&<LessonForm initial={form.lesson} day={form.day} relations={[...relations.values()].filter(r=>!r.archived_at)} onClose={()=>setForm(null)} onSaved={()=>{setForm(null);reload()}}/>}
+  {open&&<LessonDetail lesson={open} rel={relations.get(open.student_id)} mode={mode} teacherName={teacherName} onClose={()=>setOpen(null)} onEdit={()=>{setForm({lesson:open});setOpen(null)}} onChanged={()=>{setOpen(null);reload();requestCalendarSync()}}/>}
+  {form&&mode==='teacher'&&<LessonForm initial={form.lesson} day={form.day} relations={[...relations.values()].filter(r=>!r.archived_at)} onClose={()=>setForm(null)} onSaved={()=>{setForm(null);reload();requestCalendarSync()}}/>}
  </>
 }
 

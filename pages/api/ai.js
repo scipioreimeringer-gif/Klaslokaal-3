@@ -1,4 +1,6 @@
 // AI-hulp in het klaslokaal via OpenAI.
+// v45 fix: ESM default export (CommonJS module.exports was not recognised by Next.js 15 → every call returned a 500 HTML page).
+import { createClient } from "@supabase/supabase-js";
 // Instellen in Vercel: OPENAI_API_KEY. Optioneel: OPENAI_MODEL (standaard gpt-5.4-mini).
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
@@ -70,7 +72,6 @@ async function isSupabaseTeacher(req) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!token || !url || !key) return false;
   try {
-    const { createClient } = require("@supabase/supabase-js");
     const db = createClient(url, key, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false, autoRefreshToken: false } });
     const { data: { user } } = await db.auth.getUser(token);
     if (!user) return false;
@@ -79,7 +80,7 @@ async function isSupabaseTeacher(req) {
   } catch (e) { return false; }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const p = process.env.KLAS_PASSWORD;
   const passOk = !!p && req.headers["x-klas-pass"] === p;

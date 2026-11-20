@@ -1,8 +1,9 @@
 'use client';
-// v43: lesson history as cards — every registered lesson (real joint presence), with or without a recording.
-// A card opens the existing AI report of THAT lesson; no AI is called here.
+// v43/v44: "Lessen" is the central place — every registered lesson as a card; a card opens the lesson's own page
+// with (in this order) mistakes, grammar points, the word list of this lesson, deeper look, summary and assignments,
+// plus lesson notes and the homework of this lesson. A lesson without an AI report is shown too. No AI is called here.
 import {useEffect,useMemo,useState} from 'react';
-import {CalendarCheck,Clock3,AlertCircle,Languages,Sparkles,Mic,ChevronDown,ChevronRight} from 'lucide-react';
+import {CalendarCheck,Clock3,AlertCircle,Languages,Sparkles,Mic,ChevronRight,ArrowLeft,NotebookPen,ClipboardList,PencilLine} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {t} from '../lib/i18n';
 import {niceDate,type LessonEntry,type Recording} from '../lib/data';
@@ -10,6 +11,9 @@ import {languageName} from '../lib/languages';
 import {Flag} from './Flag';
 import {lessonCards,type CardAnalysis,type LessonCard} from '../lib/lessonCards';
 import type {SessionLike} from '../lib/stats';
+import type {AnalysisV2} from '../lib/analysis/pipeline';
+import {LessonReport,LessonWords,type LessonWord} from './LessonReport';
+import {TeacherAnalyses} from './Analysis';
 
 function statusText(c:LessonCard,viewer:'teacher'|'student'){
  if(c.status==='approved')return t('AI-verslag klaar');
@@ -18,23 +22,28 @@ function statusText(c:LessonCard,viewer:'teacher'|'student'){
  if(viewer==='teacher'&&c.status==='failed')return t('AI-verslag mislukt');
  return t('AI-verslag nog niet beschikbaar');
 }
+const isV2=(f:unknown)=>!!f&&typeof f==='object'&&(f as {version?:number}).version===2;
 
-export function LessonCards({studentId,viewer,entries,sessions,recordings,lang,level,onOpenReport,limit}:{studentId:string;viewer:'teacher'|'student';entries:LessonEntry[];sessions:SessionLike[]|null;recordings:Recording[];lang:string;level?:string|null;onOpenReport:(analysisId:string)=>void;limit?:number}){
- const [analyses,setAnalyses]=useState<CardAnalysis[]|null>(null);const [open,setOpen]=useState<string|null>(null);
+type Props={studentId:string;viewer:'teacher'|'student';entries:LessonEntry[];sessions:SessionLike[]|null;recordings:Recording[];lang:string;level?:string|null};
+
+/** Loads the reports once (teacher: all own analyses; student: only approved ones via the existing RPC) and builds the cards. */
+export function useLessonCards({studentId,viewer,entries,sessions,recordings}:Omit<Props,'lang'|'level'>){
+ const [analyses,setAnalyses]=useState<CardAnalysis[]|null>(null);
  useEffect(()=>{let off=false;const db=supabase()!;void(async()=>{
-  // sessions come with the workspace bundle (null = migration v43 not run yet → one card per lesson day)
   const a=await (viewer==='teacher'?db.from('lesson_analyses').select('id,lesson_date,status,recording_id,final,draft').eq('student_id',studentId).order('created_at',{ascending:false}):db.rpc('student_lesson_summaries',{sid:studentId}));
   if(off)return;
   const rows=(a.error?[]:(a.data||[])) as {id:string;lesson_date:string;status?:string;recording_id?:string|null;final?:unknown;draft?:unknown}[];
   setAnalyses(rows.map(r=>({id:r.id,lesson_date:r.lesson_date,status:r.status||'approved',recording_id:r.recording_id??null,final:r.final??r.draft??null})));
  })();return()=>{off=true}},[studentId,viewer]);
- const cards=useMemo(()=>analyses===null?null:lessonCards(entries.map(e=>({student_id:e.student_id,lesson_date:e.lesson_date,words:e.words})),sessions,analyses,recordings),[entries,sessions,analyses,recordings]);
+ return useMemo(()=>analyses===null?null:lessonCards(entries.map(e=>({student_id:e.student_id,lesson_date:e.lesson_date,words:e.words})),sessions,analyses,recordings),[entries,sessions,analyses,recordings]);
+}
+
+export function LessonCards({cards,viewer,lang,level,onOpen,limit}:{cards:LessonCard[]|null;viewer:'teacher'|'student';lang:string;level?:string|null;onOpen:(c:LessonCard)=>void;limit?:number}){
  if(!cards)return <div className="loader small"/>;
  if(!cards.length)return <div className="lc-empty"><CalendarCheck size={22} aria-hidden/><div><strong>{t('Nog geen lessen')}</strong><p className="muted">{t('Een les telt automatisch zodra docent en leerling minstens 2 minuten samen in het klaslokaal zijn. Een opname is niet nodig.')}</p></div></div>;
- const byDate=new Map(entries.map(e=>[e.lesson_date,e]));
- return <div className="lc-list">{(limit?cards.slice(0,limit):cards).map(c=>{const L=c.language||lang;const e=byDate.get(c.date);const canOpen=!!c.analysis&&(viewer==='teacher'||c.status==='approved');const expanded=open===c.key;
+ return <div className="lc-list">{(limit?cards.slice(0,limit):cards).map(c=>{const L=c.language||lang;
   return <article key={c.key} className={'lc-card st-'+c.status}>
-   <button type="button" className="lc-main" aria-expanded={canOpen?undefined:expanded} onClick={()=>canOpen?onOpenReport(c.analysis!.id):setOpen(expanded?null:c.key)}>
+   <button type="button" className="lc-main" onClick={()=>onOpen(c)} title={t('Les openen')}>
     <span className="lc-num">{t('Les {0}',c.number)}</span>
     <span className="lc-title">{L&&<Flag code={L} size={16}/>}<b>{L?languageName(L):t('Les')}{level?' '+level:''}</b><span className="muted">· {niceDate(c.date)}</span></span>
     <span className="lc-facts">
@@ -43,11 +52,51 @@ export function LessonCards({studentId,viewer,entries,sessions,recordings,lang,l
      <span><Languages size={13} aria-hidden/> {t('{0} woorden',c.words)}</span>
      {c.recording&&<span title={t('Opname')}><Mic size={13} aria-hidden/></span>}
     </span>
-    <span className={'lc-status'+(c.status==='approved'?' ok':'')}>{c.status==='approved'&&<Sparkles size={13} aria-hidden/>}{c.analysis?statusText(c,viewer):t('Les geregistreerd · AI-verslag nog niet beschikbaar')}</span>
-    {canOpen?<ChevronRight size={16} className="lc-go" aria-hidden/>:<ChevronDown size={16} className="lc-go" aria-hidden/>}
+    <span className={'lc-status'+(c.status==='approved'?' ok':'')}>{c.status==='approved'&&<Sparkles size={13} aria-hidden/>}{c.analysis&&(viewer==='teacher'||c.status==='approved')?statusText(c,viewer):t('Les geregistreerd · AI-verslag nog niet beschikbaar')}</span>
+    <ChevronRight size={16} className="lc-go" aria-hidden/>
    </button>
-   {expanded&&<div className="lc-body">{e?.notes?<><h4>{t('Lesnotities')}</h4><p className="pre">{e.notes}</p></>:<p className="muted">{t('Geen notities.')}</p>}
-    {!!(e?.words||[]).length&&<><h4>{t('Woorden')}</h4><ul className="chips">{(e!.words||[]).map((w,j)=><li key={j}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul></>}
-    {e?.homework&&<><h4>{t('Huiswerk')}</h4><p className="pre">{e.homework}</p></>}</div>}
   </article>})}</div>
+}
+
+type Hw={id:string;title:string;published_at:string|null;lesson_id?:string|null;analysis_id?:string|null;due_at?:string|null};
+/** One lesson: its own page inside "Lessen". */
+export function LessonDetail({card,studentId,viewer,entries,lang,level,onBack,onHomework}:{card:LessonCard;studentId:string;viewer:'teacher'|'student';entries:LessonEntry[];lang:string;level?:string|null;onBack:()=>void;onHomework:()=>void}){
+ const [words,setWords]=useState<LessonWord[]|null>(null);const [hw,setHw]=useState<Hw[]>([]);
+ const entry=entries.find(e=>e.lesson_date===card.date);const L=card.language||lang;
+ useEffect(()=>{let off=false;const db=supabase()!;void(async()=>{
+  // the word list of this lesson = rows of the ONE central word list with this lesson date (no copy)
+  const v=await db.from('vocab_items').select('term,translation,pos').eq('student_id',studentId).eq('lesson_date',card.date).order('created_at');
+  const central=(v.error?[]:(v.data||[])) as LessonWord[];
+  const legacy=(entry?.words||[]).map(w=>({term:w.nl,translation:w.uit||''}));
+  let a=await db.from('assignments').select('id,title,published_at,lesson_id,analysis_id,due_at').eq('student_id',studentId);
+  if(a.error&&/due_at|column/.test(a.error.message))a=await db.from('assignments').select('id,title,published_at,lesson_id,analysis_id').eq('student_id',studentId) as typeof a;
+  if(off)return;
+  setWords(central.length?central:legacy);
+  setHw(((a.error?[]:a.data||[]) as Hw[]).filter(x=>(card.lessonId&&x.lesson_id===card.lessonId)||(card.analysis&&x.analysis_id===card.analysis.id)));
+ })();return()=>{off=true}},[studentId,card.key,card.date,card.lessonId,card.analysis,entry]);
+ const doc=card.analysis&&isV2(card.analysis.final)&&(viewer==='teacher'||card.status==='approved')?card.analysis.final as AnalysisV2:null;
+ const extra=<>
+  {entry?.notes&&<div className="lr-notes"><h5><NotebookPen size={14} aria-hidden/> {t('Lesnotities')}</h5><p className="pre">{entry.notes}</p></div>}
+  {(hw.length>0||entry?.homework)&&<div className="lr-hw"><h5><ClipboardList size={14} aria-hidden/> {t('Huiswerk bij deze les')}</h5>
+   {entry?.homework&&<p className="pre">{entry.homework}</p>}
+   {hw.length>0&&<ul className="lr-hwlist">{hw.map(h=><li key={h.id}><b>{h.title}</b>{h.due_at&&<span className="muted"> · {t('inleveren vóór {0}',niceDate(h.due_at))}</span>}{viewer==='teacher'&&!h.published_at&&<span className="tag">{t('Concept')}</span>}</li>)}</ul>}
+   <button type="button" className="button small secondary" onClick={onHomework}><ClipboardList size={14}/> {t('Naar Huiswerk')}</button></div>}
+ </>;
+ return <div className="lesson-detail">
+  <div className="ld-head">
+   <button type="button" className="button small secondary" onClick={onBack}><ArrowLeft size={15}/> {viewer==='teacher'?t('Alle lessen'):t('Mijn lessen')}</button>
+   <div className="ld-title"><span className="lc-num">{t('Les {0}',card.number)}</span><div><h3>{L&&<Flag code={L} size={18}/>} {L?languageName(L):t('Les')}{level?' '+level:''}</h3>
+    <p className="muted small">{niceDate(card.date)}{card.minutes!=null?' · '+t('{0} min samen aanwezig',card.minutes):''}{card.recording?' · '+t('met opname'):''}</p></div></div>
+   <span className={'lc-status'+(card.status==='approved'?' ok':'')}>{card.analysis&&(viewer==='teacher'||card.status==='approved')?statusText(card,viewer):t('AI-verslag nog niet beschikbaar')}</span>
+  </div>
+  {words===null?<div className="loader small"/>:doc?<LessonReport doc={doc} studentId={viewer==='student'?studentId:undefined} level={level} lessonLang={L} teacher={viewer==='teacher'} words={words} extra={extra}/>:
+   <div className="lesson-report">
+    <section className="lr-sec lr-mint"><h4><Languages size={16} aria-hidden/> {t('Woordenlijst van deze les')}</h4><LessonWords words={words}/></section>
+    <section className="lr-sec lr-teal"><h4><NotebookPen size={16} aria-hidden/> {t('Samenvatting en opdrachten')}</h4>
+     <p className="muted small">{card.analysis&&viewer==='teacher'?t('Het AI-verslag van deze les is nog niet klaar of in een ouder formaat; je ziet het hieronder.'):t('Voor deze les is (nog) geen AI-verslag. Fouten en grammatica verschijnen hier zodra je docent een verslag van een opgenomen les goedkeurt.')}</p>
+     {extra}{!entry?.notes&&!hw.length&&!entry?.homework&&<p className="muted small">{t('Geen notities of huiswerk bij deze les.')}</p>}</section>
+   </div>}
+  {viewer==='teacher'&&card.analysis&&<details className="ld-edit" open={card.status==='ready'||!doc}><summary><PencilLine size={15}/> {card.status==='ready'?t('Verslag controleren en goedkeuren'):t('Verslag bewerken')}</summary>
+   <TeacherAnalyses studentId={studentId} focusId={card.analysis.id} onlyId={card.analysis.id} lessonLang={L}/></details>}
+ </div>
 }

@@ -63,18 +63,18 @@ test('grammar groups: Dutch and Brazilian Portuguese topics, counts summed, "Ove
 });
 test('report order: errors first … homework last; "Oefen dit onderwerp" only after a click; teacher approval kept', () => {
   const r = read('components/LessonReport.tsx');
-  const order = ['"Mijn fouten"', '"Grammaticale aandachtspunten"', '"Verdieping"', '"Nieuwe woorden"', '"Wat ging goed"', '"Samenvatting"', '"Oefenen en huiswerk"'].map(k => r.indexOf(k));
+  const order = ['"Mijn fouten"', '"Grammaticale aandachtspunten"', '"Woordenlijst van deze les"', '"Verdieping"', '"Samenvatting en opdrachten"'].map(k => r.indexOf(k)); // v44 order
   assert.ok(order.every(i => i > 0) && order.every((v, i) => !i || v > order[i - 1]), 'sections in the required order');
   assert.match(r, /practise\?<div className="lr-practise"><SelfPractice studentId=\{studentId\} level=\{level\} topic=\{c\.label\}\/><\/div>/);
   assert.ok(!/authedPost|\/api\/ai|useEffect/.test(r), 'opening a report calls no AI');
   assert.match(read('components/Analysis.tsx'), /\{v2\?<LessonReport doc=\{shownDoc as unknown as AnalysisV2\}/, 'students read approved reports only (existing RPC)');
   assert.match(read('components/AnalysisV2.tsx'), /<LessonReport doc=\{doc\} teacher lessonLang=\{lessonLang\}\/>/, 'teacher previews what the student will see');
 });
-test('lesson card click opens the report of THAT lesson', () => {
+test('lesson card click opens the page of THAT lesson (v44), with its own report', () => {
   const ws = read('components/StudentData.tsx');
-  assert.match(ws, /const openReport=\(id:string\)=>\{setReport\(id\);setTab\('analyses'\)\}/);
-  assert.match(ws, /<TeacherAnalyses studentId=\{studentId\} focusId=\{report\}/);
-  assert.match(read('components/LessonCards.tsx'), /onClick=\{\(\)=>canOpen\?onOpenReport\(c\.analysis!\.id\):setOpen/);
+  assert.match(ws, /const openLesson=\(k:string\)=>\{setTabState\('lessen'\);setLesson\(k\)/);
+  assert.match(ws, /card\?<LessonDetail card=\{card\}/);
+  assert.match(read('components/LessonCards.tsx'), /onClick=\{\(\)=>onOpen\(c\)\}/);
 });
 
 test('word classes: nouns with article, verbs, adjectives, adverbs, prepositions, conjunctions, expressions — grouped, no duplicates', () => {
@@ -116,7 +116,7 @@ test('next lessons: "DAARNA" with the next three, clickable to the classroom', (
   const a = read('components/Agenda.tsx');
   assert.match(a, /\.sort\(\(a,b\)=>a\.starts_at\.localeCompare\(b\.starts_at\)\)\.slice\(0,3\)/);
   assert.match(a, /<h4>\{t\('DAARNA'\)\}<\/h4>/);
-  assert.match(a, /<Link href=\{classroomHref\(l\)\} className="after-row"/);
+  assert.match(a, /<Link className="iconbtn ar-open" href=\{classroomHref\(l\)\}/, 'v45: classroom via its own button; name → profile, row → details');
 });
 test('unlinking: teacher and student, checked on the server, nothing deleted', () => {
   assert.match(read('app/leerlingen/page.tsx'), /t\("Weet je zeker dat je deze leerling wilt ontkoppelen\?"\)/);

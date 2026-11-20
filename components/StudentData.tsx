@@ -6,12 +6,13 @@ import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUr
 import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
-import {LessonCards} from './LessonCards';
+import {LessonCards,LessonDetail,useLessonCards} from './LessonCards';
+import {StudentProgress} from './StudentProgress';
 import {SelfPractice,VocabGames,VocabManager} from './Learning';
 import {LearningPath} from './LearningPath';
 import {subjectOf,authedPost} from '../lib/learning';
-import {Sparkles,Target,Gamepad2} from 'lucide-react';
-import {cumulativeWords,isEmptySeries,lessonsPerMonth} from '../lib/stats';
+import {Sparkles,Target,Gamepad2,TrendingUp,Video} from 'lucide-react';
+import {cumulativeWords,isEmptySeries,lessonsPerMonth,mergeLessons} from '../lib/stats';
 import {t, locale} from '../lib/i18n';
 import {compactAnalysis} from '../lib/analysis/compact';
 import {CATEGORY_LABEL,type CorrectionCategory} from '../lib/analysisTypes';
@@ -140,37 +141,62 @@ export function PrivateNotes({studentId}:{studentId:string}){
  return <div className="private-notes"><div className="row between"><h3><Lock size={16}/> {t("Privénotities")}</h3><small className="muted" role="status">{status}</small></div><textarea className="field" disabled={!ready} value={notes} onChange={e=>setNotes(e.target.value)} placeholder={t("Observaties, aandachtspunten, plan voor de volgende les… De leerling kan dit nooit zien.")}/></div>
 }
 
-type Tab='overzicht'|'lessen'|'analyses'|'woorden'|'doelen'|'huiswerk'|'oefenen'|'bord'|'opnames'|'prive';
+type Tab='overzicht'|'lessen'|'woorden'|'huiswerk'|'doelen'|'voortgang'|'oefenen'|'bord'|'opnames'|'prive';
 type WsStudent={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
+type TabDef=[Tab,string,typeof History];
+/** v44: five main tabs per role; everything else under "Meer" (no function removed). */
+export function workspaceTabs(viewer:'teacher'|'student'):{main:TabDef[];more:TabDef[]}{
+ return viewer==='teacher'
+  ?{main:[['overzicht','Home',House],['lessen','Lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['doelen','Leerpad',Route]],
+    more:[['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
+  :{main:[['overzicht','Home',House],['lessen','Mijn lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['voortgang','Voortgang',TrendingUp]],
+    more:[['oefenen','Oefenen',Gamepad2],['bord','Bord',PenLine],['opnames','Opnames',Mic]]};
+}
+/** Old deep links keep working: tab=analyses → Lessen (reports live in their lesson), tab=doelen for a student → Voortgang. */
+export function normalizeTab(t:string|null|undefined,viewer:'teacher'|'student'):Tab{
+ const x=t==='analyses'?'lessen':t==='taken'?'huiswerk':t||'overzicht';
+ if(viewer==='student'&&x==='doelen')return 'voortgang';
+ if(viewer==='teacher'&&(x==='voortgang'||x==='oefenen'))return x==='voortgang'?'doelen':'overzicht';
+ if(viewer==='student'&&x==='prive')return 'overzicht';
+ const {main,more}=workspaceTabs(viewer);return [...main,...more].some(d=>d[0]===x)?x as Tab:'overzicht';
+}
 export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{studentId:string;viewer:'teacher'|'student';intro?:React.ReactNode;student?:WsStudent;initialTab?:string|null}){
- const [b,setB]=useState<Bundle|null>(null);const [tab,setTab]=useState<Tab>('overzicht');const [report,setReport]=useState<string|null>(null);
- const openReport=(id:string)=>{setReport(id);setTab('analyses')};// v43: a lesson card opens the report of THAT lesson
+ const [b,setB]=useState<Bundle|null>(null);const [tab,setTabState]=useState<Tab>('overzicht');const [lesson,setLesson]=useState<string|null>(null);const [manage,setManage]=useState(false);
+ const setTab=(k:Tab)=>{setTabState(k);setLesson(null)};
  const load=useCallback(async()=>{setB(await loadStudentBundle(supabase()!,studentId))},[studentId]);
- useEffect(()=>{setB(null);setTab((initialTab as Tab)||'overzicht');void load()},[load,initialTab]);
- /* v40: short tab names; [primary on a phone] — the others go under "Meer" on small screens (all tabs and routes kept) */
- const tabs:[Tab,string,typeof History,boolean][]=[['overzicht','Home',House,true],['lessen','Lessen',History,false],['analyses','AI-verslag',Sparkles,true],['woorden','Woorden',Languages,true],['doelen','Leerpad',Route,false],['huiswerk','Taken',ClipboardList,true],...(viewer==='student'?[['oefenen','Oefenen',Gamepad2,true] as [Tab,string,typeof History,boolean]]:[]),['bord','Bord',PenLine,false],['opnames','Opnames',Mic,false],...(viewer==='teacher'?[['prive','Privé',Lock,false] as [Tab,string,typeof History,boolean]]:[])];
+ useEffect(()=>{setB(null);setTabState(normalizeTab(initialTab,viewer));setLesson(null);setManage(initialTab==='analyses');void load()},[load,initialTab,viewer]);
+ const {main,more:moreTabs}=workspaceTabs(viewer);
  const ws:WsStudent=student||{id:studentId,subject:'',level:null,lesson_language:null};
  const focus=useMemo(()=>b?.latestAnalysis?.final?compactAnalysis(b.latestAnalysis.final as AnalysisV2,{max:3,label:k=>CATEGORY_LABEL[k as CorrectionCategory]||k}).points.map(x=>x.label):[],[b]);
- const [more,setMore]=useState(false);const secondary=tabs.filter(x=>!x[3]);const activeSecondary=secondary.find(x=>x[0]===tab);
+ const cards=useLessonCards({studentId,viewer,entries:b?.lessons||EMPTY_LESSONS,sessions:b?b.sessions:null,recordings:b?.recordings||EMPTY_RECS});
+ const card=lesson&&cards?cards.find(c=>c.key===lesson)||null:null;
+ const openLesson=(k:string)=>{setTabState('lessen');setLesson(k);window.scrollTo?.({top:0,behavior:'smooth'})};
+ const [more,setMore]=useState(false);const activeMore=moreTabs.find(x=>x[0]===tab);
  useEffect(()=>{if(!more)return;const off=(e:MouseEvent)=>{if(!(e.target as Element).closest?.('.tabs-more'))setMore(false)};const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setMore(false)};document.addEventListener('mousedown',off);document.addEventListener('keydown',esc);return()=>{document.removeEventListener('mousedown',off);document.removeEventListener('keydown',esc)}},[more]);
+ const lang=subjectOf(ws);
  return <div className="workspace compact-ws">
   {b&&<FactsBar p={b.progress} focus={[]}/>}
-  <nav className="tabs" role="tablist" aria-label={t("Onderdelen")}>{tabs.map(([k,l,Icon,primary])=><button key={k} role="tab" data-secondary={primary?undefined:''} aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/>{t(l)}
-   {k==='analyses'&&focus.length>0&&<span className="tab-badge" title={t("Aandachtspunten:")+' '+focus.join(' · ')} aria-label={t("{0} aandachtspunten",focus.length)}>{focus.length}</span>}</button>)}
-   <span className="tabs-more"><button type="button" aria-haspopup="menu" aria-expanded={more} aria-selected={!!activeSecondary} onClick={()=>setMore(m=>!m)}><MoreHorizontal size={15}/>{activeSecondary?t(activeSecondary[1]):t("Meer")}</button>
-    {more&&<span className="tabs-more-menu" role="menu">{secondary.map(([k,l,Icon])=><button key={k} role="menuitem" aria-current={tab===k||undefined} onClick={()=>{setTab(k);setMore(false)}}><Icon size={15}/>{t(l)}</button>)}</span>}</span></nav>
+  <nav className="tabs tabs44" role="tablist" aria-label={t("Onderdelen")}>{main.map(([k,l,Icon])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)}><Icon size={15}/><span className="tab-lbl">{t(l)}</span>
+   {k==='lessen'&&focus.length>0&&<span className="tab-badge" title={t("Aandachtspunten:")+' '+focus.join(' · ')} aria-label={t("{0} aandachtspunten",focus.length)}>{focus.length}</span>}</button>)}
+   <span className="tabs-more"><button type="button" aria-haspopup="menu" aria-expanded={more} aria-selected={!!activeMore} onClick={()=>setMore(m=>!m)}><MoreHorizontal size={15}/><span className="tab-lbl">{activeMore?t(activeMore[1]):t("Meer")}</span></button>
+    {more&&<span className="tabs-more-menu" role="menu">{moreTabs.map(([k,l,Icon])=><button key={k} role="menuitem" aria-current={tab===k||undefined} onClick={()=>{setTab(k);setMore(false)}}><Icon size={15}/>{t(l)}</button>)}</span>}</span>
+   <a className="tabs-live" href={'/klaslokaal/live?student='+encodeURIComponent(studentId)} title={viewer==='teacher'?t("Les starten"):t("Naar de les")}><Video size={15}/><span className="tab-lbl">{viewer==='teacher'?t("Les starten"):t("Naar de les")}</span></a></nav>
   {!b?<div className="card"><div className="loader small"/></div>:<>
   {b.error&&<div className="notice">{b.error}</div>}
-  {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonCards studentId={studentId} viewer={viewer} entries={b.lessons} sessions={b.sessions} recordings={b.recordings} lang={subjectOf(ws)} level={ws.level} onOpenReport={openReport} limit={1}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
-  {tab==='lessen'&&<section className="card"><h3>{t("Lesgeschiedenis")}</h3><LessonCards studentId={studentId} viewer={viewer} entries={b.lessons} sessions={b.sessions} recordings={b.recordings} lang={subjectOf(ws)} level={ws.level} onOpenReport={openReport}/></section>}
-  {tab==='analyses'&&<section className="card"><h3><Sparkles size={17}/> {viewer==='teacher'?t("AI-lesanalyses"):t("Lessamenvattingen")}</h3>{viewer==='teacher'?<TeacherAnalyses studentId={studentId} focusId={report} lessonLang={subjectOf(ws)}/>:<StudentSummaries studentId={studentId} lessonLang={subjectOf(ws)} focusId={report}/>}</section>}
-  {tab==='woorden'&&<section className="card"><h3>{t("Woordenlijst")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
-  {tab==='doelen'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
-  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={subjectOf(ws)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
+  {tab==='overzicht'&&<><div className="grid2"><section className="card"><h3><History size={16}/> {t("Laatste les")}</h3><LessonCards cards={cards} viewer={viewer} lang={lang} level={ws.level} onOpen={c=>openLesson(c.key)} limit={1}/></section><section className="card"><h3><NotebookPen size={16}/> {t("Recente woorden")}</h3><ul className="chips">{allWords(b.lessons).slice(0,24).map(w=><li key={w.nl}><b>{w.nl}</b>{w.uit?<span> · {w.uit}</span>:null}</li>)}</ul>{!allWords(b.lessons).length&&<p className="muted">{t("Nog geen woorden.")}</p>}</section></div>{intro}<StudentCharts lessons={b.lessons}/></>}
+  {tab==='lessen'&&<section className="card">{card?<LessonDetail card={card} studentId={studentId} viewer={viewer} entries={b.lessons} lang={lang} level={ws.level} onBack={()=>setLesson(null)} onHomework={()=>setTab('huiswerk')}/>:<>
+   <h3>{viewer==='teacher'?t("Lessen"):t("Mijn lessen")}</h3><LessonCards cards={cards} viewer={viewer} lang={lang} level={ws.level} onOpen={c=>openLesson(c.key)}/>
+   {viewer==='teacher'&&<details className="manage-reports" open={manage} onToggle={e=>setManage((e.currentTarget as HTMLDetailsElement).open)}><summary><Sparkles size={15}/> {t("Alle AI-verslagen en opnames beheren")}</summary><TeacherAnalyses studentId={studentId} lessonLang={lang}/></details>}
+   {viewer==='student'&&cards&&!cards.length&&<StudentSummaries studentId={studentId} lessonLang={lang}/>}</>}</section>}
+  {tab==='woorden'&&<section className="card"><h3>{t("Woorden")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
+  {tab==='doelen'&&viewer==='teacher'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
+  {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><TrendingUp size={17}/> {t("Voortgang")}</h3><StudentProgress studentId={studentId} progress={b.progress} lessons={mergeLessons(b.lessons,b.sessions)} lessonLang={lang}/></section>}
+  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={lang}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}
-  {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} viewer={viewer} onChange={()=>void load()} onOpenAnalyses={()=>setTab('analyses')}/></section>}
+  {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} viewer={viewer} onChange={()=>void load()} onOpenAnalyses={()=>{setTab('lessen');setManage(true)}}/></section>}
   {tab==='prive'&&viewer==='teacher'&&<section className="card private"><PrivateNotes studentId={studentId}/></section>}
   </>}
  </div>
 }
+const EMPTY_LESSONS:LessonEntry[]=[];const EMPTY_RECS:Recording[]=[];

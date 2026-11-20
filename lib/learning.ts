@@ -5,7 +5,7 @@ import {relationLanguage} from './languages';
 import {t, translated, getLang} from './i18n';
 
 export type VocabItem = {id: string; student_id: string; term: string; translation: string; example: string; kind: 'word' | 'expression'; status: 'new' | 'practicing' | 'mastered'; source: 'teacher' | 'lesson' | 'ai' | 'student' | 'canvas';
-  /* v35 */ lang?: string | null; pos?: string | null; lesson_id?: string | null; source_page?: string | null; difficult?: boolean; created_at: string; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
+  /* v35 */ lang?: string | null; pos?: string | null; /* v44 */ level?: string | null; lesson_id?: string | null; source_page?: string | null; difficult?: boolean; created_at: string; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
 export type Goal = {id: string; code: string | null; subject: string; level: string; skill: string; title: string; description: string; sort: number; owner_teacher: string | null};
 export type GoalStatus = 'not_started' | 'in_progress' | 'covered' | 'mastered';
 export type GoalProgress = {student_id: string; goal_id: string; status: GoalStatus; basis: 'teacher' | 'ai_confirmed' | 'practice' | 'intake'; note: string; lesson_date: string | null; updated_at: string;

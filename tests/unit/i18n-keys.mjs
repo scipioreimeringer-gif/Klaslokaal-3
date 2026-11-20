@@ -38,6 +38,8 @@ export const DYNAMIC = [
   'Woordvolgorde', 'Lidwoorden (de/het)', 'Meervoud', 'Bijvoeglijk naamwoord', 'Voorzetsels', 'Voornaamwoorden', 'Werkwoorden en tijden', 'Woordkeuze', 'Uitspraak', 'Spelling',
   'Ser en estar', 'Overeenstemming (concordância)', 'Geslacht en lidwoorden', 'Voorzetsels en samentrekkingen', 'Spelling en accenten', 'Overig',
   'Zelfstandige naamwoorden', 'Bijvoeglijke naamwoorden', 'Bijwoorden', 'Voegwoorden', 'Uitdrukkingen', 'Voorbeeldzinnen',
+  // v44: workspace tabs (components/StudentData.tsx), homework kinds and statuses (app/huiswerk-client.tsx)
+  'Mijn lessen', 'Voortgang', 'Leerpad', 'Meer', 'Privé', 'Grammatica', 'Woorden', 'Schrijven', 'Lezen', 'Concept', 'Klaar voor controle', 'Gepubliceerd', 'Ingeleverd', 'Feedback gegeven', 'Open', 'Te laat',
 ];
 
 function sourceFiles() {
