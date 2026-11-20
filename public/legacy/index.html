@@ -2424,12 +2424,13 @@ if(isT){
   var CLOUD = {on:false, ai:false, pass:null, dirty:{}, timer:null};
   function api(path, opts){
     opts = opts || {};
+    var url = path.charAt(0) === "/" ? path : "/" + path; /* v45 fix: always from the site root (not /legacy/api/…) */
+    var go = function(t){ opts.headers = Object.assign({}, opts.headers || {}, {"x-klas-pass": CLOUD.pass || ""}, t ? {"Authorization": "Bearer " + t} : {}); return fetch(url, opts); };
     var tok = SB ? bridge().token() : Promise.resolve("");
-    return tok.then(function(t){
-      opts.headers = Object.assign({"x-klas-pass": CLOUD.pass || ""}, t ? {"Authorization": "Bearer " + t} : {}, opts.headers || {});
-      /* v45 fix: always from the site root. The classroom runs at /legacy/index.html, so "api/ai" used to become
-         /legacy/api/ai (404 HTML page → "Unexpected token '<' … is not valid JSON"). */
-      return fetch(path.charAt(0) === "/" ? path : "/" + path, opts);
+    return tok.then(go).then(function(r){
+      /* v49: an expired login (phone that kept the page in the background) is renewed once and the request retried */
+      if(r.status === 401 && SB) return bridge().token(true).then(function(t){ return t ? go(t) : r; }, function(){ return r; });
+      return r;
     }).then(function(r){
       if(r.status === 401) throw new Error(SB ? "Geen toegang tot AI (alleen voor docenten)" : "wachtwoord");
       return r.text().then(function(txt){

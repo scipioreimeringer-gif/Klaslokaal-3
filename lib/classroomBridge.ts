@@ -2,6 +2,7 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {isMissingMigration} from './data';
 import {t, getLang} from './i18n';
+import {authFetch, freshToken} from './authFetch';
 /** Calendar date on this device (a lesson at 21:00 in Brazil belongs to that day, not to the next UTC day). */
 const localDate = () => new Date().toLocaleDateString('en-CA');
 import {diffLegacyDb,matchBackupStudents,mergeBackupLessons,parseKey,rowsToLegacyDb,snapshot,type LegacyDb,type LegacyLesson,type LessonRow,type StudentRow} from './classroomMapping';
@@ -27,7 +28,7 @@ export type TeachyBridge = {
   liveUrl: string;
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
-  token(): Promise<string>;
+  token(force?: boolean): Promise<string>;
   /** v38: TURN/ICE servers from the server (environment variable), only for logged-in users. [] = STUN only. */
   iceServers?(): Promise<{urls: string | string[]; username?: string; credential?: string}[]>;
   /** Why there is (no) TURN: ok, missing, invalid, no_turn, http_401/403/404/500, error. Never contains credentials. */
@@ -54,8 +55,7 @@ export type RecordingTracks = {teacher?: Blob | null; student?: Blob | null};
 export type TranslateResult = {translation: string; expression: string | null; expression_translation: string | null; note: string; target: string};
 
 async function postJson<T>(db: SupabaseClient, path: string, body: unknown): Promise<T> {
-  const {data} = await db.auth.getSession();
-  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + (data.session?.access_token || '')}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body as object} : body)});
+  const r = await authFetch(db, path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body as object} : body)});
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(t((j as {error?: string}).error || '') || t('Fout {0}', r.status));
   return j as T;
@@ -121,8 +121,7 @@ let icePromise: Promise<{urls: string | string[]; username?: string; credential?
 let iceStatusValue = '';
 function fetchIceServers(db: SupabaseClient, studentId: string) {
   if (!icePromise) icePromise = (async () => {
-    const {data} = await db.auth.getSession();
-    const r = await fetch('/api/turn?student=' + encodeURIComponent(studentId), {headers: {Authorization: 'Bearer ' + (data.session?.access_token || '')}, cache: 'no-store'});
+    const r = await authFetch(db, '/api/turn?student=' + encodeURIComponent(studentId), {cache: 'no-store'});
     if (!r.ok) { iceStatusValue = 'http_' + r.status; return []; }
     const j = await r.json().catch(() => ({})) as {iceServers?: unknown; status?: unknown};
     iceStatusValue = typeof j.status === 'string' ? j.status : '';
@@ -193,7 +192,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
       if (k.kind === 'notes') return saveNotes(value as LegacyDb);
       return putState(k.kind, k.studentId, value);
     },
-    async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
+    async token(force?: boolean) { return freshToken(db, !!force); }, // v49: renewed when (almost) expired
     async presence(p) {
       // v43: one small RPC about every 30 s while teacher and student are both connected (never per second)
       const r = await db.rpc('lesson_presence', {sid: opts.studentId, skey: p.key, joint: Math.max(0, Math.round(p.joint)), planned: opts.lessonId || null, day: localDate()});
@@ -281,7 +280,7 @@ export function createStudentBridge(db: SupabaseClient, opts: {studentId: string
     version: 1, role: 'student', studentId: opts.studentId, studentName: opts.studentName,
     liveUrl: window.location.origin + '/klaslokaal/live?student=' + encodeURIComponent(opts.studentId),
     get: async () => null, put: refuse,
-    async token() { const {data} = await db.auth.getSession(); return data.session?.access_token || ''; },
+    async token(force?: boolean) { return freshToken(db, !!force); }, // v49: renewed when (almost) expired
     iceServers: () => fetchIceServers(db, opts.studentId),
     iceStatus: () => iceStatusValue,
     switchStudent() {}, uploadRecording: async () => ({ok: false, error: t('Alleen de docent kan opnames opslaan')}),

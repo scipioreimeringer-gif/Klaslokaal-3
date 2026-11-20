@@ -3,6 +3,7 @@ import type {SupabaseClient} from '@supabase/supabase-js';
 import type {AnalysisDoc, AnalysisStatus} from './analysisTypes';
 import {relationLanguage} from './languages';
 import {t, translated, getLang} from './i18n';
+import {authFetch} from './authFetch';
 
 export type VocabItem = {id: string; student_id: string; term: string; translation: string; example: string; kind: 'word' | 'expression'; status: 'new' | 'practicing' | 'mastered'; source: 'teacher' | 'lesson' | 'ai' | 'student' | 'canvas';
   /* v35 */ lang?: string | null; pos?: string | null; /* v44 */ level?: string | null; lesson_id?: string | null; source_page?: string | null; difficult?: boolean; created_at: string; lesson_date: string | null; correct_count: number; wrong_count: number; streak: number; due_at: string; last_practiced_at: string | null};
@@ -25,8 +26,7 @@ export const VOCAB_STATUS_LABEL = translated({new: 'Nieuw', practicing: 'Aan het
 export const subjectOf = relationLanguage;
 
 export async function authedPost<T>(db: SupabaseClient, path: string, body: unknown): Promise<T> {
-  const {data} = await db.auth.getSession();
-  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + (data.session?.access_token || '')}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body} : body)});
+  const r = await authFetch(db, path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body && typeof body === 'object' && !Array.isArray(body) ? {uiLang: getLang(), ...body} : body)});
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(t((j as {error?: string}).error || '') || t('Fout {0}', r.status));
   return j as T;

@@ -21,7 +21,8 @@ test('pages/api routes export a default handler (no CommonJS module.exports / re
   }
 });
 test('classroom calls the API from the site root, never relative to /legacy/', () => {
-  assert.match(html, /return fetch\(path\.charAt\(0\) === "\/" \? path : "\/" \+ path, opts\);/);
+  assert.match(html, /var url = path\.charAt\(0\) === "\/" \? path : "\/" \+ path;/);
+  assert.match(html, /return fetch\(url, opts\); \};/);
   assert.match(html, /fetch\("\/api\/data\?ping=1"\)/);
   assert.ok(!/fetch\("api\//.test(html), 'no relative api fetch left');
 });

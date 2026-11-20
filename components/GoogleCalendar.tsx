@@ -5,6 +5,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {CalendarCheck2,RefreshCw,AlertTriangle,Unplug,Check,Loader2,Link2} from 'lucide-react';
 import {supabase} from '../lib/supabase';
+import {authFetch} from '../lib/authFetch';
 import {t,locale} from '../lib/i18n';
 import {Select} from './Select';
 
@@ -12,8 +13,7 @@ type Status={configured:boolean;migration?:boolean;connected:boolean;email?:stri
 type Cal={id:string;name:string;primary:boolean};
 
 export async function calendarApi<T>(action:string,body?:unknown):Promise<T>{
- const {data}=await supabase()!.auth.getSession();
- const r=await fetch('/api/calendar/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+(data.session?.access_token||'')},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
+ const r=await authFetch(supabase()!,'/api/calendar/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(t((j as {error?:string}).error||'')||t('Fout {0}',r.status));return j as T;
 }
 /** Ask the panel to send local changes now (after planning, moving or cancelling a lesson). */
