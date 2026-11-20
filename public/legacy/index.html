@@ -715,7 +715,16 @@ body.sl-ink .slbar{opacity:1}
 .cvimg-ctl .bar button{width:30px;height:30px;border:0;border-radius:8px;background:rgba(8,24,28,.72);color:#fff;font-size:14px;cursor:pointer}
 .cvimg-ctl .bar button[data-a="del"]:hover{background:#c0392b}
 @media(pointer:coarse){.cvimg-ctl .h{width:24px;height:24px}.cvimg-ctl .tl,.cvimg-ctl .bl{left:-13px}.cvimg-ctl .tr,.cvimg-ctl .br{right:-13px}.cvimg-ctl .tl,.cvimg-ctl .tr{top:-13px}.cvimg-ctl .bl,.cvimg-ctl .br{bottom:-13px}}
-</style>
+.slbar .slshare{display:inline-flex;align-items:center;gap:5px;width:auto;padding:0 9px;border-radius:9px;font-size:.76rem;font-weight:700}
+.slbar .slshare[aria-pressed="true"]{background:#d64534;color:#fff}
+.pipbtn[aria-pressed="true"]{background:#13A89E;color:#fff}
+#camMenu .pipauto{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:.84rem;border-top:1px solid var(--line,#e6ecef);margin-top:4px}
+/* v47: the other participant's live selection and permanent highlights in the Canvas */
+.cvsel-layer{position:absolute;inset:0;pointer-events:none;z-index:3}
+.cvsel-layer .r{position:absolute;border-radius:3px;background:var(--sel-c,rgba(74,127,212,.22));outline:1px solid var(--sel-o,rgba(74,127,212,.45))}
+.cvsel-layer .who{position:absolute;transform:translateY(-100%);font-size:10px;font-weight:700;color:#fff;background:var(--sel-o,#4a7fd4);padding:1px 6px;border-radius:6px 6px 6px 0;white-space:nowrap}
+.cv mark.hl{background:#ffe58f;border-radius:3px;padding:0 1px;cursor:pointer}
+.cv mark.hl[data-by="s"]{background:#c9f0e3}</style>
 </head><body>
 
 <header class="top">
@@ -806,7 +815,7 @@ body.sl-ink .slbar{opacity:1}
   <section class="panel" id="pSl">
     <div class="phead">
       <span class="ptitle" id="slTitle">Slides</span>
-      <button class="btn sm" id="shareBtn" data-teacher type="button" title="Deel een tabblad, venster of je hele scherm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span id="shareLbl">Scherm delen</span></button>
+      <button class="btn sm" id="shareBtn" type="button" title="Deel een tabblad, venster of je hele scherm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span id="shareLbl">Scherm delen</span></button>
       <label class="btn sm pdfbtn" data-teacher title="Pdf openen (bijv. je PowerPoint als pdf)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg><span class="pdftxt">Pdf openen</span><input type="file" id="pdfIn" accept="application/pdf" hidden></label>
       <div class="zoom-controls" aria-label="Zoom PDF of gedeeld scherm">
         <button class="ib" id="zoomOut" type="button" title="Uitzoomen">−</button>
@@ -837,7 +846,7 @@ body.sl-ink .slbar{opacity:1}
   <!-- SCHERM (v36: eigen tab; het gedeelde scherm zelf verschijnt in het slidevlak, zodat er overheen getekend kan worden) -->
   <section class="panel" id="pScr" hidden>
     <div class="phead"><span class="ptitle">Scherm delen</span></div>
-    <div class="pbody scrempty"><div><b>Er wordt nu geen scherm gedeeld.</b><span data-teacher>Deel een tabblad, venster of je hele scherm. Het videogesprek loopt gewoon door.</span><span data-student hidden>Zodra je docent een scherm deelt, zie je het hier.</span><button class="btn primary" id="scrStart" data-teacher type="button">Scherm delen</button></div></div>
+    <div class="pbody scrempty"><div><b>Er wordt nu geen scherm gedeeld.</b><span data-teacher>Deel een tabblad, venster of je hele scherm. Het videogesprek loopt gewoon door.</span><span data-student hidden>Zodra je docent een scherm deelt, zie je het hier. Je kunt ook zelf je scherm delen.</span><button class="btn primary" id="scrStart" type="button">Scherm delen</button></div></div>
   </section>
   <!-- SPELLETJES (v36: de app toont hier Flashcards, 30 Seconds en Taboe) -->
   <section class="panel" id="pGames" hidden><div class="pbody gamesbody"><div id="gamesHost"></div></div></section>
@@ -1247,8 +1256,13 @@ function onMessage(m){
     case "cvb": cvApplyBlock(m); break;
     case "cvo": cvApplyOrder(m.ids); break;
     case "cvopen": if(window.__cvRemote) window.__cvRemote(m); break;   /* v46: shared Canvas open/close (newest decision wins) */
+    case "gpanel": if(window.__klasGames) window.__klasGames(m.open); break;  /* v47: games panel follows the teacher */
+    case "cvsel": if(window.__cvSelRemote) window.__cvSelRemote(m); break;   /* v47: the other participant's live selection */
     case "slink": if(window.__slInkRemote) window.__slInkRemote(m); break;  /* v46: drawing on slides on/off (teacher decides) */
-    case "scr": if(!m.on) hideScreen(); break;
+    case "scr": /* v47: either side can share; "stop" = the other one takes over */
+      if(m.stop){ if(screenStream && !(isT && m.by === "teacher")){ stopShare(); toast(isT ? "Je leerling deelt nu het scherm" : "Je docent deelt nu het scherm"); } }
+      else if(!m.on && !screenStream && (!m.by || m.by === scrBy)) hideScreen(); /* only the screen of the one who stopped */
+      break;
     case "cvpage": var pl = $("cvPageLbl"); if(pl){ pl.textContent = String(m.title || "").slice(0, 40) + " (" + m.i + "/" + m.n + ")"; } break;
     case "recask": if(!isT){ $("recAiWrap").hidden = !m.ai; $("recAiS").checked = false; $("recOv").hidden = false; } break;
     case "recok": if(isT) recConsentReply(true, !!m.ai); break;
@@ -1504,6 +1518,13 @@ function startTeacher2(){
       conn.on("error", function(){ dropStudent(conn.peer, false); });
     });
     peer.on("call", function(c){
+      /* v47: a student shares the screen → same screen-call type as the teacher's; shown in the existing Scherm panel */
+      if(c.metadata && c.metadata.type === "screen"){
+        c.answer(); inScr[c.peer] = c;
+        c.on("stream", function(s){ showScreen(s, c.metadata.k, "student"); });
+        c.on("close", function(){ if(inScr[c.peer] === c){ delete inScr[c.peer]; if(!screenStream) hideScreen(); } });
+        watchIce(c, "scherm-" + c.peer); return;
+      }
       calls[c.peer] = c;
       if(local) c.answer(local); else c.answer();
       var name = c.metadata && c.metadata.naam ? String(c.metadata.naam).slice(0, 40) : "Leerling";
@@ -1520,9 +1541,10 @@ function startTeacher2(){
 function dropStudent(id, said){
   if(!isT || !id) return;
   var had = !!(conns[id] || calls[id] || remoteStreams[id]);
-  var c = conns[id], k = calls[id], s = scrCalls[id];
-  delete conns[id]; delete calls[id]; delete scrCalls[id]; delete remoteStreams[id]; delete ICE_ST[id];
-  [c, k, s].forEach(function(x){ try{ if(x && x.open !== false) x.close(); }catch(e){} });
+  var c = conns[id], k = calls[id], s = scrCalls[id], r = inScr[id];
+  delete conns[id]; delete calls[id]; delete scrCalls[id]; delete remoteStreams[id]; delete ICE_ST[id]; delete inScr[id];
+  [c, k, s, r].forEach(function(x){ try{ if(x && x.open !== false) x.close(); }catch(e){} });
+  if(r && !screenStream) hideScreen(); /* v47: the student's shared screen disappears with the student */
   removeRemote(id);
   if(REC.on && !online()){ recStop(); toast("Je leerling is weg: opname gestopt en opgeslagen"); }
   else if(had && said && !online()) toast("Je leerling heeft de les verlaten. Jij blijft in de les.");
@@ -1567,7 +1589,7 @@ function connectTeacher(){
   if(!peer || peer.destroyed) return;
   status("Verbinden", "Verbinden met les " + ROOM + "...");
   tConn = peer.connect(TEACHER_ID, {reliable:true, metadata:{naam:myName}});
-  tConn.on("open", function(){ joinedAt = Date.now(); send({t:"hello"}); if(window.__cvShare) window.__cvShare(); if(!$("remotes").children.length) status("Verbonden", "Wachten op het beeld van je docent..."); });
+  tConn.on("open", function(){ joinedAt = Date.now(); send({t:"hello"}); if(window.__cvShare) window.__cvShare(); if(screenStream){ var sk = screenStream; setTimeout(function(){ if(screenStream === sk){ shareTo(TEACHER_ID); send({t:"scr", on:true}); } }, 800); } /* v47: keep sharing after a reconnect */ if(!$("remotes").children.length) status("Verbonden", "Wachten op het beeld van je docent..."); });
   tConn.on("data", onMessage);
   setTimeout(function(){ if(tConn) watchIce(tConn, "data"); }, 500);
   tConn.on("close", function(){ tConn = null; removeRemote("docent"); retry(); });
@@ -1951,6 +1973,7 @@ function sendState(){
      shared explicitly (Canvas: cvopen); the teacher opening the board still sends "mode" from the button. */
   if(window.__cvShare) window.__cvShare();
   if(window.__slInkSend) window.__slInkSend();
+  if(window.__klasGamesShare) window.__klasGamesShare();
   cvSendAll();
   if(window.sendCvPage) window.sendCvPage();
   send({t:"wb", k:WB.key, list:WB.list});
@@ -1963,7 +1986,7 @@ function sendState(){
 
 
 /* =================================================================== SCHERM DELEN */
-var screenStream = null, scrCalls = {}, scrKey = null, prevSlKey = null;
+var screenStream = null, scrCalls = {}, scrKey = null, prevSlKey = null, inScr = {}, scrBy = ""; /* v47: inScr = incoming screen calls from students; scrBy = who is sharing now */
 var scrV = $("scrV");
 if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ $("shareBtn").hidden = true; }
 function fitScreen(){
@@ -1971,18 +1994,20 @@ function fitScreen(){
 }
 scrV.addEventListener("loadedmetadata", fitScreen);
 scrV.addEventListener("resize", fitScreen);
-function showScreen(stream, key){
+function showScreen(stream, key, who){
+  scrBy = who || (screenStream ? "self" : (isT ? "student" : "teacher"));
   if(window.klasZoomReset) window.klasZoomReset();
   if(!SL.screen) prevSlKey = SL.key;
   SL.screen = true; SL.key = key || "scr"; if(!objs[SL.key]) objs[SL.key] = [];
-  scrV.srcObject = stream; scrV.hidden = false; scrV.muted = isT;
+  scrV.srcObject = stream; scrV.hidden = false; scrV.muted = scrBy === "self"; /* own screen: never echo its sound */
   var p = scrV.play(); if(p && p.catch) p.catch(function(){ toast("Tik op het scherm om het geluid aan te zetten"); scrV.addEventListener("click", function(){ scrV.play(); }, {once:true}); });
-  $("slMsg").hidden = true; $("slTitle").textContent = isT ? "Jij deelt je scherm" : "Je docent deelt het scherm"; $("slInfo").textContent = "";
+  $("slMsg").hidden = true; $("slTitle").textContent = scrBy === "self" ? "Jij deelt je scherm" : scrBy === "student" ? "Je leerling deelt het scherm" : "Je docent deelt het scherm"; $("slInfo").textContent = "";
   window.__klasTab("scr", "content");
   markNew("sl"); SL.redraw(); fitScreen();
 }
 function hideScreen(){
   if(!SL.screen) return;
+  scrBy = "";
   SL.screen = false; scrV.srcObject = null; scrV.hidden = true;
   SL.aspect = 16 / 9; $("slTitle").textContent = "Slides";
   SL.show(prevSlKey, true); SL.fit(); if(mview === "scr") window.__klasTab(window.__klasPrevTab || "sl", "user"); else layout();
@@ -1994,12 +2019,20 @@ function shareTo(id){
   if(c){ scrCalls[id] = c; c.on("close", function(){ delete scrCalls[id]; }); }
 }
 function startShare(){
-  if(!peer){ toast('Klik eerst op "Start de les"'); return; }
+  if(!peer){ toast(isT ? 'Klik eerst op "Start de les"' : 'Ga eerst naar de les'); return; }
+  if(!isT && !(tConn && tConn.open)){ toast("Je bent nog niet verbonden met je docent"); return; }
+  /* v47: one shared screen at a time — taking over is a clear choice, the other side stops its own sharing */
+  if(SL.screen && !screenStream && (scrBy === "student" || scrBy === "teacher")){
+    if(!confirm(scrBy === "student" ? "Je leerling deelt nu het scherm. Wil je het overnemen?" : "Je docent deelt nu het scherm. Wil je het overnemen?")) return;
+    send({t:"scr", stop:true, by:isT ? "teacher" : "student"});
+  }
   navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15, max:24}}, audio:true}).then(function(stream){
     screenStream = stream; scrKey = "scr:" + uid();
     stream.getVideoTracks()[0].addEventListener("ended", stopShare);
-    showScreen(stream, scrKey);
-    Object.keys(conns).forEach(function(id){ if(conns[id].open) shareTo(id); });
+    showScreen(stream, scrKey, "self");
+    if(isT) Object.keys(conns).forEach(function(id){ if(conns[id].open) shareTo(id); });
+    else shareTo(TEACHER_ID);
+    send({t:"scr", on:true, by:isT ? "teacher" : "student"});
     $("shareBtn").classList.add("on"); $("shareLbl").textContent = "Stop delen";
     toast("Je deelt nu je scherm");
   }).catch(function(){ /* geannuleerd */ });
@@ -2009,7 +2042,7 @@ function stopShare(){
   var s = screenStream; screenStream = null;
   s.getTracks().forEach(function(t){ t.stop(); });
   Object.keys(scrCalls).forEach(function(id){ try{ scrCalls[id].close(); }catch(e){} });
-  scrCalls = {}; send({t:"scr", on:false});
+  scrCalls = {}; send({t:"scr", on:false, by:isT ? "teacher" : "student"});
   hideScreen();
   $("shareBtn").classList.remove("on"); $("shareLbl").textContent = "Scherm delen";
 }
@@ -3397,10 +3430,14 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
        (this is why Scherm used to bring the board along). Nothing is deleted; the others are just closed. */
     if(on && document.body.classList.contains("cam-full")) ORDER.forEach(function(x){ if(x !== k) OPEN[x] = false; });
     OPEN[k] = !!on; save(); layout();
+    /* v47: the teacher opening/closing Spelletjes opens/closes it at the student too (remote changes are never sent back) */
+    if(k === "games" && isT && why !== "remote") send({t:"gpanel", open:!!on});
     if(on && window.__camWork) window.__camWork(why || "user");
   }
   window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); if(k === "cv") cvDecide(OPEN.cv); };
   window.__klasOpen = function(){ return {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:!!OPEN.games}; };
+  window.__klasGames = function(open){ if(!isT && !!OPEN.games !== !!open) setOpen("games", !!open, "remote"); };
+  window.__klasGamesShare = function(){ if(isT) send({t:"gpanel", open:!!OPEN.games}); };
   /* compatible API for the rest of the classroom and the app: it only OPENS, never closes the others */
   window.__klasTab = function(t, why){
     if(t === "sl" || t === "scr") setOpen("scr", true, why);
@@ -3466,7 +3503,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     [mk("scr", '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>', "Scherm", "Scherm en slides (aan/uit). Verbergen stopt het delen niet."),
      mk("games", '<path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><rect x="2" y="6" width="20" height="12" rx="4"/>', "Spelletjes", "Spelletjes: Flashcards, 30 Seconds en Taboe (aan/uit)")].forEach(function(x){ mid.insertBefore(x, first); });
     /* teacher: start/stop sharing explicitly from the ⋯ menu (hiding the panel never stops the stream) */
-    if(isT && dm){
+    if(dm){ /* v47: students can share their screen too */
       var shareItem = document.createElement("button"); shareItem.type = "button"; shareItem.id = "v40Share";
       shareItem.addEventListener("click", function(){ dm.open = false; if(screenStream) stopShare(); else if(peer){ setOpen("scr", true, "user"); startShare(); } else toast("Start eerst de les; daarna kun je je scherm delen."); });
       dm.querySelector(".menu-pop").insertBefore(shareItem, dm.querySelector(".menu-pop").firstChild);
@@ -3942,6 +3979,138 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   });
   setInterval(function(){ if(sel) place(); }, 700);
   window.__cvImages = {ok:ok, insert:insertImage};
+})();
+
+/* =================================================================== v47: SCREEN SHARE BUTTON (both roles) + PICTURE-IN-PICTURE */
+(function(){
+  /* a visible "Scherm delen" in the screen bar for teacher AND student (the same existing startShare/stopShare) */
+  var bar = document.querySelector("#pSl .slbar");
+  if(bar && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia){
+    var b = document.createElement("button"); b.type = "button"; b.className = "ib slshare"; b.id = "slShareBtn";
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span class="lbl"></span>';
+    bar.insertBefore(b, bar.firstChild);
+    b.addEventListener("click", function(){ if(screenStream) stopShare(); else startShare(); });
+    var upd = function(){ var on = !!screenStream; b.querySelector(".lbl").textContent = on ? "Stop delen" : "Scherm delen"; b.setAttribute("aria-pressed", on ? "true" : "false"); b.title = on ? "Stop met je scherm delen" : "Deel een tabblad, venster of je hele scherm (camera en microfoon blijven aan)"; };
+    setInterval(upd, 800); upd();
+  }
+
+  /* ---- Picture-in-Picture: both cameras in a small floating window above other tabs and apps (Chrome/Edge:
+     Document Picture-in-Picture). It only SHOWS the existing streams (muted copies: the sound keeps playing in the
+     classroom); the call, camera and microphone are never touched. Manual button + optional automatic opening when
+     the tab is left (the browser decides whether that is allowed). */
+  var host = (function(){ try{ return window.parent && window.parent !== window && window.parent.document ? window.parent : window; }catch(e){ return window; } })();
+  var dpip = (function(){ try{ return host.documentPictureInPicture || null; }catch(e){ return null; } })();
+  var pipWin = null, autoOpened = false, KEY = "klas-pip-auto";
+  function autoOn(){ var v = store(KEY); return v !== false; }
+  function sources(){
+    var list = [];
+    Array.prototype.forEach.call($("remotes").querySelectorAll("video"), function(v){ if(v.srcObject) list.push({s:v.srcObject, name:(document.querySelector(".vname-r") || {}).textContent || (isT ? "Leerling" : "Docent"), self:false}); });
+    var me = $("selfV"); if(me && me.srcObject) list.push({s:me.srcObject, name:"Jij", self:true});
+    return list;
+  }
+  function render(){
+    if(!pipWin) return; var d = pipWin.document, box = d.getElementById("pip"); if(!box) return;
+    var src = sources(), vids = box.querySelectorAll("figure");
+    if(vids.length !== src.length){ box.innerHTML = ""; src.forEach(function(){ var f = d.createElement("figure"), v = d.createElement("video"), c = d.createElement("figcaption"); v.autoplay = true; v.muted = true; v.playsInline = true; f.appendChild(v); f.appendChild(c); box.appendChild(f); }); vids = box.querySelectorAll("figure"); }
+    src.forEach(function(x, i){ var f = vids[i], v = f.querySelector("video"); if(v.srcObject !== x.s){ v.srcObject = x.s; var p = v.play(); if(p && p.catch) p.catch(function(){}); } v.style.transform = x.self ? "scaleX(-1)" : ""; f.querySelector("figcaption").textContent = x.name; });
+    box.className = src.length > 1 ? "two" : "one";
+    if(!src.length) box.innerHTML = '<p class="empty">Nog geen video</p>';
+  }
+  function build(w){
+    var d = w.document;
+    d.title = "TeachyRooms";
+    var st = d.createElement("style");
+    st.textContent = "html,body{margin:0;height:100%;background:#0b1514;font-family:system-ui,sans-serif}#pip{display:flex;flex-direction:column;gap:3px;height:100%}#pip figure{position:relative;margin:0;flex:1 1 0;min-height:0}#pip video{width:100%;height:100%;object-fit:cover;display:block;background:#000}#pip figcaption{position:absolute;left:6px;top:6px;padding:2px 8px;border-radius:999px;background:rgba(8,24,28,.62);color:#fff;font-size:12px;font-weight:600}#pip .empty{color:#9fb3b0;text-align:center;margin:auto}";
+    d.head.appendChild(st);
+    var box = d.createElement("div"); box.id = "pip"; d.body.appendChild(box);
+    render();
+  }
+  function fallback(){
+    var v = $("remotes").querySelector("video") || $("selfV");
+    if(v && v.srcObject && document.pictureInPictureEnabled && v.requestPictureInPicture){ v.requestPictureInPicture().catch(function(){ toast("Een zwevend videovenster is in deze browser niet beschikbaar."); }); }
+    else toast("Een zwevend videovenster is in deze browser niet beschikbaar.");
+  }
+  function openPip(auto){
+    if(pipWin){ try{ pipWin.close(); }catch(e){} return; }
+    if(!peer){ toast(isT ? 'Klik eerst op "Start de les"' : "Ga eerst naar de les"); return; }
+    if(!dpip){ if(!auto) fallback(); return; }
+    dpip.requestWindow({width:300, height:sources().length > 1 ? 380 : 220}).then(function(w){
+      pipWin = w; autoOpened = !!auto; build(w); pipBtn.setAttribute("aria-pressed", "true");
+      w.addEventListener("pagehide", function(){ pipWin = null; autoOpened = false; pipBtn.setAttribute("aria-pressed", "false"); });
+    }).catch(function(){ if(!auto) fallback(); });
+  }
+  setInterval(render, 1000);
+  /* back on TeachyRooms: an automatically opened window closes again (the classroom shows the cameras itself) */
+  host.document.addEventListener("visibilitychange", function(){ if(host.document.visibilityState === "visible" && pipWin && autoOpened){ try{ pipWin.close(); }catch(e){} } });
+  /* automatic: Chrome lets video-call pages open their window when the tab is left (Media Session) */
+  try{ if(host.navigator.mediaSession && host.navigator.mediaSession.setActionHandler) host.navigator.mediaSession.setActionHandler("enterpictureinpicture", function(){ if(autoOn() && peer && !pipWin) openPip(true); }); }catch(e){ /* not supported: manual button only */ }
+
+  /* manual button in the video window header + on/off for the automatic window in the camera menu */
+  var head = $("camPin") ? $("camPin").parentNode : null;
+  var pipBtn = document.createElement("button"); pipBtn.type = "button"; pipBtn.className = "ib pipbtn"; pipBtn.id = "pipBtn";
+  pipBtn.title = "Zwevend videovenster (blijft zichtbaar als je naar een ander tabblad gaat)"; pipBtn.setAttribute("aria-label", "Zwevend videovenster"); pipBtn.setAttribute("aria-pressed", "false");
+  pipBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1" fill="currentColor"/></svg>';
+  pipBtn.addEventListener("click", function(){ openPip(false); });
+  if(head) head.insertBefore(pipBtn, $("camPin"));
+  var menu = $("camMenu");
+  if(menu && (dpip || document.pictureInPictureEnabled)){
+    var lab = document.createElement("label"); lab.className = "pipauto";
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = autoOn(); cb.id = "pipAuto";
+    cb.addEventListener("change", function(){ store(KEY, cb.checked); toast(cb.checked ? "Zwevend venster opent automatisch bij een ander tabblad" : "Zwevend venster alleen nog via de knop"); });
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(" Automatisch zwevend venster bij een ander tabblad")); menu.appendChild(lab);
+  }
+  if(!dpip && !document.pictureInPictureEnabled) pipBtn.hidden = true;
+  window.__pip = {open:openPip, supported:!!dpip};
+})();
+
+/* =================================================================== v47: LIVE SELECTION IN THE CANVAS
+   What the other participant selects is drawn as a soft overlay with their name (teacher blue, student green). Only
+   the position is sent (block id + character offsets), debounced and only when it changes; the overlay never touches
+   your own cursor, selection or text. Permanent highlights are the existing "Markeerkleur" (saved in the text itself,
+   so they move with edits and sync/persist like all Canvas text; "Geen" removes them). */
+(function(){
+  if(!CV) return;
+  var holder = CV.parentNode; if(getComputedStyle(holder).position === "static") holder.style.position = "relative";
+  var layer = document.createElement("div"); layer.className = "cvsel-layer"; layer.setAttribute("aria-hidden", "true"); holder.appendChild(layer);
+  var other = isT ? {name:"Leerling", c:"rgba(61,154,91,.22)", o:"rgba(47,133,80,.85)"} : {name:"Docent", c:"rgba(74,127,212,.22)", o:"rgba(58,108,192,.85)"};
+  layer.style.setProperty("--sel-c", other.c); layer.style.setProperty("--sel-o", other.o);
+  function offsetIn(block, node, off){ var r = document.createRange(); r.selectNodeContents(block); try{ r.setEnd(node, off); }catch(e){ return 0; } return r.toString().length; }
+  function pointAt(block, off){
+    var w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT), n, left = off;
+    while((n = w.nextNode())){ if(left <= n.length) return {node:n, off:left}; left -= n.length; }
+    return {node:block, off:block.childNodes.length};
+  }
+  var blockOf = function(n){ var e = n && (n.nodeType === 1 ? n : n.parentNode); e = e && e.closest ? e.closest(".b") : null; return e && e.parentNode === CV ? e : null; };
+  /* send mine */
+  var last = "null", tm = null;
+  function current(){
+    var s = window.getSelection(); if(!s || !s.rangeCount || s.isCollapsed) return null;
+    var r = s.getRangeAt(0), a = blockOf(r.startContainer), b = blockOf(r.endContainer); if(!a || !b) return null;
+    return {a:[a.getAttribute("data-id"), offsetIn(a, r.startContainer, r.startOffset)], b:[b.getAttribute("data-id"), offsetIn(b, r.endContainer, r.endOffset)]};
+  }
+  document.addEventListener("selectionchange", function(){
+    clearTimeout(tm); tm = setTimeout(function(){ var s = current(), k = JSON.stringify(s); if(k === last) return; last = k; send({t:"cvsel", s:s}); }, 120);
+  });
+  /* draw theirs */
+  var theirs = null;
+  function draw(){
+    layer.innerHTML = ""; if(!theirs || $("pCv").hidden) return;
+    var A = CV.querySelector('[data-id="' + String(theirs.a[0]).replace(/[^a-z0-9]/gi, "") + '"]'), B = CV.querySelector('[data-id="' + String(theirs.b[0]).replace(/[^a-z0-9]/gi, "") + '"]');
+    if(!A || !B) return;
+    var p = pointAt(A, +theirs.a[1] || 0), q = pointAt(B, +theirs.b[1] || 0), r = document.createRange();
+    try{ r.setStart(p.node, p.off); r.setEnd(q.node, q.off); }catch(e){ return; }
+    var base = holder.getBoundingClientRect(), rects = Array.prototype.slice.call(r.getClientRects()).filter(function(x){ return x.width > 0.5 && x.height > 0.5; }).slice(0, 60);
+    rects.forEach(function(x, i){
+      var d = document.createElement("div"); d.className = "r";
+      d.style.left = (x.left - base.left + holder.scrollLeft) + "px"; d.style.top = (x.top - base.top + holder.scrollTop) + "px"; d.style.width = x.width + "px"; d.style.height = x.height + "px";
+      layer.appendChild(d);
+      if(!i){ var w = document.createElement("span"); w.className = "who"; w.textContent = other.name; w.style.left = d.style.left; w.style.top = d.style.top; layer.appendChild(w); }
+    });
+  }
+  window.__cvSelRemote = function(m){ theirs = m && m.s && Array.isArray(m.s.a) && Array.isArray(m.s.b) ? m.s : null; draw(); };
+  window.addEventListener("resize", draw); holder.addEventListener("scroll", draw); document.addEventListener("scroll", draw, true);
+  if(window.MutationObserver) new MutationObserver(function(){ if(theirs) requestAnimationFrame(draw); }).observe(CV, {childList:true, subtree:true, characterData:true});
+  setInterval(function(){ if(theirs) draw(); }, 1500);
 })();
 
 })();

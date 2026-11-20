@@ -45,7 +45,7 @@ test('pre-join check reuses its stream (one permission prompt) and never blocks 
 });
 test('screen sharing gets its own tab and says who shares', () => {
   assert.match(html, /window\.__klasTab\("scr", "content"\)/);
-  assert.match(html, /"Jij deelt je scherm" : "Je docent deelt het scherm"/);
+  assert.match(html, /scrBy === "self" \? "Jij deelt je scherm" : scrBy === "student" \? "Je leerling deelt het scherm" : "Je docent deelt het scherm"/, 'v47: student can share too');
 });
 test('new classroom texts are translated', () => {
   const i18n = readFileSync(path.join(root, 'public/legacy/i18n.js'), 'utf8');

@@ -61,15 +61,22 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
 
  /* ---------- messages from the other player ---------- */
  const newRound=useRef<(c?:number,f?:{level:BankLevelSel;cat:BankCatSel})=>Promise<void>>(async()=>{});
+ const opened=useRef('');
+ // v47: teacher reloaded during a game → the restored game opens its panel again (and therefore at the student too)
+ useEffect(()=>{if(host&&mount&&ref.current&&ref.current.phase!=='ended'&&!opened.current){opened.current='restored';onOpen()}},[host,mount,onOpen]);
  useEffect(()=>{const b=bridge();if(!b)return;
   b.onGame=(raw:unknown)=>{const m=raw as Msg;if(!m||m.t!=='game')return;
    if(host&&m.k==='act'){if((m.a as {a:string}).a==='newround')void newRound.current();else apply(m.a as Action,'student')}
-   if(!host&&m.k==='state'){const s=fromWire(m,Date.now());setState(s);if(s.phase!=='ended')onOpen()}};
+   // v47: open the panel at the student once per game/round (not on every state update: a panel the student closed
+   // on purpose must not jump open again with every timer tick); the timer always follows the host's state
+   if(!host&&m.k==='state'){const s=fromWire(m,Date.now());setState(s);const k=s.id+':'+s.round+':'+(s.phase==='ended'?'end':'on');if(s.phase!=='ended'&&opened.current!==k){opened.current=k;onOpen()}if(s.phase==='ended')opened.current=k}};
   if(host)b.onPeerHello=()=>broadcast(ref.current); // student (re)connected: send the current state again
   return()=>{if(b.onGame)b.onGame=undefined;if(host)b.onPeerHello=undefined}},[host,apply,broadcast,onOpen]);
 
  /* ---------- timer ---------- */
- useEffect(()=>{const id=setInterval(()=>{setNow(Date.now());if(host&&ref.current?.phase==='running')apply({a:'tick'},'teacher')},250);return()=>clearInterval(id)},[host,apply]);
+ // v47: one timer — the host's start/end. The host re-sends the state every 4 s while the clock runs, so the student's
+ // display is corrected continuously (latency, a hidden tab, a reconnect) instead of drifting on its own.
+ useEffect(()=>{let last=0;const id=setInterval(()=>{const t=Date.now();setNow(t);if(host&&ref.current?.phase==='running'){apply({a:'tick'},'teacher');if(t-last>4000){last=t;broadcast(ref.current)}}},250);return()=>clearInterval(id)},[host,apply,broadcast]);
 
  /* ---------- teacher: words + suggestions ---------- */
  const loadWords=useCallback(async()=>{const db=supabase()!;
