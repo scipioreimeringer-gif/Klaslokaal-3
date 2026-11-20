@@ -1068,3 +1068,23 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .hw-prog{position:relative}.hw-prog::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;border-radius:99px;background:#eef1f4;z-index:0}.hw-prog>span{position:relative;z-index:1;box-shadow:none;justify-self:start}
 .hw-prog small{font-size:11px;color:var(--muted,#6b7a86)}
 @media(max-width:640px){.hw-head44{grid-template-columns:auto minmax(0,1fr)}.hw-prog{grid-column:1/-1;width:100%}}
+/* v45: clickable student (profile) and lesson (details) in "Volgende les" and "Daarna" */
+.who-link{display:inline-flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none;border-radius:12px;padding:2px 6px 2px 2px;margin:-2px 0 -2px -2px;transition:background .15s ease}
+.who-link:hover,.who-link:focus-visible{background:var(--teal-50)}.who-link:hover .who-name{text-decoration:underline;text-underline-offset:3px}
+.when-link{color:inherit;text-decoration:none;border-radius:8px}.when-link:hover{color:var(--teal-600);text-decoration:underline;text-underline-offset:3px}
+.after-row{grid-template-columns:minmax(0,1fr) auto auto!important;padding:4px 6px}
+.after-row .ar-lesson{display:inline-flex;align-items:center;gap:8px;color:inherit;text-decoration:none;border-radius:10px;padding:6px 8px;min-height:36px;transition:background .15s ease}
+.after-row .ar-lesson:hover,.after-row .ar-lesson:focus-visible{background:var(--teal-50)}
+.after-row .ar-open{width:36px;height:36px}
+@media(max-width:640px){.after-row .ar-lesson .ar-count{display:none}}
+
+/* ===== v45: Google Calendar status in the agenda ===== */
+.gcal-bar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px}
+.gcal-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #bfe5dc;border-radius:999px;background:var(--teal-50);color:#0b6b63;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:background .15s ease}
+.gcal-chip:hover{background:#d7f1ec}.gcal-chip.off{cursor:default;background:#f3f5f7;border-color:var(--line,#e6ecef);color:var(--ink-2)}
+.gcal-chip.err{background:#fff4e0;border-color:#f3d9a6;color:#8a5200}
+.gcal-sub{font-weight:550;color:var(--muted,#6b7a86);font-size:12px}
+.gcal-err{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:#8a5200}
+.gcal-err .linklike{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.gcal-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:min(420px,calc(100vw - 32px));display:grid;gap:10px;padding:14px;border:1px solid var(--line,#e6ecef);border-radius:14px;background:#fff;box-shadow:0 12px 32px rgba(15,60,70,.14)}
+.gcal-pop p{margin:0}
