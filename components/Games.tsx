@@ -20,6 +20,7 @@ type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidde
 type Msg={t:'game';k:'state';s:GameState}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'}};
 const frame=()=>document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;
 function send(m:unknown){try{(frame()?.contentWindow as unknown as {__klasGameSend?:(m:unknown)=>void}|null)?.__klasGameSend?.(m)}catch{/* classroom not ready */}}
+function online(){try{return !!(frame()?.contentWindow as unknown as {__klasOnline?:()=>boolean}|null)?.__klasOnline?.()}catch{return false}}
 const KIND_LABEL:Record<Kind,string>={flash:'Flashcards',thirty:'30 Seconds',taboo:'Taboe'};
 const KIND_ICON:Record<Kind,ReactNode>={flash:<Brain size={18}/>,thirty:<Timer size={18}/>,taboo:<Target size={18}/>};
 const KIND_HINT:Record<Kind,string>={flash:'Omdraaien en oefenen',thirty:'Leg zoveel mogelijk woorden uit',taboo:'Uitleggen zonder verboden woorden'};
@@ -74,8 +75,10 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
   const onHello=()=>{if(host)broadcast(ref.current)}; // student (re)connected: send the current state again
   window.addEventListener('teachy-game',onMsg);window.addEventListener('teachy-peer-hello',onHello);
   return()=>{window.removeEventListener('teachy-game',onMsg);window.removeEventListener('teachy-peer-hello',onHello)}},[host,apply,broadcast,onOpen]);
- // student without a state: ask the teacher (now and every 3 s, at most 10 times) until the game state arrives
- useEffect(()=>{if(host||state)return;let n=0;const ask=()=>{if(n++<10)send({t:'game',k:'act',a:{a:'sync'}})};ask();const id=setInterval(ask,3000);return()=>clearInterval(id)},[host,state]);
+ // student without a state: ask the teacher every 4 s while connected (a few bytes) until the game state arrives,
+ // so a game started before the student joined, or a lost message, never leaves the student waiting
+ const [linked,setLinked]=useState(true);
+ useEffect(()=>{if(host||state)return;const ask=()=>{const on=online();setLinked(on);if(on)send({t:'game',k:'act',a:{a:'sync'}})};ask();const id=setInterval(ask,4000);return()=>clearInterval(id)},[host,state]);
 
  /* ---------- timer ---------- */
  // v47: one timer — the host's start/end. The host re-sends the state every 4 s while the clock runs, so the student's
@@ -143,7 +146,7 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
 
  /* ---------- no game yet ---------- */
  if(!state||state.phase==='ended'&&!host){
-  if(!host)return <aside className={'games-panel gx gx-'+accent} aria-live="polite">{head}<div className="gx-wait"><Deco/><p>{state?.phase==='ended'?tt('Het spel is afgelopen.'):tt('Je docent start zo een spel.')}</p>{state&&<Score s={state}/>}</div></aside>;
+  if(!host)return <aside className={'games-panel gx gx-'+accent} aria-live="polite">{head}<div className="gx-wait"><Deco/><p>{state?.phase==='ended'?tt('Het spel is afgelopen.'):linked?tt('Je docent start zo een spel.'):tt('Nog niet verbonden met je docent. Het spel verschijnt zodra de verbinding er is.')}</p>{state&&<Score s={state}/>}</div></aside>;
  }
  if(host&&(!state||state.phase==='ended')){
   const srcOpts=[{value:'bank' as Source,label:tt('Willekeurig'),icon:<Dices size={15}/>,hint:bankOk?tt('ingebouwde woordenbank'):tt('geen woordenbank voor deze taal'),disabled:!bankOk},

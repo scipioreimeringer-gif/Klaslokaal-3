@@ -1331,4 +1331,5 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Zeg de zin goed": ["Say the sentence correctly","Diga a frase corretamente","Di la frase correctamente","Dis la phrase correctement","Sag den Satz richtig"],
  "Verbeter de zin": ["Correct the sentence","Corrija a frase","Corrige la frase","Corrige la phrase","Verbessere den Satz"],
  "Welke zin is goed?": ["Which sentence is correct?","Qual frase está correta?","¿Qué frase es correcta?","Quelle phrase est correcte ?","Welcher Satz ist richtig?"],
+ "Nog niet verbonden met je docent. Het spel verschijnt zodra de verbinding er is.": ["Not connected to your teacher yet. The game appears as soon as the connection is there.","Ainda não conectado ao seu professor. O jogo aparece assim que houver conexão.","Aún no estás conectado con tu profesor. El juego aparece en cuanto haya conexión.","Pas encore connecté à ton professeur. Le jeu apparaît dès que la connexion est établie.","Noch nicht mit deiner Lehrkraft verbunden. Das Spiel erscheint, sobald die Verbindung steht."],
 };

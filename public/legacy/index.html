@@ -1133,7 +1133,7 @@ var params = new URLSearchParams(location.search);
 function bridge(){ try{ return (window.parent !== window && window.parent.teachyBridge) || null; }catch(e){ return null; } }
 var SB = params.get("sb") === "1" && !!bridge();
 /* v35: word games run in the app (parent page); they use this data channel. Only the explaining player ever loads cards. */
-window.__klasGameSend = function(m){ if(m && m.t === "game") sendBig(m); }; /* v47 fix: large game states (flashcards) are split like other large messages */
+window.__klasGameSend = function(m){ if(m && m.t === "game") send(m); }; /* v48: one message (the data channel splits large ones itself) */
 /* v47 fix: game messages reach the app through ONE window event (does not depend on which bridge object exists) */
 function gameEvent(name, m){ try{ var w = window.parent && window.parent !== window ? window.parent : window; w.dispatchEvent(new w.CustomEvent(name, {detail:m})); }catch(e){} }
 window.__klasOnline = function(){ return online(); };
@@ -1227,11 +1227,16 @@ var netRoute = "";
 
 function online(){ return isT ? Object.keys(conns).some(function(id){ return conns[id].open; }) : !!(tConn && tConn.open); }
 function send(m){ if(!online()) return; queue.push(m); if(!sending) pump(); }
+/* v48: normal messages go out at once, in order. Only the pieces of large files/messages are paced, and not in a
+   hidden tab: there the browser delays timers to once per second or even once per minute, which held back every
+   message behind it (testing teacher + student in two tabs = one of them is always hidden). The data channel itself
+   buffers what it cannot send yet. */
 function pump(){
-  if(!queue.length || !online()){ sending = false; if(!online()) queue = []; return; }
-  sending = true; var m = queue.shift();
-  deliver(m, null);
-  setTimeout(pump, (m.t === "chunk" || m.t === "big") ? 4 : 0);
+  while(queue.length && online()){
+    var m = queue.shift(); deliver(m, null);
+    if((m.t === "chunk" || m.t === "big") && queue.length && !document.hidden){ sending = true; setTimeout(pump, 4); return; }
+  }
+  sending = false; if(!online()) queue = [];
 }
 function deliver(m, except){
   if(isT){ Object.keys(conns).forEach(function(id){ var c = conns[id]; if(c.open && id !== except){ try{ c.send(m); }catch(e){} } }); }
@@ -1258,7 +1263,8 @@ function onMessage(m){
     case "cvb": cvApplyBlock(m); break;
     case "cvo": cvApplyOrder(m.ids); break;
     case "cvopen": if(window.__cvRemote) window.__cvRemote(m); break;   /* v46: shared Canvas open/close (newest decision wins) */
-    case "gpanel": if(window.__klasGames) window.__klasGames(m.open); break;  /* v47: games panel follows the teacher */
+    case "gpanel": if(window.__klasGames) window.__klasGames(m.open); break;  /* v47 (older version) */
+    case "panels": if(window.__psRemote) window.__psRemote(m.s); break;       /* v48: shared panels, both directions */
     case "cvsel": if(window.__cvSelRemote) window.__cvSelRemote(m); break;   /* v47: the other participant's live selection */
     case "slink": if(window.__slInkRemote) window.__slInkRemote(m); break;  /* v46: drawing on slides on/off (teacher decides) */
     case "scr": /* v47: either side can share; "stop" = the other one takes over */
@@ -1975,7 +1981,6 @@ function sendState(){
      shared explicitly (Canvas: cvopen); the teacher opening the board still sends "mode" from the button. */
   if(window.__cvShare) window.__cvShare();
   if(window.__slInkSend) window.__slInkSend();
-  if(window.__klasGamesShare) window.__klasGamesShare();
   cvSendAll();
   if(window.sendCvPage) window.sendCvPage();
   send({t:"wb", k:WB.key, list:WB.list});
@@ -3411,21 +3416,35 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   $("pScr").hidden = true; var gb = $("gamesBtn"); if(gb) gb.hidden = true;
 
   var ORDER = ["cv", "wb", "scr", "games"], PANEL = {cv:pCv, wb:pWb, scr:pSl, games:pGames}, lastVis = -1;
-  var OPEN = store("klas-open");
+  var OPEN = store("klas-open-" + (isT ? "t" : "s"));
   if(!OPEN || typeof OPEN !== "object"){ var mv = store("klas-tab"); OPEN = {cv:true, wb:false, scr:mv === "sl" || mv === "both" || mv === "scr", games:false}; } /* v46: first visit = Canvas only */
   OPEN.games = false; /* games open when a game starts or on a click */
   /* v46: SHARED CANVAS. On entering, the Canvas is open for teacher and student. A deliberate open/close (dock button
      or X) is stored with a timestamp and sent to the other side; the newest deliberate decision wins, also after a refresh
      or reconnect (both sides send theirs on connecting). Changes that arrive from the other side are applied without
      being sent back, so there are no loops; a deliberate close is never undone by the automatic opening. */
-  var CVK = "klas-cvs-" + (ROOM || "x");
-  function cvShared(){ var s = store(CVK); return s && s.at && Date.now() - s.at < 6 * 3600e3 ? s : null; }
-  var cvs0 = cvShared(); OPEN.cv = cvs0 ? !!cvs0.open : true;
-  function cvDecide(open){ var s = {open:!!open, at:Date.now()}; store(CVK, s); send({t:"cvopen", open:s.open, at:s.at}); }
-  window.__cvRemote = function(m){ var s = cvShared(), at = +m.at || 0; if(!at || (s && s.at >= at)) return; store(CVK, {open:!!m.open, at:at}); if(!!OPEN.cv !== !!m.open) setOpen("cv", !!m.open, "remote"); };
-  window.__cvShare = function(){ var s = cvShared(); if(s) send({t:"cvopen", open:s.open, at:s.at}); };
+  /* v48: SHARED PANELS (Canvas, Bord, Spelletjes) in BOTH directions. Every deliberate open/close (dock button, X, menu)
+     is stored with a timestamp and sent; the newest deliberate decision wins on both sides. The state is sent again on
+     (re)connecting and every 15 s (a few bytes), so a lost message never leaves the two screens different. Remote changes
+     are applied without being sent back (no loops). The storage key includes the role, so a teacher and a student tab in
+     the SAME browser (testing alone) no longer read each other's decisions as their own. */
+  var SHARED = ["cv", "wb", "games"], PSK = "klas-ps-" + (isT ? "t" : "s") + "-" + (ROOM || "x");
+  var PS = (function(){ var s = store(PSK); return s && typeof s === "object" ? s : {}; })();
+  function psFresh(x){ return !!(x && x.at && Date.now() - x.at < 6 * 3600e3); }
+  OPEN.cv = psFresh(PS.cv) ? !!PS.cv.open : true;
+  if(psFresh(PS.wb)) OPEN.wb = !!PS.wb.open;
+  function psDecide(k, open){ if(SHARED.indexOf(k) < 0) return; PS[k] = {open:!!open, at:Date.now()}; store(PSK, PS); var o = {}; o[k] = PS[k]; send({t:"panels", s:o}); }
+  function psAll(){ var o = {}, n = 0; SHARED.forEach(function(k){ if(psFresh(PS[k])){ o[k] = PS[k]; n++; } }); if(n) send({t:"panels", s:o}); }
+  window.__psRemote = function(s){
+    if(!s || typeof s !== "object") return;
+    SHARED.forEach(function(k){ var x = s[k], at = x && +x.at || 0; if(!at || (PS[k] && PS[k].at >= at)) return;
+      PS[k] = {open:!!x.open, at:at}; store(PSK, PS); if(!!OPEN[k] !== !!x.open) setOpen(k, !!x.open, "remote"); });
+  };
+  window.__cvRemote = function(m){ window.__psRemote({cv:{open:m.open, at:m.at}}); }; /* older classroom version */
+  window.__cvShare = psAll;
+  setInterval(function(){ if(online()) psAll(); }, 15000);
   function gamesOn(){ var b = bridge(); return !!(SB && b && b.ui && b.ui.games); }
-  function save(){ store("klas-open", {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:false}); }
+  function save(){ store("klas-open-" + (isT ? "t" : "s"), {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:false}); }
   function setOpen(k, on, why){
     if(!PANEL[k] || (k === "games" && on && !gamesOn())) return;
     /* v42: panels "open" behind the full video were not visible: opening one shows ONLY that one
@@ -3433,13 +3452,12 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     if(on && document.body.classList.contains("cam-full")) ORDER.forEach(function(x){ if(x !== k) OPEN[x] = false; });
     OPEN[k] = !!on; save(); layout();
     /* v47: the teacher opening/closing Spelletjes opens/closes it at the student too (remote changes are never sent back) */
-    if(k === "games" && isT && why !== "remote") send({t:"gpanel", open:!!on});
+    if(why === "user") psDecide(k, !!on); /* v48: deliberate choices are shared (both directions) */
     if(on && window.__camWork) window.__camWork(why || "user");
   }
-  window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); if(k === "cv") cvDecide(OPEN.cv); };
+  window.__klasToggle = function(k, on){ setOpen(k, on === undefined ? !OPEN[k] : !!on, "user"); };
   window.__klasOpen = function(){ return {cv:!!OPEN.cv, wb:!!OPEN.wb, scr:!!OPEN.scr, games:!!OPEN.games}; };
-  window.__klasGames = function(open){ if(!isT && !!OPEN.games !== !!open) setOpen("games", !!open, "remote"); };
-  window.__klasGamesShare = function(){ if(isT) send({t:"gpanel", open:!!OPEN.games}); };
+  window.__klasGames = function(open){ if(!isT && !!OPEN.games !== !!open) setOpen("games", !!open, "remote"); }; /* older classroom version */
   /* compatible API for the rest of the classroom and the app: it only OPENS, never closes the others */
   window.__klasTab = function(t, why){
     if(t === "sl" || t === "scr") setOpen("scr", true, why);
@@ -3525,7 +3543,6 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
       return;
     }
     setOpen(k, full ? true : !OPEN[k], "user");
-    if(k === "cv") cvDecide(OPEN.cv);
     if(OPEN[k] && isT && (k === "cv" || k === "wb")) send({t:"mode", m:k});
   }
   function sync(){
@@ -3567,7 +3584,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     var x = document.createElement("button"); x.type = "button"; x.className = "pclose43"; x.setAttribute("data-close", k);
     x.title = label; x.setAttribute("aria-label", label);
     x.innerHTML = SVG('<path d="M18 6 6 18M6 6l12 12"/>');
-    x.addEventListener("click", function(e){ e.stopPropagation(); if(k === "wb" && document.body.classList.contains("wb-max")) wbMax(false); if(k === "scr") { if(OPEN.scr) toggle("scr"); } else { setOpen(k, false); if(k === "cv") cvDecide(false); } });
+    x.addEventListener("click", function(e){ e.stopPropagation(); if(k === "wb" && document.body.classList.contains("wb-max")) wbMax(false); if(k === "scr") { if(OPEN.scr) toggle("scr"); } else setOpen(k, false, "user"); });
     return x;
   }
   /* placed in the toolbar each panel really shows (the v40 floating bars; the old .phead rows are hidden) */

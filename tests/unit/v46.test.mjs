@@ -11,13 +11,12 @@ const html = read('public/legacy/index.html');
 const fnSrc = name => { const i = html.indexOf('function ' + name + '('); let d = 0, j = html.indexOf('{', i); for (let k = j; k < html.length; k++) { if (html[k] === '{') d++; else if (html[k] === '}' && --d === 0) return html.slice(i, k + 1); } };
 
 test('Canvas: open for both on entering; deliberate open/close shared, newest decision wins, no echo', () => {
-  assert.match(html, /var cvs0 = cvShared\(\); OPEN\.cv = cvs0 \? !!cvs0\.open : true;/);
-  assert.match(html, /function cvDecide\(open\)\{ var s = \{open:!!open, at:Date\.now\(\)\}; store\(CVK, s\); send\(\{t:"cvopen", open:s\.open, at:s\.at\}\); \}/);
-  assert.match(html, /window\.__cvRemote = function\(m\)\{ var s = cvShared\(\), at = \+m\.at \|\| 0; if\(!at \|\| \(s && s\.at >= at\)\) return;/, 'older or equal decisions are ignored');
-  assert.match(html, /setOpen\("cv", !!m\.open, "remote"\); \};/, 'remote changes are applied without being sent back');
-  assert.match(html, /if\(k === "cv"\) cvDecide\(OPEN\.cv\);/);
-  assert.match(html, /else \{ setOpen\(k, false\); if\(k === "cv"\) cvDecide\(false\); \}/, 'the X is a deliberate close');
-  assert.match(html, /case "cvopen": if\(window\.__cvRemote\) window\.__cvRemote\(m\); break;/);
+  // v48: generalised to shared panels (Canvas, Bord, Spelletjes) in both directions — see v48-sync.test.mjs
+  assert.match(html, /OPEN\.cv = psFresh\(PS\.cv\) \? !!PS\.cv\.open : true;/);
+  assert.match(html, /if\(!at \|\| \(PS\[k\] && PS\[k\]\.at >= at\)\) return;/, 'older or equal decisions are ignored');
+  assert.match(html, /setOpen\(k, !!x\.open, "remote"\);/, 'remote changes are applied without being sent back');
+  assert.match(html, /else setOpen\(k, false, "user"\); \}\);/, 'the X is a deliberate close');
+  assert.match(html, /case "cvopen": if\(window\.__cvRemote\) window\.__cvRemote\(m\); break;/, 'an older classroom version is still understood');
   assert.match(html, /tConn\.on\("open", function\(\)\{ joinedAt = Date\.now\(\); send\(\{t:"hello"\}\); if\(window\.__cvShare\) window\.__cvShare\(\);/, 'the student shares its decision on (re)connect');
   const ss = fnSrc('sendState');
   assert.match(ss, /if\(window\.__cvShare\) window\.__cvShare\(\);/);

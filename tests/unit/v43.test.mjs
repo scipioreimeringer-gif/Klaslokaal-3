@@ -106,7 +106,7 @@ test('classroom: X on Canvas/Bord/Scherm uses the same OPEN state as the dock; b
   assert.match(html, /\[\["cv", pCv\.querySelector\("\.cvtb"\) \|\| cvHead, "Canvas sluiten"\], \["wb", wbGrp, "Bord sluiten"\], \["scr", pSl\.querySelector\("\.slbar"\) \|\| pSl\.querySelector\("\.phead"\), "Scherm sluiten"\]\]/);
   assert.match(html, /var ftBar = pWb\.querySelector\("#ftools"\); if\(ftBar\) ftBar\.appendChild\(wbGrp\);/, 'in the visible board toolbar, outside its scrolling tool list');
   assert.match(html, /body\.wb-max #ws\{z-index:79!important;position:relative\}/, 'above the top bar and the video window');
-  assert.match(html, /if\(k === "scr"\) \{ if\(OPEN\.scr\) toggle\("scr"\); \} else \{ setOpen\(k, false\); if\(k === "cv"\) cvDecide\(false\); \}/, 'closing Scherm never silently stops sharing; v46: closing Canvas is a shared decision');
+  assert.match(html, /if\(k === "scr"\) \{ if\(OPEN\.scr\) toggle\("scr"\); \} else setOpen\(k, false, "user"\); \}/, 'closing Scherm never silently stops sharing; v46: closing Canvas is a shared decision');
   assert.match(read('components/Games.tsx'), /className="gx-close"/, 'Spelletjes keeps its own X (→ __klasToggle games false)');
   assert.match(html, /wbMaxBtn\.title = on \? "Terug naar het klaslokaal" : "Bord op volledig scherm";/);
   assert.match(html, /if\(e\.key === "Escape" && document\.body\.classList\.contains\("wb-max"\)\) wbMax\(false\);/);
