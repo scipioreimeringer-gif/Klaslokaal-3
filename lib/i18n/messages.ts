@@ -1250,4 +1250,8 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Leerling uitnodigen als gast (e-mailadres uit het leerlingprofiel)": ["Invite the student as a guest (e-mail from the student profile)","Convidar o aluno como convidado (e-mail do perfil do aluno)","Invitar al alumno como invitado (correo del perfil del alumno)","Inviter l’élève comme invité (e-mail du profil de l’élève)","Schüler:in als Gast einladen (E-Mail aus dem Profil)"],
  "Nu synchroniseren": ["Sync now","Sincronizar agora","Sincronizar ahora","Synchroniser maintenant","Jetzt synchronisieren"],
  "{0} wijziging(en) wachten nog op Google.": ["{0} change(s) still waiting for Google.","{0} alteração(ões) ainda aguardando o Google.","{0} cambio(s) aún esperando a Google.","{0} modification(s) en attente de Google.","{0} Änderung(en) warten noch auf Google."],
+ "Lege afbeelding": ["Empty image","Imagem vazia","Imagen vacía","Image vide","Leeres Bild"],
+ "Afbeelding is te groot (max. 5 MB)": ["Image is too large (max. 5 MB)","A imagem é grande demais (máx. 5 MB)","La imagen es demasiado grande (máx. 5 MB)","L’image est trop grande (max. 5 Mo)","Bild ist zu groß (max. 5 MB)"],
+ "Alleen JPG, PNG, WebP of GIF": ["Only JPG, PNG, WebP or GIF","Somente JPG, PNG, WebP ou GIF","Solo JPG, PNG, WebP o GIF","Uniquement JPG, PNG, WebP ou GIF","Nur JPG, PNG, WebP oder GIF"],
+ "Afbeeldingen zijn nog niet ingesteld: voer supabase/v46.sql uit.": ["Images are not set up yet: run supabase/v46.sql.","As imagens ainda não estão configuradas: execute supabase/v46.sql.","Las imágenes aún no están configuradas: ejecuta supabase/v46.sql.","Les images ne sont pas encore configurées : exécutez supabase/v46.sql.","Bilder sind noch nicht eingerichtet: führe supabase/v46.sql aus."],
 };
