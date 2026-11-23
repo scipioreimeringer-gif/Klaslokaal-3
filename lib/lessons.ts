@@ -95,6 +95,11 @@ export function planningError(msg: string) {
     if (m[1] === 'PERSONAL') return t('Dubbele boeking: je hebt op {0} een persoonlijke afspraak.', when);
     return m[1] === 'TEACHER' ? t('Dubbele boeking: je hebt op {0} al een les (die je geeft of zelf volgt).', when) : t('Dubbele boeking: deze leerling heeft op {0} al een les (ook bij een andere docent).', when);
   }
+  // v59: booking by the learner
+  const na = msg.match(/NOT_AVAILABLE\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+  if (na) return t('Je docent is op {0} niet beschikbaar.', `${fmtDay(na[1], {weekday: 'short', day: 'numeric', month: 'short'})} ${na[2]}`);
+  if (/NO_AVAILABILITY/.test(msg)) return t('Je docent heeft nog geen beschikbaarheid ingesteld.');
+  if (/TOO_SOON/.test(msg)) return t('Boek minstens een uur van tevoren.');
   if (/Invalid time zone/.test(msg)) return t('Ongeldige tijdzone.');
   if (/Invalid duration/.test(msg)) return t('Kies een lesduur tussen 10 minuten en 8 uur.');
   if (/Invalid number of weeks/.test(msg)) return t('Kies tussen 1 en 52 weken.');

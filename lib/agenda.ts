@@ -7,13 +7,23 @@
 import type {Lesson} from './lessons.ts';
 
 export type AgendaKind = 'teach' | 'learn' | 'personal';
-export type PersonalEvent = {id: string; title: string; notes: string | null; starts_at: string; ends_at: string; timezone: string; blocks_lessons: boolean};
+export type PersonalEvent = {id: string; title: string; notes: string | null; starts_at: string; ends_at: string; timezone: string; blocks_lessons: boolean; kind?: 'personal' | 'block'};
 export type AgendaItem =
   | {key: string; kind: 'teach' | 'learn'; starts_at: string; ends_at: string; lesson: Lesson}
   | {key: string; kind: 'personal'; starts_at: string; ends_at: string; event: PersonalEvent};
 export type AgendaFilter = 'all' | AgendaKind;
 export const FILTERS: AgendaFilter[] = ['all', 'teach', 'learn', 'personal'];
-export const PERSONAL_COLUMNS = 'id,title,notes,starts_at,ends_at,timezone,blocks_lessons';
+export const PERSONAL_COLUMNS = '*'; // v59 adds "kind" (block); '*' keeps working before v59.sql
+
+/** v59: a multi-day item (e.g. a holiday block) appears on every day it covers, not only on its first day. */
+export function spreadByDay<T extends {starts_at: string; ends_at: string}>(items: T[], tz: string, dayKeyFn: (iso: string | number, tz: string) => string, addDaysFn: (d: string, n: number) => string) {
+  const m = new Map<string, T[]>();
+  for (const it of [...items].sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
+    const first = dayKeyFn(it.starts_at, tz), last = dayKeyFn(Date.parse(it.ends_at) - 1, tz);
+    for (let d = first, i = 0; d <= last && i < 70; d = addDaysFn(d, 1), i++) m.set(d, [...(m.get(d) || []), it]);
+  }
+  return m;
+}
 
 export function mergeAgenda(me: string, lessons: Lesson[][], learnerStudentIds: Iterable<string>, events: PersonalEvent[] = []): AgendaItem[] {
   const mine = new Set(learnerStudentIds), seen = new Map<string, AgendaItem>();
