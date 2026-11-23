@@ -1427,4 +1427,5 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Vervoeg: {0}": ["Conjugate: {0}","Conjugue: {0}","Conjuga: {0}","Conjuguez : {0}","Konjugiere: {0}"],
  "Woorden koppelen klaar met {0} fout(en)": ["Matching done with {0} mistake(s)","Associação concluída com {0} erro(s)","Emparejar terminado con {0} error(es)","Association terminée avec {0} erreur(s)","Zuordnen fertig mit {0} Fehler(n)"],
  "Kies de juiste betekenis": ["Choose the right meaning","Escolha o significado certo","Elige el significado correcto","Choisissez le bon sens","Wähle die richtige Bedeutung"],
+ "Mijn leeromgeving": ["My learning space","Meu espaço de estudo","Mi espacio de aprendizaje","Mon espace d’apprentissage","Mein Lernbereich"],
 };
