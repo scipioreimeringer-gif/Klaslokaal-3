@@ -941,6 +941,25 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .gx-flip .face strong{font-size:clamp(24px,4vw,34px)}
 @media(max-width:560px){.gx-kinds{grid-template-columns:1fr}.gx-kind{min-height:50px}.gx-kind-txt small{display:none}.gx-top{gap:10px}.gx-ring{width:56px;height:56px}}
 @media(prefers-reduced-motion:reduce){.gx-kind,.gx-start,.gx-good,.gx-bad,.gx-card,.gx-ring .bar,.gx-progress span{transition:none}.gx-ring.low b{animation:none}.gx-kind:hover,.gx-start:hover{transform:none}}
+/* v53: fresher game colours — soft gradient header, coloured score dots, a calm "round done" card, the round's words */
+.gx{--gx-acc-dark:color-mix(in srgb,var(--gx-acc) 78%,#0b2a2a);--gx-teacher:#4a7fd4;--gx-student:#e0794f}
+.gx-top{background:linear-gradient(135deg,var(--gx-soft) 0%,color-mix(in srgb,var(--gx-soft) 55%,#eef5ff) 100%);border:1px solid color-mix(in srgb,var(--gx-acc) 14%,#fff);box-shadow:0 1px 0 rgba(255,255,255,.8) inset}
+.gx-ring .track{stroke:color-mix(in srgb,var(--gx-acc) 14%,#fff)}
+.gx-ring b{color:var(--gx-acc-dark)}
+.gx-tag{box-shadow:0 1px 2px rgba(15,42,46,.06);border:1px solid rgba(15,42,46,.05)}
+.gx-tag.me{background:var(--gx-acc);color:#fff;border-color:transparent}
+.gx-score span{box-shadow:0 1px 2px rgba(15,42,46,.06);border:1px solid rgba(15,42,46,.05)}
+.gx-score span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--gx-teacher)}.gx-score span.s::before{background:var(--gx-student)}
+.gx-result{display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,color-mix(in srgb,var(--gx-acc) 12%,#fff),color-mix(in srgb,var(--gx-acc) 5%,#fff));color:var(--gx-acc-dark);border:1px solid color-mix(in srgb,var(--gx-acc) 22%,#fff)}
+.gx-result svg{flex:none;color:var(--gx-acc)}
+.gx-reveal-list{padding:12px;border-radius:14px;background:#fff;border:1px solid #e3eeec}
+.gx-reveal-list h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--gx-acc-dark)}
+.gx-reveal-list ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.gx-reveal-list li{display:flex;align-items:flex-start;gap:7px;padding:7px 9px;border-radius:10px;font-size:14px;line-height:1.3}
+.gx-reveal-list li span{display:grid;gap:1px;min-width:0}.gx-reveal-list li small{color:var(--ink-2);font-size:12px}
+.gx-reveal-list li.ok{background:#e9f7ef;color:#1d6a43}.gx-reveal-list li.ok svg{color:#22995a;margin-top:2px;flex:none}
+.gx-reveal-list li.miss{background:#fdf0ea;color:#8a3d22}.gx-reveal-list li.miss svg{color:#d9603f;margin-top:2px;flex:none}
+.gx-reveal-list li b{word-break:break-word}
 .gx-reveal{display:inline-flex;margin-top:4px;padding:2px 8px;border:1px dashed #cfe1dd;border-radius:99px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
 .gx-reveal:hover{background:#f3f8f7;color:var(--ink-2)}
 .flash-dir{margin:0 auto 10px;display:flex;width:fit-content}

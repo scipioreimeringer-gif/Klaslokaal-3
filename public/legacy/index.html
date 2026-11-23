@@ -763,6 +763,46 @@ body.sl-ink .slbar{opacity:1}
 html[data-theme="dark"] .v51-pop{background:#131f1e;color:#e6eeeb;border-color:#24403e}
 html[data-theme="dark"] .v51-row:hover,html[data-theme="dark"] .v51-pop .v51-act:hover{background:#16302d}
 html[data-theme="dark"] .v51-row select,html[data-theme="dark"] .v51-url input{background-color:#0f1a19;color:#e6eeeb;border-color:#24403e}
+
+/* v53: camera — a tile is exactly as high as its box (no more "only the top half"), and the personal camera settings */
+.vbody .remotes{grid-auto-rows:minmax(0,1fr)!important;align-content:stretch}
+.vbody .remotes video{width:100%!important;height:100%!important;min-height:0;max-height:100%}
+body.cv-fit-contain .vbody .remotes video,body.cv-fit-contain.cam-duo .vbody .selfv{object-fit:contain!important;background:#0b1514}
+body.cv-fit-cover .vbody .remotes video,body.cv-fit-cover.cam-duo .vbody .selfv{object-fit:cover!important}
+body.cam-duo.cv-side .vbody{flex-direction:row!important}
+body.cam-duo.cv-stack .vbody{flex-direction:column!important}
+body.cam-duo.cv-side .vbody .selfv{width:auto!important}
+body.cam-duo.cv-side .vname-s{top:8px!important;left:calc(50% + 8px)!important}
+body.cam-duo.cv-stack .vname-s{top:calc(50% + 6px)!important;left:8px!important}
+body.cv-other .vbody .selfv,body.cv-other .vname-s{display:none!important}
+body.cv-pip .vbody .selfv{position:absolute!important;inset:auto 10px 10px auto!important;width:26%!important;max-width:220px!important;min-width:90px;height:auto!important;aspect-ratio:4/3;object-fit:cover!important;border-radius:10px!important;border:2px solid rgba(255,255,255,.75)!important;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+body.cv-pip .vname-s{display:none!important}
+body.cv-nomirror #selfV{transform:none!important}
+.v53-cam{width:min(380px,calc(100vw - 16px));padding:14px}
+.v53-cam .v53-h{margin:0 2px 8px;font-weight:700;font-size:15px}
+.v53-sec{padding:8px 0;border-top:1px solid #edf3f2}.v53-sec:first-of-type{border-top:0;padding-top:0}
+.v53-sec h3{margin:0 2px 8px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#0f7c78}
+.v53-views{display:grid;gap:6px}
+.v53-views button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:1px solid #e1ecea;border-radius:12px;background:#fff;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.v53-views button:hover{background:#f4faf9}
+.v53-views button.on{border-color:#14a39a;background:#eaf7f5;box-shadow:0 0 0 1px #14a39a inset}
+.v53-views .ic{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#eef6f5;color:#0f7c78;flex:none}
+.v53-views button.on .ic{background:#14a39a;color:#fff}
+.v53-views .tx{display:grid;gap:1px}.v53-views .tx b{font-size:14px}.v53-views .tx small{font-size:12px;color:#5a706d}
+.v53-seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.v53-seg button{display:grid;gap:1px;padding:8px 10px;border:1px solid #e1ecea;border-radius:12px;background:#fff;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.v53-seg button b{font-size:13.5px}.v53-seg button small{font-size:11.5px;color:#5a706d}
+.v53-seg button.on{border-color:#14a39a;background:#eaf7f5;box-shadow:0 0 0 1px #14a39a inset}
+.v53-sw{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:4px 2px;font-size:14px;cursor:pointer}
+.v53-sw input{-webkit-appearance:none;appearance:none;flex:none;width:36px;height:20px;border-radius:999px;background:#cfdcda;position:relative;cursor:pointer;margin:0;transition:background .15s}
+.v53-sw input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
+.v53-sw input:checked{background:#14a39a}.v53-sw input:checked::after{transform:translateX(16px)}
+.v53-pos,.v53-w{display:flex;flex-wrap:wrap;gap:6px}.v53-w{margin-top:8px}
+.v53-pos button,.v53-w button{height:32px;padding:0 12px;border:1px solid #e1ecea;border-radius:999px;background:#fff;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.v53-pos button.on,.v53-w button.on{background:#14a39a;border-color:#14a39a;color:#fff}
+.v53-note{margin:8px 2px 0;font-size:12px;color:#5a706d}
+.v53-cam button:focus-visible,.v53-cam input:focus-visible{outline:2px solid #14a39a;outline-offset:2px}
+html[data-theme="dark"] .v53-views button,html[data-theme="dark"] .v53-seg button,html[data-theme="dark"] .v53-pos button,html[data-theme="dark"] .v53-w button{background:#0f1a19;border-color:#24403e}
 </style>
 </head><body>
 
@@ -3876,7 +3916,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   function other(){ var b = bridge(), t = ($("vTitle") && $("vTitle").textContent) || ""; if(t && t !== "Video") return t; return isT ? ((b && b.studentName) || "Leerling") : "Docent"; }
   function upd(){
     var hasR = rem.children.length > 0, hasS = !self.hidden && !!self.srcObject, B = document.body;
-    B.classList.toggle("cam-duo", hasR && hasS);
+    B.classList.toggle("cam-duo", hasR && hasS && !window.__camNoDuo); /* v53: "alleen de ander" / "ik klein" = one big picture */
     B.classList.toggle("cam-solo-self", !hasR && hasS && !!peer);
     nr.hidden = !hasR; if(hasR) nr.textContent = other();
     ns.hidden = !hasS || (!hasR && !peer); ns.textContent = "Jij";
@@ -4138,6 +4178,83 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     input.addEventListener("focus", function(){ input.select(); });
   }
   window.__v51 = {place:place, close:close};
+})();
+
+/* =================================================================== v53: CAMERA SETTINGS
+   A settings panel for the video (gear in the video header): how the cameras are shown, whether the whole picture is
+   visible or the tile is filled, mirroring of your own picture, plus the existing position and width. Saved per person
+   on this device (teacher and student each have their own). Only classes/CSS change: tracks, calls and PeerJS are
+   untouched. Also fixes the cut-off picture: a video tile is now exactly as high as its box (before, in a low, wide box
+   the video kept its own height and only the top half was visible). */
+(function(){
+  var head = $("vhead"), pin = $("camPin"); if(!head || !pin) return;
+  var KEY = "klas-camset-" + (isT ? "t" : "s");
+  var S = (function(){ var s = store(KEY) || {}; return {view: ["auto", "side", "stack", "other", "pip"].indexOf(s.view) >= 0 ? s.view : "auto", fit: s.fit === "cover" ? "cover" : "contain", mirror: s.mirror !== false}; })();
+  var vb = $("vbody");
+  function resolved(){ if(S.view !== "auto") return S.view; var r = vb && vb.getBoundingClientRect(); return r && r.width > r.height * 1.15 ? "side" : "stack"; }
+  function apply(){
+    var B = document.body, v = resolved();
+    ["side", "stack", "other", "pip"].forEach(function(x){ B.classList.toggle("cv-" + x, v === x); });
+    B.classList.toggle("cv-fit-cover", S.fit === "cover"); B.classList.toggle("cv-fit-contain", S.fit !== "cover");
+    B.classList.toggle("cv-nomirror", !S.mirror);
+    window.__camNoDuo = v === "other" || v === "pip";   /* read by the camera tiles (v46): one big picture */
+    if(window.__camDuo) window.__camDuo();
+    if(box) sync();
+  }
+  function save(){ store(KEY, S); apply(); }
+  if(window.ResizeObserver && vb) new ResizeObserver(function(){ if(S.view === "auto") apply(); }).observe(vb);
+
+  /* ---- the gear button + panel (in the top layer of v51, so never behind the video or cut off) ---- */
+  var SVG = function(p){ return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var btn = document.createElement("button"); btn.type = "button"; btn.className = "ib"; btn.id = "camSet"; btn.title = "Camera-instellingen"; btn.setAttribute("aria-label", "Camera-instellingen"); btn.setAttribute("aria-haspopup", "dialog"); btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = SVG('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>');
+  head.insertBefore(btn, pin);
+  var layer = document.querySelector(".v51-layer"); if(!layer){ layer = document.createElement("div"); layer.className = "v51-layer"; document.body.appendChild(layer); layer.addEventListener("click", function(e){ e.stopPropagation(); }); }
+  var box = document.createElement("div"); box.className = "v51-pop v53-cam"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Camera-instellingen");
+  var VIEWS = [["auto", "Automatisch", "Naast of onder elkaar, wat het beste past", '<rect x="3" y="5" width="8" height="14" rx="2"/><rect x="13" y="5" width="8" height="14" rx="2"/>'],
+    ["side", "Naast elkaar", "Allebei even groot, links en rechts", '<rect x="2" y="6" width="9" height="12" rx="2"/><rect x="13" y="6" width="9" height="12" rx="2"/>'],
+    ["stack", "Onder elkaar", "Allebei even groot, boven en onder", '<rect x="5" y="2" width="14" height="9" rx="2"/><rect x="5" y="13" width="14" height="9" rx="2"/>'],
+    ["pip", "De ander groot, ik klein", "Jezelf klein in de hoek", '<rect x="2" y="4" width="20" height="16" rx="2"/><rect x="13" y="12" width="7" height="6" rx="1" fill="currentColor"/>'],
+    ["other", "Alleen de ander", (isT ? "Alleen je leerling" : "Alleen je docent") + ", zonder jezelf", '<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="12" cy="11" r="3"/><path d="M7 18a5 5 0 0 1 10 0"/>']];
+  box.innerHTML = '<p class="v53-h">Camera-instellingen</p>' +
+    '<section class="v53-sec"><h3>Weergave</h3><div class="v53-views" role="radiogroup" aria-label="Weergave"></div></section>' +
+    '<section class="v53-sec"><h3>Beeld</h3><div class="v53-seg" role="radiogroup" aria-label="Beeld"><button type="button" data-fit="contain" role="radio"><b>Heel beeld</b><small>niets wordt afgesneden</small></button><button type="button" data-fit="cover" role="radio"><b>Vullen</b><small>randen worden bijgesneden</small></button></div>' +
+    '<label class="v53-sw"><span>Mijn eigen beeld spiegelen</span><input type="checkbox" id="v53Mirror"></label></section>' +
+    '<section class="v53-sec"><h3>Plaats en grootte</h3><div class="v53-pos"></div><div class="v53-w"></div></section>' +
+    '<p class="v53-note">Alleen voor jou, bewaard op dit apparaat. De andere deelnemer kiest een eigen indeling.</p>';
+  layer.appendChild(box);
+  var views = box.querySelector(".v53-views");
+  VIEWS.forEach(function(v){ var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("data-view", v[0]);
+    b.innerHTML = '<span class="ic">' + SVG(v[3]) + '</span><span class="tx"><b></b><small></small></span>'; b.querySelector("b").textContent = v[1]; b.querySelector("small").textContent = v[2];
+    b.addEventListener("click", function(){ S.view = v[0]; if(v[0] !== "other" && $("selfV").hidden && local){ $("selfBtn").click(); } save(); }); views.appendChild(b); });
+  box.querySelectorAll("[data-fit]").forEach(function(b){ b.addEventListener("click", function(){ S.fit = b.getAttribute("data-fit"); save(); }); });
+  var mir = box.querySelector("#v53Mirror"); mir.addEventListener("change", function(){ S.mirror = mir.checked; save(); });
+  /* position and width: the existing camera menu buttons (same behaviour and storage) */
+  var pos = box.querySelector(".v53-pos"), wid = box.querySelector(".v53-w");
+  var PN = {full:"Volledig scherm", float:"Zwevend", left:"Links", center:"Boven", right:"Rechts"};
+  ["left", "center", "right", "float", "full"].forEach(function(m){ var src = document.querySelector('#camMenu [data-camm="' + m + '"]'); if(!src) return;
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("data-pos", m); b.textContent = PN[m]; b.addEventListener("click", function(){ src.click(); setTimeout(sync, 60); }); pos.appendChild(b); });
+  document.querySelectorAll("#camMenu [data-camw]").forEach(function(src){ var b = document.createElement("button"); b.type = "button"; b.setAttribute("data-w", src.getAttribute("data-camw")); b.textContent = src.textContent; b.addEventListener("click", function(){ src.click(); setTimeout(sync, 60); }); wid.appendChild(b); });
+  function sync(){
+    views.querySelectorAll("[data-view]").forEach(function(b){ var on = b.getAttribute("data-view") === S.view; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false"); });
+    box.querySelectorAll("[data-fit]").forEach(function(b){ var on = b.getAttribute("data-fit") === S.fit; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false"); });
+    mir.checked = !!S.mirror;
+    var B = document.body, cur = ["full", "float", "left", "center", "right"].filter(function(m){ return B.classList.contains("cam-" + m); })[0];
+    pos.querySelectorAll("[data-pos]").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-pos") === cur); });
+    var full = cur === "full" || cur === "float"; wid.hidden = full;
+    var mw = document.querySelector("#camMenu [data-camw].on, #camMenu [data-camw][aria-pressed='true']");
+    wid.querySelectorAll("[data-w]").forEach(function(b){ b.classList.toggle("on", !!mw && mw.getAttribute("data-camw") === b.getAttribute("data-w")); });
+  }
+  function open(){ sync(); box.classList.add("on"); btn.setAttribute("aria-expanded", "true"); if(window.__v51 && window.__v51.place){ window.__v51.close(); window.__v51.place(box, btn, true); } }
+  function close(){ box.classList.remove("on"); btn.setAttribute("aria-expanded", "false"); }
+  btn.addEventListener("click", function(e){ e.stopPropagation(); if(box.classList.contains("on")) close(); else open(); });
+  document.addEventListener("click", function(e){ if(box.classList.contains("on") && !btn.contains(e.target)) close(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && box.classList.contains("on")){ close(); try{ btn.focus(); }catch(x){} } });
+  window.addEventListener("resize", function(){ if(box.classList.contains("on") && window.__v51) window.__v51.place(box, btn, true); });
+  /* the old pin menu now opens the same settings panel */
+  pin.addEventListener("click", function(e){ e.stopImmediatePropagation(); e.preventDefault(); if(box.classList.contains("on")) close(); else open(); }, true);
+  apply();
+  window.__camSettings = {get:function(){ return {view:S.view, fit:S.fit, mirror:S.mirror, resolved:resolved()}; }, open:open};
 })();
 
 /* =================================================================== v47: SCREEN SHARE BUTTON (both roles) + PICTURE-IN-PICTURE */

@@ -24,7 +24,7 @@ test('Canvas: open for both on entering; deliberate open/close shared, newest de
   assert.match(html, /if\(OPEN\.cv && window\.__camWork\) window\.__camWork\("auto"\);/, 'cameras stay visible next to the Canvas');
 });
 test('cameras: two equal tiles (stacked when docked), cover, names; alone = full; WebRTC untouched', () => {
-  assert.match(html, /B\.classList\.toggle\("cam-duo", hasR && hasS\);/);
+  assert.match(html, /B\.classList\.toggle\("cam-duo", hasR && hasS && !window\.__camNoDuo\);/); // v53: unless "alleen de ander" / "ik klein"
   assert.match(html, /body\.cam-duo \.vbody\{display:flex;flex-direction:column;/);
   assert.match(html, /body\.cam-duo \.vbody \.remotes\{position:relative;inset:auto;flex:1 1 0;/);
   assert.match(html, /body\.cam-duo \.vbody \.selfv\{[^}]*flex:1 1 0;[^}]*object-fit:cover/);

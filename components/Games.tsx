@@ -18,7 +18,9 @@ const langLabel=(l:string)=>l?languageName(l):tt('Lestaal');
 import {t as tt} from '../lib/i18n';
 
 type Card={vocab_id:string|null;bank_id?:string;term:string;hint:string;forbidden:string[]};
-type Msg=({t:'game';k:'state';s:GameState;at?:number}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'};aid?:string});
+// v53: k 'reveal' = the words of a FINISHED round, sent by the explainer so the guesser sees them after the time is up
+type RevealWord={term:string;hint:string;ok:boolean};
+type Msg=({t:'game';k:'state';s:GameState;at?:number}|{t:'game';k:'act';a:Action|{a:'newround'}|{a:'sync'};aid?:string}|{t:'game';k:'reveal';roundId:string;words:RevealWord[]});
 const frame=()=>document.querySelector('iframe.live-frame') as HTMLIFrameElement|null;
 // v50: every game message goes over TWO independent routes: the classroom's data channel (peer-to-peer) AND a Supabase
 // Realtime broadcast channel between the two apps (part of the existing Supabase project; no new service). Whichever
@@ -79,6 +81,9 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  const seen=useRef<Set<string>>(new Set());const lastAt=useRef<{id:string;at:number}|null>(null);
  const handle=useRef<(m:Msg)=>void>(()=>{});
  handle.current=(m:Msg)=>{if(!m||m.t!=='game')return;
+   // v53: the words of a finished round (never during the round: a reveal for a running round is ignored)
+   if(m.k==='reveal'){const cur=ref.current;if(!m.roundId||(cur&&cur.roundId===m.roundId&&(cur.phase==='running'||cur.phase==='ready'||cur.phase==='paused')))return;
+    setRevealed({roundId:String(m.roundId),words:(Array.isArray(m.words)?m.words:[]).slice(0,40).map(w=>({term:String(w.term||'').slice(0,80),hint:String(w.hint||'').slice(0,160),ok:!!w.ok}))});return}
    if(host&&m.k==='act'){if(m.aid){if(seen.current.has(m.aid))return;seen.current.add(m.aid);if(seen.current.size>300)seen.current=new Set([...seen.current].slice(-150))}
     const a=(m.a as {a:string}).a;if(a==='sync')broadcast(ref.current);else if(a==='newround')void newRound.current();else apply(m.a as Action,'student')}
    if(!host&&m.k==='state'){const L=lastAt.current;if(m.at&&L&&L.id===m.s.id&&m.at<L.at)return; // an older copy over the slower route
@@ -161,6 +166,13 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
  useEffect(()=>{const rid=state?.roundId;if(!explaining||!rid||cards?.roundId===rid)return;let c=false;
   void supabase()!.from('game_rounds').select('cards').eq('id',rid).maybeSingle().then(({data})=>{if(!c&&data)setCards({roundId:rid,cards:(data as {cards:Card[]}).cards})});return()=>{c=true}},[explaining,state?.roundId,cards?.roundId]);
  useEffect(()=>{setShown(new Set())},[state?.roundId]); // a new round starts with all meanings hidden again
+ // v53: when the time is up (or all words are guessed) the explainer shares the round's words with the guesser,
+ // marked guessed / not guessed — sent twice (both routes) so a lost message does not matter
+ const [revealed,setRevealed]=useState<{roundId:string;words:RevealWord[]}|null>(null);const sentReveal=useRef('');
+ useEffect(()=>{const s=state;if(!s||s.kind==='flash'||!s.roundId||!explaining||(s.phase!=='between'&&s.phase!=='ended'))return;
+  if(!cards||cards.roundId!==s.roundId||sentReveal.current===s.roundId)return;sentReveal.current=s.roundId;
+  const words=cards.cards.map((c,i)=>({term:c.term,hint:c.hint||'',ok:s.guessed.includes(i)}));const m={t:'game',k:'reveal',roundId:s.roundId,words};
+  setRevealed({roundId:s.roundId,words});send(m);setTimeout(()=>send(m),2500)},[state,explaining,cards]);
  function guessed(i:number){const c=cards?.cards[i];act({a:'guessed',index:i});if(c?.vocab_id&&state?.roundId)void supabase()!.rpc('game_mark_guessed',{p_round:state.roundId,p_vocab:c.vocab_id})}
 
  if(!open&&!mount)return null;
@@ -239,7 +251,10 @@ function GamesView({studentId,role,open,onOpen,onClose,mount}:Props):ReactNode{
      {s.phase==='running'&&(s.guessed.includes(i)?<button className="gx-round" title={tt('Ongedaan maken')} aria-label={tt('Ongedaan maken')} onClick={()=>act({a:'undo',index:i})}><RotateCcw size={14}/></button>:<button className="gx-good small" onClick={()=>guessed(i)}><Check size={14}/> {tt('Geraden')}</button>)}</div>)}
     <p className="muted small">{s.kind==='taboo'?tt('Leg uit zonder het woord zelf en zonder de verboden woorden te gebruiken.'):tt('Leg uit zonder het woord zelf te noemen.')}</p></div>
    :<div className="gx-guess"><Deco/><strong>{tt('{0} van {1} geraden',s.guessed.length,s.cardCount)}</strong><p className="muted">{s.explainer==='teacher'?tt('Je docent legt uit. Raad de woorden!'):tt('Je leerling legt uit. Raad de woorden!')}</p></div>)}
-  {s.phase==='between'&&!!s.rounds.length&&<p className="gx-result">{tt('Ronde klaar: {0} van {1} geraden.',s.rounds[s.rounds.length-1].guessed,s.rounds[s.rounds.length-1].of)}</p>}
+  {s.phase==='between'&&!!s.rounds.length&&<p className="gx-result"><Check size={16} aria-hidden/> {tt('Ronde klaar: {0} van {1} geraden.',s.rounds[s.rounds.length-1].guessed,s.rounds[s.rounds.length-1].of)}</p>}
+  {(s.phase==='between'||s.phase==='ended')&&revealed&&!!revealed.words.length&&<div className="gx-reveal-list" aria-label={tt('De woorden van deze ronde')}>
+   <h4>{tt('De woorden van deze ronde')}</h4>
+   <ul>{revealed.words.map((w,i)=><li key={i} className={w.ok?'ok':'miss'}>{w.ok?<Check size={14} aria-hidden/>:<X size={14} aria-hidden/>}<span><b>{w.term}</b>{w.hint&&<small>{w.hint}</small>}</span><em className="sr-only">{w.ok?tt('geraden'):tt('niet geraden')}</em></li>)}</ul></div>}
   <div className="gx-play-actions">
    {s.phase==='ready'&&<button className="gx-start" onClick={()=>act({a:'begin'})}><Play size={16}/> {tt('Start de tijd')}</button>}
    {s.phase==='running'&&<button className="gx-ghost" onClick={()=>act({a:'pause'})}><Pause size={15}/> {tt('Pauze')}</button>}
@@ -257,4 +272,4 @@ function Ring({frac,low,label}:{frac:number;low:boolean;label:string}){const r=2
  return <span className={'gx-ring'+(low?' low':'')} role="timer" aria-label={label+' '+tt('seconden')}><svg viewBox="0 0 64 64" width="64" height="64" aria-hidden><circle cx="32" cy="32" r={r} className="track"/><circle cx="32" cy="32" r={r} className="bar" strokeDasharray={c} strokeDashoffset={c*(1-frac)}/></svg><b>{label}</b></span>}
 /** small decorative SVG accent (inline, no network request) */
 function Deco(){return <svg className="gx-deco" viewBox="0 0 120 40" aria-hidden><circle cx="14" cy="20" r="8" fill="#bfeee6"/><rect x="34" y="10" width="20" height="20" rx="6" fill="#ffe9a8"/><path d="M74 30l10-20 10 20z" fill="#ffd2c4"/><circle cx="108" cy="20" r="6" fill="#cfe2ff"/></svg>}
-function Score({s}:{s:GameState}){return <div className="gx-score"><span>{tt('Docent')} <b>{s.score.teacher}</b></span><span>{tt('Leerling')} <b>{s.score.student}</b></span></div>}
+function Score({s}:{s:GameState}){return <div className="gx-score"><span className="t">{tt('Docent')} <b>{s.score.teacher}</b></span><span className="s">{tt('Leerling')} <b>{s.score.student}</b></span></div>}

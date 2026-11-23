@@ -1378,4 +1378,7 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Samentrekking: {0}.": ["Contraction: {0}.","Contração: {0}.","Contracción: {0}.","Contraction : {0}.","Zusammenziehung: {0}."],
  "Schrijf een zin met dit woord in de verleden tijd": ["Write a sentence with this word in the past tense","Escreva uma frase com esta palavra no passado","Escribe una frase con esta palabra en pasado","Écris une phrase avec ce mot au passé","Schreib einen Satz mit diesem Wort in der Vergangenheit"],
  "Beantwoord de vraag in een hele zin": ["Answer the question in a full sentence","Responda à pergunta com uma frase completa","Responde a la pregunta con una frase completa","Réponds à la question par une phrase complète","Beantworte die Frage in einem ganzen Satz"],
+ "De woorden van deze ronde": ["The words of this round","As palavras desta rodada","Las palabras de esta ronda","Les mots de cette manche","Die Wörter dieser Runde"],
+ "geraden": ["guessed","adivinhada","adivinada","devinée","erraten"],
+ "niet geraden": ["not guessed","não adivinhada","no adivinada","pas devinée","nicht erraten"],
 };
