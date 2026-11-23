@@ -121,15 +121,22 @@ function canvasImages(db: SupabaseClient, studentId: string) {
 }
 
 /** TURN credentials are never in the classroom code: fetched once per page from /api/turn (logged-in users only). */
+// v60: kept per classroom (student) and ONLY when it worked — before, one failed request (expired login, a classroom
+// without access, a network hiccup) was kept for the whole page, so every next classroom showed "TURN ontbreekt"
 let icePromise: Promise<{urls: string | string[]; username?: string; credential?: string}[]> | null = null;
+let iceFor = '';
 let iceStatusValue = '';
 function fetchIceServers(db: SupabaseClient, studentId: string) {
+  if (iceFor !== studentId) { icePromise = null; iceFor = studentId; }
   if (!icePromise) icePromise = (async () => {
-    const r = await authFetch(db, '/api/turn?student=' + encodeURIComponent(studentId), {cache: 'no-store'});
-    if (!r.ok) { iceStatusValue = 'http_' + r.status; return []; }
+    let r = await authFetch(db, '/api/turn?student=' + encodeURIComponent(studentId), {cache: 'no-store'});
+    if (r.status === 401) { await freshToken(db, true).catch(() => ''); r = await authFetch(db, '/api/turn?student=' + encodeURIComponent(studentId), {cache: 'no-store'}); }
+    if (!r.ok) { iceStatusValue = 'http_' + r.status; icePromise = null; return []; }
     const j = await r.json().catch(() => ({})) as {iceServers?: unknown; status?: unknown};
     iceStatusValue = typeof j.status === 'string' ? j.status : '';
-    return Array.isArray(j.iceServers) ? j.iceServers as {urls: string | string[]; username?: string; credential?: string}[] : [];
+    const list = Array.isArray(j.iceServers) ? j.iceServers as {urls: string | string[]; username?: string; credential?: string}[] : [];
+    if (iceStatusValue !== 'ok') icePromise = null;                                 // ask again next time
+    return list;
   })().catch(() => { icePromise = null; iceStatusValue = 'error'; return []; });
   return icePromise;
 }
