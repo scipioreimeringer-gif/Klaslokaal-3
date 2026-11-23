@@ -5,6 +5,7 @@ import {createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, r
 import {createClient, type SupabaseClient} from '@supabase/supabase-js';
 import {HttpError} from './ai';
 import {eventBody, eventIdFor, mergeAttendees, relevant, toApply, type GEvent, type OutboxRow} from '../gcal/map';
+import {extraEventBody, extraEventId, extraFingerprint, type ExtraItem} from '../gcal/items';
 
 /** Only what is needed: list the teacher's calendars (read-only) and manage events. No Gmail, Drive, contacts or profile. */
 export const GCAL_SCOPES = ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.events'];
@@ -165,7 +166,41 @@ export function anonDb() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {auth: {persistSession: false, autoRefreshToken: false}});
 }
 
-export type Ctx = {refresh_enc: string; calendar_id: string | null; sync_token: string | null; invite: boolean; channel_id: string | null; resource_id: string | null; channel_expires_at: string | null; status: string};
+export type Ctx = {refresh_enc: string; calendar_id: string | null; sync_token: string | null; invite: boolean; channel_id: string | null; resource_id: string | null; channel_expires_at: string | null; status: string;
+  confirmed?: boolean; sync_teaching?: boolean; sync_learning?: boolean; sync_personal?: boolean};
+
+/** v57: one-way part — lessons I follow and personal appointments → the chosen calendar (stable ids, unchanged ones skipped). */
+type ExtraPlan = {want: (ExtraItem & {event_id: string | null; fingerprint: string | null})[]; remove: {item_id: string; event_id: string}[]};
+export async function pushExtras(db: SupabaseClient, token: string, calendarId: string, origin: string) {
+  const {data, error} = await db.rpc('gcal_extra_plan');
+  if (error) throw new Error(error.message);
+  const plan = (data || {want: [], remove: []}) as ExtraPlan, cal = enc(calendarId);
+  let sent = 0, removed = 0, failed = 0;
+  for (const it of plan.want) {
+    const f = extraFingerprint(it, origin);
+    if (it.event_id && it.fingerprint === f) continue;
+    const id = it.event_id || extraEventId(it), body = JSON.stringify(extraEventBody(it, origin));
+    try {
+      try { await g(token, `/calendars/${cal}/events/${enc(id)}`, {method: 'PUT', body}); }
+      catch (e) {
+        if (!(e instanceof GoogleError && (e.status === 404 || e.status === 410))) throw e;
+        try { await g(token, `/calendars/${cal}/events`, {method: 'POST', body: JSON.stringify({id, ...JSON.parse(body)})}); }
+        catch (e2) { if (e2 instanceof GoogleError && e2.status === 409) await g(token, `/calendars/${cal}/events/${enc(id)}`, {method: 'PUT', body}); else throw e2; }
+      }
+      await db.rpc('gcal_extra_done', {p_kind: it.kind, p_item: it.item_id, p_event_id: id, p_fingerprint: f, p_removed: false});
+      sent++;
+    } catch (e) { if (e instanceof RevokedError) throw e; failed++; }
+  }
+  for (const r of plan.remove) {
+    try {
+      try { await g(token, `/calendars/${cal}/events/${enc(r.event_id)}`, {method: 'DELETE'}); }
+      catch (e) { if (!(e instanceof GoogleError && (e.status === 404 || e.status === 410))) throw e; }
+      await db.rpc('gcal_extra_done', {p_kind: 'learn', p_item: r.item_id, p_event_id: r.event_id, p_fingerprint: null, p_removed: true});
+      removed++;
+    } catch { failed++; }
+  }
+  return {sent, removed, failed};
+}
 
 /** One full sync for the logged-in teacher: send local changes, read Google changes, keep push notifications alive. */
 export async function syncTeacher(db: SupabaseClient, origin: string, webhookUrl: string | null) {
@@ -174,6 +209,7 @@ export async function syncTeacher(db: SupabaseClient, origin: string, webhookUrl
   const ctx = data as Ctx | null;
   if (!ctx) throw new HttpError(404, 'Google Calendar is niet verbonden.');
   if (!ctx.calendar_id) return {needsCalendar: true};
+  if (ctx.confirmed === false) return {needsConsent: true};                       // v57: nothing is sent before the explicit choice
   let token: string;
   try { token = await accessToken(ctx.refresh_enc); }
   catch (e) {
@@ -186,6 +222,9 @@ export async function syncTeacher(db: SupabaseClient, origin: string, webhookUrl
   const applied = await db.rpc('gcal_apply', {p_events: pulled.events, p_sync_token: pulled.syncToken});
   if (applied.error) throw new HttpError(500, applied.error.message);
   if (pulled.events.length) await pushOutbox(db, token, {calendar_id: ctx.calendar_id, invite: ctx.invite}, origin); // conflicts write TeachyRooms back
+  // v57: lessons I follow + personal appointments (one way); before v57.sql the plan function is missing → skipped
+  const extra = await pushExtras(db, token, ctx.calendar_id, origin).catch(e => { if (e instanceof RevokedError) throw e; return {sent: 0, removed: 0, failed: /gcal_extra_plan/.test(String(e)) ? 0 : 1}; });
+  push.sent += extra.sent + extra.removed; push.failed += extra.failed;
   let channel: Awaited<ReturnType<typeof watch>> | null = null, pushError: string | null = null;
   const expiring = !ctx.channel_expires_at || Date.parse(ctx.channel_expires_at) < Date.now() + 2 * 86400e3;
   if (webhookUrl && expiring) {

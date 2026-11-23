@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
-import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,GraduationCap,Languages,ShieldCheck,BookOpen,Menu,LogOut,Presentation,Home,Route,Gamepad2} from 'lucide-react';
+import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,GraduationCap,Languages,ShieldCheck,BookOpen,Menu,LogOut,Presentation,Home,Route,Gamepad2,ListTodo} from 'lucide-react';
+import {TaskBadge} from './Tasks';
 import {LanguagePicker} from './I18n';
 import {useAuth} from './Auth';
 import {supabase} from '../lib/supabase';
@@ -26,8 +27,8 @@ function Frame({children}:{children:React.ReactNode}){
  /** The menu button is the only toggle: desktop collapses fully (no reserved space), mobile opens/closes the drawer (also closes on outside click / Esc). */
  function toggleSide(){if(isMobile())setOpen(o=>!o);else persist(!collapsed)}
  useEffect(()=>{if(!open)return;const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[open]);
- const teacherLinks=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}];
- const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')}];
+ const teacherLinks=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/taken',icon:ListTodo,label:tt('Taken')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}];
+ const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/taken',icon:ListTodo,label:tt('Taken')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')}];
  const links=mode==='teacher'?teacherLinks:studentNav;
  const both=canTeach&&studentLinks.length>0;
  const meta=(user?.user_metadata||{}) as {avatar_url?:string;picture?:string};const avatar=meta.avatar_url||meta.picture||'';
@@ -37,7 +38,7 @@ function Frame({children}:{children:React.ReactNode}){
   <aside className={'side'+(open?' open':'')}>
    <div className="side-head"><Link className="brand" href="/" onClick={()=>setOpen(false)}><span className="brandmark"><GraduationCap size={20}/></span><span>{tt("TeachyRooms")}</span></Link></div>
    <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Mijn leeromgeving')}</div>
-   <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}</Link>)}
+   <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}{href==='/taken'&&user&&<TaskBadge/>}</Link>)}
     {mode==='teacher'&&role==='admin'&&<Link href="/beheer" className={active('/beheer')?'active':''} onClick={()=>setOpen(false)}><ShieldCheck size={18}/>{tt('Docenten beheren')}</Link>}</nav>
    {mode!=='teacher'&&<Suspense fallback={null}><SideLanguages onNavigate={()=>setOpen(false)}/></Suspense>}
    <div className="buildinfo" title={tt("Welke versie draait hier (branch · commit)")}>{process.env.NEXT_PUBLIC_BUILD_ENV==='production'?tt("Productie"):tt("Preview")} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</div>

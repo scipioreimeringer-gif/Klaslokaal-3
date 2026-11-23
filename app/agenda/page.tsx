@@ -6,7 +6,8 @@ import {AgendaView} from '../../components/Agenda';
 import {useQueryParam} from '../../lib/useQuery';
 
 function Page(){
- const {mode}=useAuth();const openNew=useQueryParam('nieuw')==='1';const openId=useQueryParam('les');
- return <AgendaView key={mode||'none'} mode={mode==='teacher'?'teacher':'student'} openNew={openNew} openId={openId}/>
+ // v57: one central agenda for every role (lessons I give + lessons I follow + personal), independent of the profile switch
+ const {user}=useAuth();const openNew=useQueryParam('nieuw')==='1';const openId=useQueryParam('les');
+ return <AgendaView key={user?.id||'none'} openNew={openNew} openId={openId}/>
 }
 export default function Agenda(){return <Nav><Suspense fallback={<div className="loader small"/>}><Page/></Suspense></Nav>}

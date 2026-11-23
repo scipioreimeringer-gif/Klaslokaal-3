@@ -1108,6 +1108,53 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .gcal-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:min(420px,calc(100vw - 32px));display:grid;gap:10px;padding:14px;border:1px solid var(--line,#e6ecef);border-radius:14px;background:#fff;box-shadow:0 12px 32px rgba(15,60,70,.14)}
 .gcal-pop p{margin:0}
 
+/* ===== v57: central agenda — kind of appointment (colour + icon + label, never colour alone) ===== */
+.agenda-item.k-learn{border-left-color:#6d5bd0;background:#eeebfb;color:#2e2370}
+.agenda-item.k-personal{border-left-color:#8a96a3;background:#f1f3f5;color:#33414d}
+.agenda-item.k-learn.completed,.agenda-item.k-personal.completed{opacity:.75}
+.agenda-item .ai-kind{flex-shrink:0;opacity:.85}
+.agenda-item .ai-role{font-weight:750;margin-right:2px}
+.agenda-item .ai-who{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.kind-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:750;white-space:nowrap}
+.kind-badge.k-teach{background:var(--teal-100);color:var(--petrol-700)}
+.kind-badge.k-learn{background:#eeebfb;color:#4a3ab0}
+.kind-badge.k-personal{background:#eef1f3;color:#4b5a66}
+.agenda-filters{margin:0 0 10px;flex-wrap:wrap}
+.agenda-filters button{display:inline-flex;align-items:center;gap:5px}
+.agenda-filters .af-teach[aria-pressed=true]{background:var(--teal-500);color:#fff}
+.agenda-filters .af-learn[aria-pressed=true]{background:#6d5bd0;color:#fff}
+.agenda-filters .af-personal[aria-pressed=true]{background:#6b7885;color:#fff}
+.agenda-tz{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
+.field.inline{width:auto;max-width:230px;padding:3px 8px;font-size:12.5px;min-height:0}
+.add-cal{position:relative;display:inline-block}
+.add-cal>summary{list-style:none;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.add-cal>summary::-webkit-details-marker{display:none}
+.add-cal-menu{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:190px;display:grid;gap:2px;padding:6px;border:1px solid var(--line,#e6ecef);border-radius:12px;background:#fff;box-shadow:0 10px 28px rgba(15,60,70,.14)}
+.add-cal-menu a,.add-cal-menu button{display:block;text-align:left;padding:7px 10px;border-radius:8px;font-size:13px;color:inherit;text-decoration:none}
+.add-cal-menu a:hover,.add-cal-menu button:hover{background:var(--teal-50)}
+.gcal-types{display:grid;gap:6px;flex-basis:100%;max-width:560px;order:5;padding:12px 14px;border:1px solid #bfe5dc;border-radius:14px;background:#fff}
+.gcal-types p{margin:0}
+.gcal-what{flex-basis:100%}
+
+/* ===== v57: tasks ===== */
+.nav-badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#d0523a;color:#fff;font-size:11.5px;font-weight:800;display:inline-grid;place-items:center}
+.task-filters{justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip-count{margin-left:6px;font-size:11px;font-weight:800;opacity:.7}
+.task-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.task-row{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid var(--line,#e6ecef);border-left:4px solid var(--teal-400);border-radius:12px;background:#fff}
+.task-row.p-high{border-left-color:#d0523a}.task-row.p-low{border-left-color:#c3ccd3}
+.task-row.overdue{background:#fff8f6}
+.task-row.done{opacity:.6}.task-row.done strong{text-decoration:line-through}
+.task-row>input{margin-top:3px;width:18px;height:18px;accent-color:var(--teal-500);flex-shrink:0}
+.task-main{flex:1;min-width:0;display:grid;gap:4px}
+.task-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12.5px}
+.task-meta>span{display:inline-flex;align-items:center;gap:4px}
+.prio{padding:1px 8px;border-radius:999px;font-weight:700;font-size:11.5px;background:#eef1f3;color:#4b5a66}
+.prio.p-high{background:#fdecea;color:#b3412c}.prio.p-low{background:#f5f7f8;color:#7a8893}
+.task-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.task-form{display:grid;gap:10px;margin-bottom:12px}
+@media(max-width:640px){.task-row{flex-wrap:wrap}.task-actions{width:100%;justify-content:flex-end}}
+
 /* ===== v46 phase 2: errors and corrections ===== */
 .er-list{display:grid;gap:8px}
 .er-note{display:flex;gap:6px;align-items:flex-start;margin:0;padding:8px 10px;border-radius:10px;background:#fff4e0;color:#7a4b00;font-size:13px}

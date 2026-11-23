@@ -55,8 +55,16 @@ export async function POST(req: Request, {params}: {params: Promise<{action: str
     const {action} = await params;
     const {db, user} = await authUser(req);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-    const {data: isTeacher} = await db.rpc('is_teacher');
-    if (!isTeacher) throw new HttpError(403, 'Alleen docenten kunnen een agenda koppelen.');
+    // v57: every account with lessons (given or followed) may connect its OWN Google account (before v57.sql: teachers only)
+    const may = await db.rpc('gcal_may_connect');
+    const allowed = may.error ? (await db.rpc('is_teacher')).data : may.data;
+    if (!allowed) throw new HttpError(403, 'Alleen accounts met lessen kunnen een agenda koppelen.');
+
+    if (action === 'types') {
+      const r = await db.rpc('gcal_set_types', {p_teaching: body.teaching === true, p_learning: body.learning === true, p_personal: body.personal === true});
+      if (r.error) throw new HttpError(/gcal_set_types/.test(r.error.message) ? 503 : 400, /gcal_set_types/.test(r.error.message) ? 'Voer eerst supabase/v57.sql uit.' : r.error.message);
+      return Response.json({queued: r.data, ...(await syncTeacher(db, originOf(req), webhookOf(req)))});
+    }
 
     if (action === 'connect') return Response.json({url: authUrl(redirectOf(req), signState(user.id))});
 

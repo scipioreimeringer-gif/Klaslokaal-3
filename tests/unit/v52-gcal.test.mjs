@@ -21,7 +21,7 @@ test('withdrawn access is shown right away (also without a chosen calendar)', ()
 test('the disconnect button is always visible; not connected is shown clearly; no sync without a working connection', () => {
   assert.match(ui, /\{!open&&<button type="button" className="button small secondary danger-text gcal-off"/);
   assert.match(ui, /t\('Google Calendar niet verbonden'\)/);
-  assert.match(ui, /if\(!s\?\.connected\|\|!s\.calendar_id\|\|s\.status==='revoked'\)return;/);
+  assert.match(ui, /if\(!s\?\.connected\|\|!s\.calendar_id\|\|s\.confirmed===false\|\|s\.status==='revoked'\)return;/);
   assert.match(ui, /st\.email\?st\.email\+' · ':''/, 'the connected account is shown');
 });
 test('another Google account: chooser always shown, old account cleaned up, nothing reused', () => {

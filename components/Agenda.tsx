@@ -2,7 +2,9 @@
 // Lesson agenda (v30): planned lessons per teacher–student relation, shown in each viewer's own time zone.
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
-import {CalendarDays,CalendarPlus,ChevronLeft,ChevronRight,Clock,Video,X,Repeat,Sparkles,Mic,FileText,ClipboardList,Pencil,Ban} from 'lucide-react';
+import {CalendarDays,CalendarPlus,ChevronLeft,ChevronRight,Clock,Video,X,Repeat,Sparkles,Mic,FileText,ClipboardList,Pencil,Ban,Presentation,GraduationCap,UserRound,Plus,Trash2} from 'lucide-react';
+import {mergeAgenda,applyFilter,readFilter,overlaps,FILTERS,PERSONAL_COLUMNS,type AgendaItem,type AgendaKind,type AgendaFilter,type PersonalEvent} from '../lib/agenda';
+import {googleTemplateUrl,outlookUrl,icsFile,type ExtraItem} from '../lib/gcal/items';
 import {supabase} from '../lib/supabase';
 import {t,locale} from '../lib/i18n';
 import {useAuth} from './Auth';
@@ -73,41 +75,80 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
      <Link className="next-when when-link" href={lessonHref(next)} title={t('Lesdetails openen')}><Clock size={15}/> {fmtWhen(next,tz)}</Link>
      <div className="next-count">{countdown(next.starts_at,now)}</div>
     </div>
-    <Link className="button next-open" href={classroomHref(next)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
+    <Link className="button next-open" href={classroomHref(next,mode)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
    </div>
   </div>}
   {next&&after.length>0&&<div className="next-after"><h4>{t('DAARNA')}</h4><ul className="after-rows">{after.map(l=>{const r=relations.get(l.student_id);const lg=langOf(l,r);return <li key={l.id}>
    <div className="after-row">
     <Link className="ar-who who-link" href={profileHref(l,mode)} title={mode==='teacher'?t('Leerlingprofiel openen'):t('Mijn lessen openen')}><Who l={l} rel={r} mode={mode} teacherName={teacherName} size={26}/></Link>
     <Link className="ar-lesson" href={lessonHref(l)} title={t('Lesdetails openen')}>{lg&&<Flag code={lg} size={16}/>}<span className="ar-when">{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})} · {clock(l.starts_at,tz)}</span><span className="ar-count">{countdown(l.starts_at,now)}</span></Link>
-    <Link className="iconbtn ar-open" href={classroomHref(l)} title={t('Klaslokaal openen')} aria-label={t('Klaslokaal openen')}><Video size={15}/></Link>
+    <Link className="iconbtn ar-open" href={classroomHref(l,mode)} title={t('Klaslokaal openen')} aria-label={t('Klaslokaal openen')}><Video size={15}/></Link>
    </div></li>})}</ul></div>}
   {next&&<div className="next-foot"><Link href="/agenda">{t('Naar de agenda')} →</Link></div>}
  </section>
 }
 
-/* ---------------- agenda page ---------------- */
-export function AgendaView({mode,openNew,openId}:{mode:'teacher'|'student';openNew?:boolean;openId?:string|null}){
- const {studentLinks}=useAuth();useSyncTimeZone();const now=useNow();const tz=browserTimeZone();
+/* ---------------- central agenda (v57): every lesson I give or follow + my personal appointments ---------------- */
+type AgendaCtx={items:AgendaItem[];relations:Map<string,StudentRecord>;learnerIds:Set<string>;ready:boolean;personalReady:boolean;error:string;loaded:boolean;reload:()=>void};
+/** One query per role, always restricted to MY involvement (teacher_id = me / my learner profiles / my appointments):
+ *  an admin's wider read rights never put other people's lessons in this agenda. */
+export function useAgenda(range:{from:string;to:string}|null):AgendaCtx{
+ const {user,canTeach}=useAuth();const [st,setSt]=useState<Omit<AgendaCtx,'reload'>>({items:[],relations:new Map(),learnerIds:new Set(),ready:true,personalReady:true,error:'',loaded:false});const [tick,setTick]=useState(0);
+ const key=range?range.from+range.to:'';
+ useEffect(()=>{if(!user||!range)return;let off=false;void(async()=>{const db=supabase()!;
+  const [teachRel,learnRel]=await Promise.all([canTeach?loadStudents(db,{teacherId:user.id}):Promise.resolve({data:[] as StudentRecord[]}),loadStudents(db,{userId:user.id})]);
+  const mine=learnRel.data.filter(s=>s.user_id===user.id);const learnerIds=new Set(mine.map(s=>s.id));
+  const rel=new Map<string,StudentRecord>([...teachRel.data,...mine].map(s=>[s.id,s]));
+  const base=()=>db.from('lessons').select(LESSON_COLUMNS).gte('ends_at',range.from).lt('starts_at',range.to).order('starts_at');
+  const [a,b,p]=await Promise.all([canTeach?base().eq('teacher_id',user.id):Promise.resolve({data:[],error:null}),learnerIds.size?base().in('student_id',[...learnerIds]):Promise.resolve({data:[],error:null}),
+   db.from('personal_events').select(PERSONAL_COLUMNS).eq('owner_id',user.id).gte('ends_at',range.from).lt('starts_at',range.to).order('starts_at')]);
+  if(off)return;const err=a.error||b.error;
+  if(err){const missing=/lessons|schema cache|does not exist/i.test(err.message);setSt({items:[],relations:rel,learnerIds,ready:!missing,personalReady:!p.error,error:missing?'':err.message,loaded:true});return}
+  setSt({items:mergeAgenda(user.id,[(a.data||[]) as Lesson[],(b.data||[]) as Lesson[]],learnerIds,p.error?[]:(p.data||[]) as PersonalEvent[]),relations:rel,learnerIds,ready:true,personalReady:!p.error,error:'',loaded:true})})();return()=>{off=true}},[user?.id,canTeach,key,tick]);// eslint-disable-line react-hooks/exhaustive-deps
+ return {...st,reload:useCallback(()=>setTick(x=>x+1),[])};
+}
+const KIND_ICON={teach:Presentation,learn:GraduationCap,personal:UserRound};
+export const kindLabel=(k:AgendaKind)=>k==='teach'?t('Docent'):k==='learn'?t('Leerling'):t('Persoonlijk');
+/** "Docent · Nederlands met Madison" / "Leerling · Portugees met Esther" / "Persoonlijk · Tandarts" */
+function itemText(i:AgendaItem,rel:StudentRecord|undefined,teacherName:(sid:string)=>string){
+ if(i.kind==='personal')return i.event.title;
+ const lang=langOf(i.lesson,rel);const other=i.kind==='teach'?(rel?.name||t('Leerling')):(teacherName(i.lesson.student_id)||t('Docent'));
+ return (lang?languageName(lang)+' ':t('Les')+' ')+t('met {0}',other);
+}
+function useStoredTz(){const [tz,setTz]=useState(()=>{try{return localStorage.getItem('teachy-agenda-tz')||browserTimeZone()}catch{return browserTimeZone()}});
+ return [tz,(z:string)=>{setTz(z);try{if(z===browserTimeZone())localStorage.removeItem('teachy-agenda-tz');else localStorage.setItem('teachy-agenda-tz',z)}catch{}}] as const}
+
+export function AgendaView({openNew,openId}:{openNew?:boolean;openId?:string|null}){
+ const {user,canTeach,studentLinks}=useAuth();useSyncTimeZone();const now=useNow();const [tz,setTz]=useStoredTz();
  const [view,setView]=useState<View>(()=>{try{return (localStorage.getItem('teachy-agenda-view') as View)||'week'}catch{return 'week'}});
- const [anchor,setAnchor]=useState(()=>dayKey(Date.now(),browserTimeZone()));
+ const [filter,setFilterState]=useState<AgendaFilter>(()=>{try{return readFilter(localStorage.getItem('teachy-agenda-filter'),true)}catch{return 'all'}});
+ const shown=readFilter(filter,canTeach);
+ function setFilter(f:AgendaFilter){setFilterState(f);try{localStorage.setItem('teachy-agenda-filter',f)}catch{}}
+ const [anchor,setAnchor]=useState(()=>dayKey(Date.now(),tz));
  const days=gridDays(anchor,view);
  const range=useMemo(()=>({from:new Date(Date.parse(days[0]+'T00:00:00Z')-86400e3).toISOString(),to:new Date(Date.parse(days[days.length-1]+'T00:00:00Z')+2*86400e3).toISOString()}),[days[0],days[days.length-1]]);// eslint-disable-line react-hooks/exhaustive-deps
- const {lessons,relations,ready,error,loaded,reload}=useLessons(range,mode);
- const [open,setOpen]=useState<Lesson|null>(null);const [form,setForm]=useState<{lesson?:Lesson;day?:string}|null>(openNew&&mode==='teacher'?{}:null);
+ const {items,relations,learnerIds,ready,personalReady,error,loaded,reload}=useAgenda(range);
+ const [open,setOpen]=useState<AgendaItem|null>(null);const [form,setForm]=useState<{lesson?:Lesson;day?:string}|null>(openNew&&canTeach?{}:null);
+ const [pform,setPform]=useState<{event?:PersonalEvent;day?:string}|null>(null);
  const [showCancelled,setShowCancelled]=useState(false);
- // v45: /agenda?les=<id> opens the existing details of that lesson (RLS decides whether it may be read)
- useEffect(()=>{if(!openId||!/^[0-9a-f-]{36}$/i.test(openId))return;let off=false;void supabase()?.from('lessons').select(LESSON_COLUMNS).eq('id',openId).maybeSingle().then(({data})=>{if(!off&&data){setOpen(data as Lesson);setAnchor(dayKey((data as Lesson).starts_at,browserTimeZone()))}});return()=>{off=true}},[openId]);
+ // v45: /agenda?les=<id> opens the details of that lesson — only when I give or follow it
+ useEffect(()=>{if(!openId||!/^[0-9a-f-]{36}$/i.test(openId)||!user||!loaded)return;let off=false;void supabase()?.from('lessons').select(LESSON_COLUMNS).eq('id',openId).maybeSingle().then(({data})=>{if(off||!data)return;const it=mergeAgenda(user.id,[[data as Lesson]],learnerIds)[0];if(it){setOpen(it);setAnchor(dayKey(it.starts_at,tz))}});return()=>{off=true}},[openId,user?.id,loaded]);// eslint-disable-line react-hooks/exhaustive-deps
  const teacherName=(sid:string)=>studentLinks.find(x=>x.id===sid)?.teacher_name||'';
- const groups=byDay(lessons.filter(l=>showCancelled||l.status!=='cancelled'),tz);const today=dayKey(now,tz);
+ const visible=applyFilter(items,shown).filter(i=>showCancelled||i.kind==='personal'||i.lesson.status!=='cancelled');
+ const groups=byDay(visible,tz);const today=dayKey(now,tz);
  function setV(v:View){setView(v);try{localStorage.setItem('teachy-agenda-view',v)}catch{}}
  const title=view==='month'?new Date(anchor+'T12:00:00Z').toLocaleDateString(locale(),{month:'long',year:'numeric',timeZone:'UTC'}):view==='week'?`${fmtDay(days[0],{day:'numeric',month:'short'})} – ${fmtDay(days[6],{day:'numeric',month:'short',year:'numeric'})}`:fmtDay(anchor,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+ const zones=useMemo(()=>timeZones(),[]);const changed=()=>{reload();requestCalendarSync()};
+ const filters=FILTERS.filter(f=>f!=='teach'||canTeach);
  return <>
-  <div className="page-head"><div><p className="eyebrow-dark">{mode==='teacher'?t('DOCENT'):t('MIJN LESSEN')}</p><h1>{t('Agenda')}</h1><p className="muted">{t('Tijden in jouw tijdzone: {0}', tz.replace(/_/g,' '))}</p></div>
-   {mode==='teacher'&&<button className="button" onClick={()=>setForm({})}><CalendarPlus size={16}/> {t('Les inplannen')}</button>}</div>
+  <div className="page-head"><div><p className="eyebrow-dark">{t('MIJN AGENDA')}</p><h1>{t('Agenda')}</h1>
+   <label className="muted small agenda-tz">{t('Tijdzone')}: <select className="field inline" value={tz} onChange={e=>setTz(e.target.value)}>{(zones.includes(tz)?zones:[tz,...zones]).map(z=><option key={z} value={z}>{z.replace(/_/g,' ')}</option>)}</select></label></div>
+   <div className="row">{personalReady&&<button className="button secondary" onClick={()=>setPform({})}><Plus size={16}/> {t('Afspraak')}</button>}
+    {canTeach&&<button className="button" onClick={()=>setForm({})}><CalendarPlus size={16}/> {t('Les inplannen')}</button>}</div></div>
   {!ready&&<div className="notice">{t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.')}</div>}
   {error&&<div className="notice">{error}</div>}
-  {mode==='teacher'&&ready&&<GoogleCalendarPanel onSynced={reload}/>}
+  {ready&&<GoogleCalendarPanel onSynced={reload}/>}
+  <div className="agenda-filters chipbar" role="group" aria-label={t('Filter')}>{filters.map(f=>{const I=f==='all'?CalendarDays:KIND_ICON[f];return <button key={f} className={'af-'+f} aria-pressed={shown===f} onClick={()=>setFilter(f)}><I size={14} aria-hidden/> {f==='all'?t('Alles'):f==='teach'?t('Ik geef les'):f==='learn'?t('Ik volg les'):t('Persoonlijk')}</button>})}</div>
   <div className="agenda-bar">
    <div className="row"><button className="iconbtn" aria-label={t('Vorige')} title={t('Vorige')} onClick={()=>setAnchor(shift(anchor,view,-1))}><ChevronLeft size={18}/></button><button className="button small secondary" onClick={()=>setAnchor(today)}>{t('Vandaag')}</button><button className="iconbtn" aria-label={t('Volgende')} title={t('Volgende')} onClick={()=>setAnchor(shift(anchor,view,1))}><ChevronRight size={18}/></button><strong className="agenda-title">{title}</strong></div>
    <div className="row"><label className="row small muted"><input type="checkbox" checked={showCancelled} onChange={e=>setShowCancelled(e.target.checked)}/> {t('Geannuleerde tonen')}</label>
@@ -115,18 +156,76 @@ export function AgendaView({mode,openNew,openId}:{mode:'teacher'|'student';openN
   </div>
   {!loaded?<div className="loader small"/>:<div className={'agenda-grid '+view}>
    {view==='month'&&[1,2,3,4,5,6,7].map(i=><div key={i} className="agenda-dow">{fmtDay(days[i-1],{weekday:'short'})}</div>)}
-   {days.map(d=>{const items=groups.get(d)||[];const out=view==='month'&&d.slice(0,7)!==anchor.slice(0,7);return <div key={d} className={'agenda-day'+(d===today?' today':'')+(out?' out':'')}>
-    <div className="agenda-dhead"><span>{view==='month'?Number(d.slice(8)):fmtDay(d,{weekday:'short',day:'numeric',month:'short'})}</span>{mode==='teacher'&&ready&&<button className="iconbtn tiny" title={t('Les inplannen')} aria-label={t('Les inplannen')} onClick={()=>setForm({day:d})}>+</button>}</div>
-    {items.map(l=>{const rel=relations.get(l.student_id);const st=lessonState(l,now);const lang=langOf(l,rel);return <button key={l.id} className={'agenda-item '+st} onClick={()=>setOpen(l)}>
-     <span className="ai-time">{clock(l.starts_at,tz)}{view!=='month'&&'–'+clock(l.ends_at,tz)}</span><span className="ai-who">{lang&&<Flag code={lang} size={14}/>} {mode==='teacher'?(rel?.name||t('Leerling')):(teacherName(l.student_id)||t('Docent'))}</span>{l.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}</button>})}
-    {!items.length&&view!=='month'&&<p className="agenda-none">{t('Geen lessen')}</p>}
+   {days.map(d=>{const list=groups.get(d)||[];const out=view==='month'&&d.slice(0,7)!==anchor.slice(0,7);return <div key={d} className={'agenda-day'+(d===today?' today':'')+(out?' out':'')}>
+    <div className="agenda-dhead"><span>{view==='month'?Number(d.slice(8)):fmtDay(d,{weekday:'short',day:'numeric',month:'short'})}</span>{canTeach&&ready&&<button className="iconbtn tiny" title={t('Les inplannen')} aria-label={t('Les inplannen')} onClick={()=>setForm({day:d})}>+</button>}</div>
+    {list.map(i=>{const I=KIND_ICON[i.kind];const rel=i.kind==='personal'?undefined:relations.get(i.lesson.student_id);const st=i.kind==='personal'?(Date.parse(i.ends_at)<=now?'completed':'scheduled'):lessonState(i.lesson,now);const lang=i.kind==='personal'?'':langOf(i.lesson,rel);const text=itemText(i,rel,teacherName);
+     return <button key={i.key} className={'agenda-item k-'+i.kind+' '+st} onClick={()=>setOpen(i)} title={kindLabel(i.kind)+' · '+text} aria-label={kindLabel(i.kind)+' · '+text+' · '+clock(i.starts_at,tz)}>
+     <span className="ai-time">{clock(i.starts_at,tz)}{view!=='month'&&'–'+clock(i.ends_at,tz)}</span>
+     <span className="ai-who"><I size={13} aria-hidden className="ai-kind"/>{view!=='month'&&<span className="ai-role">{kindLabel(i.kind)} ·</span>} {lang&&<Flag code={lang} size={14}/>} {text}</span>
+     {i.kind!=='personal'&&i.lesson.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}</button>})}
+    {!list.length&&view!=='month'&&<p className="agenda-none">{t('Geen afspraken')}</p>}
    </div>})}
   </div>}
-  {loaded&&ready&&!lessons.length&&<div className="emptystate"><CalendarDays size={30}/><strong>{t('Geen lessen in deze periode')}</strong>{mode==='teacher'?<button className="button small" onClick={()=>setForm({})}><CalendarPlus size={15}/> {t('Les inplannen')}</button>:<p className="muted">{t('Zodra je docent een les inplant, zie je die hier.')}</p>}</div>}
-  {open&&<LessonDetail lesson={open} rel={relations.get(open.student_id)} mode={mode} teacherName={teacherName} onClose={()=>setOpen(null)} onEdit={()=>{setForm({lesson:open});setOpen(null)}} onChanged={()=>{setOpen(null);reload();requestCalendarSync()}}/>}
-  {form&&mode==='teacher'&&<LessonForm initial={form.lesson} day={form.day} relations={[...relations.values()].filter(r=>!r.archived_at)} onClose={()=>setForm(null)} onSaved={()=>{setForm(null);reload();requestCalendarSync()}}/>}
+  {loaded&&ready&&!visible.length&&<div className="emptystate"><CalendarDays size={30}/><strong>{t('Geen afspraken in deze periode')}</strong>{canTeach?<button className="button small" onClick={()=>setForm({})}><CalendarPlus size={15}/> {t('Les inplannen')}</button>:<p className="muted">{t('Zodra je docent een les inplant, zie je die hier.')}</p>}</div>}
+  {open&&open.kind!=='personal'&&<LessonDetail lesson={open.lesson} rel={relations.get(open.lesson.student_id)} mode={open.kind==='teach'?'teacher':'student'} teacherName={teacherName} onClose={()=>setOpen(null)} onEdit={()=>{setForm({lesson:open.lesson});setOpen(null)}} onChanged={()=>{setOpen(null);changed()}}/>}
+  {open&&open.kind==='personal'&&<PersonalDetail ev={open.event} tz={tz} onClose={()=>setOpen(null)} onEdit={()=>{setPform({event:open.event});setOpen(null)}} onChanged={()=>{setOpen(null);changed()}}/>}
+  {form&&canTeach&&<LessonForm initial={form.lesson} day={form.day} relations={[...relations.values()].filter(r=>!r.archived_at&&r.teacher_id===user?.id)} busy={items} onClose={()=>setForm(null)} onSaved={()=>{setForm(null);changed()}}/>}
+  {pform&&<PersonalForm initial={pform.event} day={pform.day} tz={tz} busy={items} onClose={()=>setPform(null)} onSaved={()=>{setPform(null);changed()}}/>}
  </>
 }
+
+/* ---------------- add to my own calendar without connecting Google (v57) ---------------- */
+function AddToCalendar({item}:{item:ExtraItem}){
+ const origin=typeof window!=='undefined'?window.location.origin:'';
+ function ics(){const blob=new Blob([icsFile(item,origin)],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='teachyrooms-'+item.starts_at.slice(0,10)+'.ics';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+ return <details className="add-cal"><summary className="button small secondary"><CalendarPlus size={14}/> {t('Toevoegen aan agenda')}</summary>
+  <div className="add-cal-menu"><a href={googleTemplateUrl(item,origin)} target="_blank" rel="noopener noreferrer">{t('Google Agenda')}</a><a href={outlookUrl(item,origin)} target="_blank" rel="noopener noreferrer">{t('Outlook')}</a><button type="button" className="linklike" onClick={ics}>{t('Apple / andere (.ics)')}</button></div></details>
+}
+
+/* ---------------- personal appointments (v57) ---------------- */
+function PersonalDetail({ev,tz,onClose,onEdit,onChanged}:{ev:PersonalEvent;tz:string;onClose:()=>void;onEdit:()=>void;onChanged:()=>void}){
+ const [msg,setMsg]=useState('');
+ useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[onClose]);
+ async function remove(){if(!confirm(t('Deze afspraak verwijderen?')))return;const {error}=await supabase()!.from('personal_events').delete().eq('id',ev.id);if(error){setMsg(error.message);return}onChanged()}
+ return <div className="modal-scrim" onClick={onClose}><div className="modal card lesson-detail k-personal" role="dialog" aria-modal="true" aria-label={t('Afspraak')} onClick={e=>e.stopPropagation()}>
+  <div className="row between"><div className="row"><span className="kind-badge k-personal"><UserRound size={14}/> {t('Persoonlijk')}</span><strong>{ev.title}</strong></div><button className="iconbtn" aria-label={t('Sluiten')} onClick={onClose}><X size={18}/></button></div>
+  <p className="ld-when"><Clock size={15}/> {fmtWhen(ev,tz)} <small className="muted">({minutesOf(ev)} {t('min')})</small></p>
+  {ev.notes&&<p className="muted">{ev.notes}</p>}
+  <p className="muted small">{ev.blocks_lessons?t('Telt als bezet bij het plannen van lessen.'):t('Telt niet als bezet bij het plannen van lessen.')}</p>
+  <AddToCalendar item={{kind:'personal',item_id:ev.id,starts_at:ev.starts_at,ends_at:ev.ends_at,timezone:ev.timezone,title:ev.title}}/>
+  {msg&&<p className="notice">{msg}</p>}
+  <div className="row ld-actions"><button className="button small secondary" onClick={onEdit}><Pencil size={14}/> {t('Wijzigen')}</button><button className="button small secondary danger-text" onClick={()=>void remove()}><Trash2 size={14}/> {t('Verwijderen')}</button></div>
+ </div></div>
+}
+function PersonalForm({initial,day,tz,busy,onClose,onSaved}:{initial?:PersonalEvent;day?:string;tz:string;busy:AgendaItem[];onClose:()=>void;onSaved:()=>void}){
+ const [title,setTitle]=useState(initial?.title||'');const [date,setDate]=useState(initial?dayKey(initial.starts_at,tz):(day||dayKey(Date.now(),tz)));
+ const [time,setTime]=useState(initial?clock(initial.starts_at,tz):'12:00');const [minutes,setMinutes]=useState(initial?minutesOf(initial):60);
+ const [notes,setNotes]=useState(initial?.notes||'');const [blocks,setBlocks]=useState(initial?.blocks_lessons??true);const [msg,setMsg]=useState('');const [saving,setSaving]=useState(false);
+ useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[onClose]);
+ const start=useMemo(()=>localToInstant(date,time,tz),[date,time,tz]);
+ const clash=Number.isNaN(start)?[]:overlaps(busy.filter(b=>b.kind!=='personal'||b.event.id!==initial?.id),start,start+minutes*60e3);
+ async function save(){if(!title.trim()||Number.isNaN(start))return;setSaving(true);setMsg('');const db=supabase()!;
+  const row={title:title.trim().slice(0,200),notes:notes.trim()||null,starts_at:new Date(start).toISOString(),ends_at:new Date(start+minutes*60e3).toISOString(),timezone:tz,blocks_lessons:blocks,updated_at:new Date().toISOString()};
+  const {error}=initial?await db.from('personal_events').update(row).eq('id',initial.id):await db.from('personal_events').insert(row);
+  setSaving(false);if(error){setMsg(/personal_events/.test(error.message)?t('Voer eerst supabase/v57.sql uit.'):error.message);return}onSaved()}
+ return <div className="modal-scrim" onClick={onClose}><div className="modal card lesson-form" role="dialog" aria-modal="true" aria-label={initial?t('Afspraak wijzigen'):t('Nieuwe afspraak')} onClick={e=>e.stopPropagation()}>
+  <div className="row between"><h3>{initial?t('Afspraak wijzigen'):t('Nieuwe afspraak')}</h3><button className="iconbtn" aria-label={t('Sluiten')} onClick={onClose}><X size={18}/></button></div>
+  <label className="stack"><span className="label">{t('Titel')}</span><input className="field" value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} placeholder={t('Bijvoorbeeld: tandarts')} autoFocus/></label>
+  <div className="grid2">
+   <label className="stack"><span className="label">{t('Datum')}</span><input className="field" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+   <label className="stack"><span className="label">{t('Begintijd')}</span><input className="field" type="time" value={time} step={300} onChange={e=>setTime(e.target.value)}/></label>
+   <label className="stack"><span className="label">{t('Duur')}</span><select className="field" value={minutes} onChange={e=>setMinutes(+e.target.value)}>{[...new Set([15,30,45,60,90,120,180,240,480,minutes])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m} {t('min')}</option>)}</select></label>
+  </div>
+  <label className="stack"><span className="label">{t('Notitie (alleen voor jou)')}</span><textarea className="field" rows={2} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
+  <label className="row small"><input type="checkbox" checked={blocks} onChange={e=>setBlocks(e.target.checked)}/> {t('Telt als bezet: tijdens deze afspraak kunnen geen lessen met mij worden gepland')}</label>
+  {clash.length>0&&<p className="notice small">{t('Let op: dit overlapt met {0} andere afspraak/afspraken.',clash.length)}</p>}
+  <p className="muted small">{t('Tijden in {0}',tz.replace(/_/g,' '))}</p>
+  {msg&&<p className="notice" role="alert">{msg}</p>}
+  <div className="row"><button className="button" disabled={saving||!title.trim()} onClick={()=>void save()}>{saving?t('Opslaan…'):t('Opslaan')}</button><button className="button secondary" onClick={onClose}>{t('Annuleren')}</button></div>
+ </div></div>
+}
+/** Wall time in a zone → instant (DST-safe: corrects with the zone's offset at that moment). */
+function localToInstant(date:string,time:string,tz:string){try{const guess=Date.parse(`${date}T${time}:00Z`);if(Number.isNaN(guess))return NaN;const off=(x:number)=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:tz,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(x));const g=(k:string)=>Number(p.find(q=>q.type===k)?.value);return Date.UTC(g('year'),g('month')-1,g('day'),g('hour'),g('minute'))-x};const first=guess-off(guess);return guess-off(first)}catch{return NaN}}
 
 /* ---------------- details of one lesson ---------------- */
 type Links={recordings:number;analysis:{id:string;status:string}|null;homework:number;notes:boolean};
@@ -147,11 +246,12 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
  const base='/'+(mode==='teacher'?'leerlingen?student=':'mijn-profiel?student=')+l.student_id+'&tab=';
  return <div className="modal-scrim" onClick={onClose}><div className="modal card lesson-detail" role="dialog" aria-modal="true" aria-label={t('Les')} onClick={e=>e.stopPropagation()}>
   <div className="row between"><div className="row"><Who l={l} rel={rel} mode={mode} teacherName={teacherName} size={44}/></div><button className="iconbtn" aria-label={t('Sluiten')} onClick={onClose}><X size={18}/></button></div>
-  <div className="ld-meta"><StatusChip state={st}/>{lang&&<span><Flag code={lang} size={16}/> {languageName(lang)}{rel?.level?' · '+rel.level:''}</span>}{l.series_id&&<span><Repeat size={14}/> {t('Wekelijks')}</span>}</div>
+  <div className="ld-meta"><span className={'kind-badge k-'+(mode==='teacher'?'teach':'learn')}>{mode==='teacher'?<Presentation size={14}/>:<GraduationCap size={14}/>} {mode==='teacher'?t('Jij geeft deze les'):t('Jij volgt deze les')}</span><StatusChip state={st}/>{lang&&<span><Flag code={lang} size={16}/> {languageName(lang)}{rel?.level?' · '+rel.level:''}</span>}{(rel?.subject||rel?.curriculum_subject)&&<span>{rel?.subject||languageName(rel?.curriculum_subject||'')}</span>}{l.series_id&&<span><Repeat size={14}/> {t('Wekelijks')}</span>}</div>
   <p className="ld-when"><Clock size={15}/> {fmtWhen(l,tz)} <small className="muted">({minutesOf(l)} {t('min')})</small></p>
   {otherTz&&otherTz!==tz&&<p className="muted small">{mode==='teacher'?t('Voor de leerling: {0} ({1})',clock(l.starts_at,otherTz)+'–'+clock(l.ends_at,otherTz),otherTz.replace(/_/g,' ')):t('Voor je docent: {0} ({1})',clock(l.starts_at,otherTz)+'–'+clock(l.ends_at,otherTz),otherTz.replace(/_/g,' '))}</p>}
   {st==='scheduled'&&<p className="next-count">{countdown(l.starts_at,now)}</p>}
-  {st!=='cancelled'&&<Link className="button" href={classroomHref(l)}><Video size={16}/> {t('Klaslokaal openen')}</Link>}
+  {st!=='cancelled'&&<div className="row"><Link className="button" href={classroomHref(l,mode)}><Video size={16}/> {t('Naar het klaslokaal')}</Link>
+   {st==='scheduled'&&<AddToCalendar item={{kind:mode==='teacher'?'teach':'learn',item_id:l.id,student_id:l.student_id,starts_at:l.starts_at,ends_at:l.ends_at,timezone:l.timezone,language:lang||null,teacher_name:teacherName(l.student_id)||null,student_name:rel?.name||null}}/>}</div>}
   {links&&<div className="ld-links"><h4>{t('Bij deze les')}</h4><ul>
    {mode==='teacher'&&<li><Sparkles size={15}/> {links.analysis?<Link href={base+'analyses'}>{t('Lesanalyse bekijken')} · {links.analysis.status==='approved'?t('Goedgekeurd'):links.analysis.status==='ready'?t('Klaar voor controle'):links.analysis.status==='failed'?t('Verwerking mislukt'):t('In verwerking')}</Link>:<span className="muted">{t('Nog geen lesanalyse')}</span>}</li>}
    <li><Mic size={15}/> {links.recordings?<Link href={base+'opnames'}>{t('{0} opname(s)',links.recordings)}</Link>:<span className="muted">{t('Geen opname')}</span>}</li>
@@ -171,7 +271,7 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
 
 /* ---------------- plan / change a lesson (teacher) ---------------- */
 const DURATIONS=[30,45,60,75,90,120];
-function LessonForm({initial,day,relations,onClose,onSaved}:{initial?:Lesson;day?:string;relations:StudentRecord[];onClose:()=>void;onSaved:()=>void}){
+function LessonForm({initial,day,relations,busy=[],onClose,onSaved}:{initial?:Lesson;day?:string;relations:StudentRecord[];busy?:AgendaItem[];onClose:()=>void;onSaved:()=>void}){
  const people=usePeopleTz();const myTz=browserTimeZone();
  const [student,setStudent]=useState(initial?.student_id||relations[0]?.id||'');
  const rel=relations.find(r=>r.id===student);
@@ -181,7 +281,7 @@ function LessonForm({initial,day,relations,onClose,onSaved}:{initial?:Lesson;day
  const [minutes,setMinutes]=useState(initial?minutesOf(initial):60);
  const [language,setLanguage]=useState(initial?.language||'');
  const [weekly,setWeekly]=useState(false);const [weeks,setWeeks]=useState(8);
- const [notes,setNotes]=useState('');const [busy,setBusy]=useState(false);const [msg,setMsg]=useState('');
+ const [notes,setNotes]=useState('');const [saving,setBusy]=useState(false);const [msg,setMsg]=useState('');
  useEffect(()=>{if(!initial)setLanguage(rel?relationLanguage(rel):'')},[student]);// eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[onClose]);
  const studentTz=rel?.user_id?people.get(rel.user_id):undefined;
@@ -209,7 +309,8 @@ function LessonForm({initial,day,relations,onClose,onSaved}:{initial?:Lesson;day
   {!initial&&<><label className="row"><input type="checkbox" checked={weekly} onChange={e=>setWeekly(e.target.checked)}/> <Repeat size={15}/> {t('Elke week herhalen')}</label>
    {weekly&&<label className="stack"><span className="label">{t('Aantal weken (inclusief deze)')}</span><input className="field" type="number" min={2} max={52} value={weeks} onChange={e=>setWeeks(Math.max(2,Math.min(52,+e.target.value||2)))}/><small className="muted">{t('Lessen blijven op dezelfde lokale tijd, ook bij zomer- en wintertijd.')}</small></label>}
    <label className="stack"><span className="label">{t('Lesnotities (optioneel, alleen voor jou)')}</span><textarea className="field" rows={2} value={notes} onChange={e=>setNotes(e.target.value)}/></label></>}
+  {!weekly&&(()=>{const c=Number.isNaN(startPreview)?[]:overlaps(busy,startPreview,startPreview+minutes*60e3,initial?.id);return c.length>0&&<p className="notice small" role="alert">{t('Je bent dan al bezet: {0}.',c.map(i=>kindLabel(i.kind)+' '+clock(i.starts_at,myTz)).join(', '))}</p>})()}
   {msg&&<p className="notice" role="alert">{msg}</p>}
-  <div className="row"><button className="button" disabled={busy||!student} onClick={()=>void save()}>{busy?t('Opslaan…'):initial?t('Wijziging opslaan'):weekly?t('{0} lessen inplannen',weeks):t('Les inplannen')}</button><button className="button secondary" onClick={onClose}>{t('Annuleren')}</button></div></>}
+  <div className="row"><button className="button" disabled={saving||!student} onClick={()=>void save()}>{saving?t('Opslaan…'):initial?t('Wijziging opslaan'):weekly?t('{0} lessen inplannen',weeks):t('Les inplannen')}</button><button className="button secondary" onClick={onClose}>{t('Annuleren')}</button></div></>}
  </div></div>
 }

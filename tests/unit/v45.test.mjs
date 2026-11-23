@@ -21,8 +21,8 @@ test('"Volgende les" and "Daarna": name/avatar → profile, date/row → lesson 
   assert.match(a, /<Link className="next-when when-link" href=\{lessonHref\(next\)\}/);
   assert.match(a, /<Link className="ar-who who-link" href=\{profileHref\(l,mode\)\}/);
   assert.match(a, /<Link className="ar-lesson" href=\{lessonHref\(l\)\}/);
-  assert.match(a, /<Link className="button next-open" href=\{classroomHref\(next\)\}>/);
-  assert.match(a, /<Link className="iconbtn ar-open" href=\{classroomHref\(l\)\}/);
+  assert.match(a, /<Link className="button next-open" href=\{classroomHref\(next,mode\)\}>/); // v57: with the role
+  assert.match(a, /<Link className="iconbtn ar-open" href=\{classroomHref\(l,mode\)\}/);
   assert.match(a, /from\('lessons'\)\.select\(LESSON_COLUMNS\)\.eq\('id',openId\)\.maybeSingle\(\)/, '/agenda?les=… opens the existing details (RLS applies)');
   assert.match(read('app/agenda/page.tsx'), /const openId=useQueryParam\('les'\);/);
 });
@@ -95,5 +95,6 @@ test('sync: local changes first, then incremental Google changes; expired sync t
   assert.match(s, /if \(e instanceof RevokedError\) \{ await db\.rpc\('gcal_save_state'/, 'revoked/expired token is shown, not retried forever');
   const p = read('components/GoogleCalendar.tsx');
   assert.match(p, /'Opnieuw synchroniseren'/); assert.match(p, /'Google Calendar verbonden'/);
-  assert.match(read('components/Agenda.tsx'), /onSaved=\{\(\)=>\{setForm\(null\);reload\(\);requestCalendarSync\(\)\}\}/);
+  assert.match(read('components/Agenda.tsx'), /onSaved=\{\(\)=>\{setForm\(null\);changed\(\)\}\}/); // v57: changed() = reload + requestCalendarSync
+  assert.match(read('components/Agenda.tsx'), /const changed=\(\)=>\{reload\(\);requestCalendarSync\(\)\}/);
 });

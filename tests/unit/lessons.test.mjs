@@ -58,7 +58,8 @@ test('countdown and readable planning errors (translated)', async () => {
   assert.equal(countdown('2026-11-20T18:00:00Z', now), 'Les bezig');
   assert.match(planningError('DOUBLE_BOOKING_STUDENT 2026-11-20 15:30'), /andere docent/);
   setCurrentLang('en');
-  assert.match(planningError('DOUBLE_BOOKING_TEACHER 2026-11-20 15:30'), /^Double booking: you already have a lesson on .*15:30\.$/);
+  // v57: also a lesson the teacher follows as a learner counts
+  assert.match(planningError('DOUBLE_BOOKING_TEACHER 2026-11-20 15:30'), /^Double booking: you already have a lesson on .*15:30 \(one you give or follow yourself\)\.$/);
   assert.equal(countdown('2026-11-20T18:42:00Z', now), 'In 12 minutes');
   assert.equal(countdown('2026-11-21T20:30:00Z', now), 'In 1 day and 2 hours');
   setCurrentLang('nl');

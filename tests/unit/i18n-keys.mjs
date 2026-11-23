@@ -12,6 +12,9 @@ const TFN = new Set(['t', 'tt', 'tx', 'T']);
 
 /** Texts passed to t() through a variable (tab labels, field labels, server messages). */
 export const DYNAMIC = [
+  // v57 tasks (lib/tasks.ts titles/actions/priorities, translated in components/Tasks.tsx)
+  'Huiswerk nakijken: {0}', 'AI-lesverslag mislukt', 'Les inplannen met {0}', 'Geen les in de komende 2 weken', 'Nakijken', 'Bekijken', 'Inplannen',
+  'Huiswerk maken: {0}', 'Maken', 'Les volgen bij {0}', 'Les volgen', 'Toestemming voor AI-lesverslag', 'Naar het klaslokaal', 'Openen', 'Hoog', 'Normaal', 'Laag',
   // components/StudentData.tsx tabs
   'Overzicht', 'Lessen', 'Lesanalyses', 'Samenvattingen', 'Woordenschat', 'Leerdoelen', 'Huiswerk', 'Oefenen', 'Bord & canvas', 'Opnames', 'Privé',
   // app/portugees tabs

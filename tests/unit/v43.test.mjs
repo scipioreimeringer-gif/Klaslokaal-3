@@ -116,7 +116,7 @@ test('next lessons: "DAARNA" with the next three, clickable to the classroom', (
   const a = read('components/Agenda.tsx');
   assert.match(a, /\.sort\(\(a,b\)=>a\.starts_at\.localeCompare\(b\.starts_at\)\)\.slice\(0,3\)/);
   assert.match(a, /<h4>\{t\('DAARNA'\)\}<\/h4>/);
-  assert.match(a, /<Link className="iconbtn ar-open" href=\{classroomHref\(l\)\}/, 'v45: classroom via its own button; name → profile, row → details');
+  assert.match(a, /<Link className="iconbtn ar-open" href=\{classroomHref\(l,mode\)\}/, 'v45: classroom via its own button (v57: with the role); name → profile, row → details');
 });
 test('unlinking: teacher and student, checked on the server, nothing deleted', () => {
   assert.match(read('app/leerlingen/page.tsx'), /t\("Weet je zeker dat je deze leerling wilt ontkoppelen\?"\)/);

@@ -43,7 +43,7 @@ function Picker(){
   <p className="muted small-print">{t("Het oude klaslokaal zonder leerlingkoppeling staat nog op")} <a href="/legacy/index.html">{'/legacy/index.html'}</a> {t("(lokale opslag op dit apparaat).")}</p></Nav>
 }
 
-function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|null}){
+function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:string|null;asParam?:string|null}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
  const [assistOpen,setAssistOpen]=useState(false);const [gamesOpen,setGamesOpen]=useState(false);const [gamesHost,setGamesHost]=useState<Element|null>(null);const [frameLoads,setFrameLoads]=useState(0);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
@@ -53,7 +53,8 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
   if(!r.data){setError(t("Deze les bestaat niet of je hebt er geen toegang toe."));return}
   const s=r.data as StudentRecord;const isTeacher=s.teacher_id===user.id&&canTeach;const isStudent=s.user_id===user.id;
   // Someone who is both (teaching themselves for a test) follows the selected profile.
-  const as:Room['as']|null=isTeacher&&isStudent?(mode==='student'?'student':'teacher'):isTeacher?'teacher':isStudent?'student':null;
+  // v57: a link from the central agenda says which role (als=docent|leerling); it is only honoured where that role is real
+  const as:Room['as']|null=isTeacher&&isStudent?(asParam==='leerling'?'student':asParam==='docent'?'teacher':mode==='student'?'student':'teacher'):isTeacher?'teacher':isStudent?'student':null;
   if(!as){setError(t("Geen toegang tot dit klaslokaal."));return}
   if(!s.room_code){setError(t(MIGRATION_HINT));return}
   const lesson=as==='teacher'?await findLesson(db,s.id,lessonParam):null;const lessonId=lesson?.id||null;if(cancelled)return;
@@ -62,7 +63,7 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
   window.teachyBridge.uiLang=getLang();
   window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true),games:()=>frameCall('__klasTab','games','user')};
   setRoom({student:s,as});setReady(true);
- })();return()=>{cancelled=true}},[studentId,lessonParam,user?.id,canTeach,mode,router]);
+ })();return()=>{cancelled=true}},[studentId,lessonParam,asParam,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
  // v36: mount point for the games inside the classroom's work panel (re-attached after every classroom reload)
  useEffect(()=>{if(!ready)return;let stop=false;setGamesHost(null);const attach=()=>{if(stop)return;const el=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentDocument?.getElementById('gamesHost');if(!el){setTimeout(attach,400);return}
@@ -96,5 +97,5 @@ function LiveRoom({studentId,lessonParam}:{studentId:string;lessonParam:string|n
  </main>;
 }
 
-function Live(){const studentId=useQueryParam('student');const lesson=useQueryParam('lesson');return studentId?<LiveRoom studentId={studentId} lessonParam={lesson}/>:<Picker/>}
+function Live(){const studentId=useQueryParam('student');const lesson=useQueryParam('lesson');const als=useQueryParam('als');return studentId?<LiveRoom studentId={studentId} lessonParam={lesson} asParam={als}/>:<Picker/>}
 export default function LivePage(){return <Suspense fallback={<div className="live-page"><div className="loader"/></div>}><Live/></Suspense>}

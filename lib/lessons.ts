@@ -66,8 +66,8 @@ export function shift(anchor: string, view: View, dir: -1 | 1) {
   const d = new Date(anchor.slice(0, 8) + '15T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + dir); return d.toISOString().slice(0, 10);
 }
 /** Group lessons by calendar day in the viewer's zone, sorted by start. */
-export function byDay(lessons: Lesson[], tz: string) {
-  const m = new Map<string, Lesson[]>();
+export function byDay<T extends {starts_at: string}>(lessons: T[], tz: string) {
+  const m = new Map<string, T[]>();
   for (const l of [...lessons].sort((a, b) => a.starts_at.localeCompare(b.starts_at))) { const k = dayKey(l.starts_at, tz); m.set(k, [...(m.get(k) || []), l]); }
   return m;
 }
@@ -89,10 +89,11 @@ export function countdown(startIso: string, now = Date.now()) {
 
 /** Readable message for database errors from planning (double booking, invalid input). */
 export function planningError(msg: string) {
-  const m = msg.match(/DOUBLE_BOOKING_(TEACHER|STUDENT)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+  const m = msg.match(/DOUBLE_BOOKING_(TEACHER|STUDENT|PERSONAL)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
   if (m) {
     const when = `${fmtDay(m[2], {weekday: 'short', day: 'numeric', month: 'short'})} ${m[3]}`;
-    return m[1] === 'TEACHER' ? t('Dubbele boeking: je hebt op {0} al een les.', when) : t('Dubbele boeking: deze leerling heeft op {0} al een les (ook bij een andere docent).', when);
+    if (m[1] === 'PERSONAL') return t('Dubbele boeking: je hebt op {0} een persoonlijke afspraak.', when);
+    return m[1] === 'TEACHER' ? t('Dubbele boeking: je hebt op {0} al een les (die je geeft of zelf volgt).', when) : t('Dubbele boeking: deze leerling heeft op {0} al een les (ook bij een andere docent).', when);
   }
   if (/Invalid time zone/.test(msg)) return t('Ongeldige tijdzone.');
   if (/Invalid duration/.test(msg)) return t('Kies een lesduur tussen 10 minuten en 8 uur.');
@@ -102,7 +103,9 @@ export function planningError(msg: string) {
 }
 
 /** Classroom link; the lesson id links recordings and the analysis to this lesson. */
-export const classroomHref = (l: Pick<Lesson, 'id' | 'student_id'>) => `/klaslokaal/live?student=${encodeURIComponent(l.student_id)}&lesson=${encodeURIComponent(l.id)}`;
+/** v57: with the role (als=docent|leerling) the classroom opens with the right access when one account is both. */
+export const classroomHref = (l: Pick<Lesson, 'id' | 'student_id'>, as?: 'teacher' | 'student') =>
+  `/klaslokaal/live?student=${encodeURIComponent(l.student_id)}&lesson=${encodeURIComponent(l.id)}` + (as ? '&als=' + (as === 'teacher' ? 'docent' : 'leerling') : '');
 
 /** All IANA time zones the browser knows (fallback: a short list). */
 export function timeZones(): string[] {
