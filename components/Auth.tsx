@@ -32,19 +32,21 @@ export function AuthProvider({children}:{children:React.ReactNode}){
    if(!u){setRole(null);setLinks([]);setPending([]);return}
    const [{data:p},{data:links},teachers,pending]=await Promise.all([
     db.from('profiles').select('role').eq('id',u.id).maybeSingle(),
-    db.from('students').select('id,name,subject,teacher_id').eq('user_id',u.id).neq('teacher_id',u.id).order('name'),
+    // v55: also profiles where I am my own teacher (one account with "Docent" and "Mijn leeromgeving")
+    db.from('students').select('id,name,subject,teacher_id').eq('user_id',u.id).order('name'),
     db.rpc('my_teachers'),
     db.rpc('my_pending_student_links'),
    ]);
    const r=(['admin','teacher','pending_teacher','rejected_teacher'].includes(p?.role??'')?p?.role:'student') as Role;setRole(r);
    const names=new Map<string,string>(((teachers.data||[]) as {student_id:string;teacher_name:string}[]).map(t=>[t.student_id,t.teacher_name]));
-   setLinks(((links||[]) as {id:string;name:string;subject:string;teacher_id:string}[]).filter(l=>l.teacher_id!==u.id).map(({teacher_id:_,...l})=>({...l,teacher_name:names.get(l.id)||''})));
+   setLinks(((links||[]) as {id:string;name:string;subject:string;teacher_id:string}[]).map(({teacher_id:_,...l})=>({...l,teacher_name:names.get(l.id)||''})));
    setPending(pending.error?[]:((pending.data||[]) as PendingLink[]));
   }catch{setUser(null);setRole(null)}finally{setLoading(false)}},[]);
- useEffect(()=>{try{const m=sessionStorage.getItem(MODE_KEY);if(m==='teacher'||m==='student')setModeState(m)}catch{}
+ // v55: the chosen environment (Docent / Mijn leeromgeving) is remembered on this device, not only in this tab
+ useEffect(()=>{try{const m=localStorage.getItem(MODE_KEY)||sessionStorage.getItem(MODE_KEY);if(m==='teacher'||m==='student')setModeState(m)}catch{}
   void load();const db=supabase();const {data}=db?.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){try{sessionStorage.removeItem(MODE_KEY)}catch{}setModeState(null)}setTimeout(()=>{void load()},0)})||{};return()=>data?.subscription.unsubscribe()},[load]);
  const canTeach=role==='teacher'||role==='admin';
- const setMode=useCallback((m:Mode)=>{setModeState(m);try{sessionStorage.setItem(MODE_KEY,m)}catch{}},[]);
+ const setMode=useCallback((m:Mode)=>{setModeState(m);try{sessionStorage.setItem(MODE_KEY,m);localStorage.setItem(MODE_KEY,m)}catch{}},[]);
  // Single-role accounts never need to choose.
  const effective:Mode|null=!user?null:canTeach&&studentLinks.length===0?'teacher':!canTeach?'student':mode;
  return <C.Provider value={{user,role,loading,refresh:load,canTeach,studentLinks,pendingLinks,mode:effective,setMode}}>{children}</C.Provider>

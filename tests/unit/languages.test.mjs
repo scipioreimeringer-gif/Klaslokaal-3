@@ -53,14 +53,15 @@ test('language names', () => {
   assert.equal(languageName('xx'), 'XX');
 });
 
-test('own learning languages: never what I teach; same list for dashboard and sidebar', () => {
+test('own learning languages: never what I only teach; my own learner profile counts (v55); same list for dashboard and sidebar', () => {
   const me = 'me';
   const rels = [
     rel('a', 'ana', {curriculum_subject: 'pt', user_id: me}),         // I learn Portuguese with Ana
     rel('b', me, {curriculum_subject: 'nl', user_id: me}),            // my own test student (I teach myself)
     rel('c', me, {curriculum_subject: 'nl', user_id: 'madison'}),     // I teach Dutch to Madison
   ];
-  assert.deepEqual(ownLearningCards(rels, [], me).map(c => c.code), ['pt']);
-  assert.deepEqual(ownLearningCards(rels, [{id: 's', language: 'nl', level: null}], me).map(c => c.code), ['pt', 'nl'], 'only a self-added language can add Dutch');
+  // v55: one account that teaches AND learns — my own learner profile (I teach myself) is a learning language; Madison's is not
+  assert.deepEqual(ownLearningCards(rels, [], me).map(c => c.code).sort(), ['nl', 'pt']);
+  assert.ok(!ownLearningCards(rels, [], me).find(c => c.code === 'nl').relations.some(r => r.id === 'c'), 'never the student I only teach');
   assert.deepEqual(ownLearningCards(rels, [], 'madison').map(c => c.code), ['nl'], 'Madison sees the Dutch I teach her');
 });

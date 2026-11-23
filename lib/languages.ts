@@ -50,10 +50,12 @@ export function buildLanguageCards<R extends RelationLike>(relations: R[], selfL
   return Array.from(map.values()).sort((a, b) => (b.relations.length ? 1 : 0) - (a.relations.length ? 1 : 0) || languageName(a.code).localeCompare(languageName(b.code)));
 }
 
-/** "Languages I learn": relations where I am the STUDENT and someone else teaches me, plus my self-study languages.
- *  Languages I teach (teacher_id = me) never appear here. Used by the dashboard cards, the sidebar and "Mijn lessen". */
+/** "Languages I learn": relations where I am the linked STUDENT (user_id = me), plus my self-study languages.
+ *  v55: a relation where I am also the teacher counts too (one account that teaches AND learns, e.g. after merging two
+ *  accounts: "Mijn leeromgeving"). Students I only teach (user_id = someone else) never appear here. Without user_id
+ *  information the old rule applies (not taught by me). Used by the dashboard cards, the sidebar and "Mijn lessen". */
 export function ownLearningCards<R extends RelationLike>(relations: R[], selfLangs: SelfLanguage[], me: string): LanguageCard<R>[] {
-  return buildLanguageCards(relations.filter(r => r.teacher_id !== me && (r.user_id === undefined || r.user_id === me)), selfLangs);
+  return buildLanguageCards(relations.filter(r => r.user_id === undefined ? r.teacher_id !== me : r.user_id === me), selfLangs);
 }
 
 /** Measured numbers for a card, only from stored rows of its own relations. */

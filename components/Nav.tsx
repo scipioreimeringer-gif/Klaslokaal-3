@@ -31,7 +31,7 @@ function Frame({children}:{children:React.ReactNode}){
  return <div className={'shell'+(collapsed?' side-collapsed':'')}>
   <aside className={'side'+(open?' open':'')}>
    <div className="side-head"><Link className="brand" href="/" onClick={()=>setOpen(false)}><span className="brandmark"><GraduationCap size={20}/></span><span>{tt("TeachyRooms")}</span></Link></div>
-   <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Leerling')}</div>
+   <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Mijn leeromgeving')}</div>
    <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}</Link>)}
     {mode==='teacher'&&role==='admin'&&<Link href="/beheer" className={active('/beheer')?'active':''} onClick={()=>setOpen(false)}><ShieldCheck size={18}/>{tt('Docenten beheren')}</Link>}</nav>
    {mode!=='teacher'&&<Suspense fallback={null}><SideLanguages onNavigate={()=>setOpen(false)}/></Suspense>}
@@ -44,7 +44,7 @@ function Frame({children}:{children:React.ReactNode}){
     <button className="iconbtn menu-btn" aria-label={tt("Menu openen of sluiten")} title={tt("Menu openen of sluiten")} aria-expanded={open||!collapsed} onClick={toggleSide}><Menu size={20}/></button>
     <span className="topbar-title">{mode==='teacher'?tt('Jouw onderwijsruimte'):tt('Jouw leeromgeving')}</span>
     <div className="topbar-actions">
-     {both&&<div className="mode-switch" role="group" aria-label={tt("Profiel kiezen")}><button aria-pressed={mode==='teacher'} onClick={()=>switchTo('teacher')}><Presentation size={15}/><span>{tt('Docent')}</span></button><button aria-pressed={mode==='student'} onClick={()=>switchTo('student')}><BookOpen size={15}/><span>{tt('Leerling')}</span></button></div>}
+     {both&&<div className="mode-switch" role="group" aria-label={tt("Profiel kiezen")}><button aria-pressed={mode==='teacher'} onClick={()=>switchTo('teacher')}><Presentation size={15}/><span>{tt('Docent')}</span></button><button aria-pressed={mode==='student'} onClick={()=>switchTo('student')}><BookOpen size={15}/><span>{tt('Mijn leeromgeving')}</span></button></div>}
      <LanguagePicker/>
     </div>
    </header>
