@@ -98,7 +98,11 @@ export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>
   void Promise.all([db.from('curriculum_goals').select('id,title').in('id',ids),db.from('student_goal_progress').select('goal_id,status,title_override').eq('student_id',a.student_id).in('goal_id',ids)]).then(([g,p])=>{
    const pm=new Map(((p.data||[]) as {goal_id:string;status:GoalStatus;title_override?:string|null}[]).map(x=>[x.goal_id,x]));
    setTopics(Object.fromEntries(((g.data||[]) as {id:string;title:string}[]).map(x=>[x.id,{id:x.id,title:pm.get(x.id)?.title_override||x.title,status:pm.get(x.id)?.status||'not_started'}])))})},[a.id]);
- const published=!a.is_test&&a.status==='approved';
+ const published=!a.is_test&&a.status==='approved';const hidden=!a.is_test&&a.status==='ready'&&!!(a.stage_detail as {hidden?:boolean}|null)?.hidden;
+ // v56: published automatically; the teacher can hide it again (and show it) — the content is never deleted
+ async function visible(show:boolean){setBusy(true);setMsg('');const t=new Date().toISOString();const sd={...((a.stage_detail||{}) as Record<string,unknown>),hidden:!show};
+  const r=await supabase()!.from('lesson_analyses').update(show?{status:'approved',final:doc,stage_detail:sd,published_at:a.published_at||t,approved_at:t,updated_at:t}:{status:'ready',stage_detail:sd,updated_at:t}).eq('id',a.id);
+  setBusy(false);setMsg(r.error?r.error.message:show?tt('Het verslag is weer zichtbaar voor de leerling.'):tt('Het verslag is verborgen voor de leerling.'));if(!r.error)onChange()}
  async function save(next=doc,note?:string){setBusy(true);setMsg('');
   const r=await supabase()!.from('lesson_analyses').update(a.is_test?{draft:next,updated_at:new Date().toISOString()}:{draft:next,final:next,updated_at:new Date().toISOString()}).eq('id',a.id);
   setBusy(false);setMsg(r.error?r.error.message:note||(published?tt("Opgeslagen. De leerling ziet de aangepaste versie."):tt("Opgeslagen.")));if(!r.error)onChange()}
@@ -120,7 +124,10 @@ export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>
   <div className={'quality q-'+doc.source_quality}><Bot size={15}/> <b>{tt("AI-lesanalyse")}</b> {tt("· brongegevens:")} {doc.source_quality==='good'?tt("goed"):doc.source_quality==='partial'?tt("gedeeltelijk"):tt("onvoldoende")}{doc.quality_note&&<> — {doc.quality_note}</>}
    <small className="muted block">{tt("{0} transcriptdelen · {1} leerlingzinnen · {2} niet-verifieerbare fouten weggelaten · taal van de uitleg: {3}",doc.chunks,doc.student_utterances,doc.dropped_unverified,doc.explanation_language)}</small></div>
   {a.is_test?<p className="notice test-note"><span className="test-badge">{'TEST'}</span> {tt('TEST-analyse: nooit gedeeld met de leerling; geen huiswerk, geen voorstellen voor het leertraject.')}</p>
-   :published&&<p className="muted"><CheckCircle2 size={14}/> {tt("Verslag en foutenanalyse zijn automatisch gedeeld met de leerling{0}. Je kunt ze hier aanpassen.",a.published_at?' ('+niceDate(a.published_at)+')':'')}</p>}
+   :published?<p className="muted row between wrap"><span><CheckCircle2 size={14}/> {tt("Verslag en foutenanalyse zijn automatisch gedeeld met de leerling{0}. Je kunt ze hier aanpassen.",a.published_at?' ('+niceDate(a.published_at)+')':'')}</span>
+     <button type="button" className="button small secondary" disabled={busy} onClick={()=>void visible(false)}>{tt('Verbergen voor de leerling')}</button></p>
+    :hidden?<p className="notice row between wrap"><span>{tt('Dit verslag is verborgen voor de leerling.')}</span><button type="button" className="button small" disabled={busy} onClick={()=>void visible(true)}>{tt('Weer tonen aan de leerling')}</button></p>
+    :a.status==='ready'&&<p className="notice row between wrap"><span>{tt('Dit verslag is nog niet gedeeld.')}</span><button type="button" className="button small" disabled={busy} onClick={()=>void visible(true)}>{tt('Nu delen met de leerling')}</button></p>}
 
   {!a.is_test&&<details className="compact-preview"><summary><b>{tt("Zo ziet de leerling het verslag")}</b></summary><LessonReport doc={doc} teacher lessonLang={lessonLang}/></details>}
 

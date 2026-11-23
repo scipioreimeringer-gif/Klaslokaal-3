@@ -6,6 +6,7 @@ import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,Graduatio
 import {LanguagePicker} from './I18n';
 import {useAuth} from './Auth';
 import {supabase} from '../lib/supabase';
+import {authFetch} from '../lib/authFetch';
 import {AssistantLauncher} from './Assistant';
 import {Avatar} from './Avatar';
 import {SideLanguages} from './Languages';
@@ -14,6 +15,10 @@ import {t as tt} from '../lib/i18n';
 
 function Frame({children}:{children:React.ReactNode}){
  const {user,role,mode,setMode,canTeach,studentLinks}=useAuth();
+ // v56: AI lesson reports catch up by themselves — whenever a teacher opens TeachyRooms (at most every 10 minutes per
+ // device) recordings with consent but without a report are processed, failed ones retried, waiting drafts published
+ useEffect(()=>{if(!user||!canTeach||mode!=='teacher')return;const k='teachy-report-catchup-'+user.id;try{const last=+(localStorage.getItem(k)||0);if(Date.now()-last<10*60e3)return;localStorage.setItem(k,String(Date.now()))}catch{/* private mode */}
+  const db=supabase();if(db)void authFetch(db,'/api/ai/backfill',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{/* next visit */})},[user?.id,canTeach,mode]);
  const path=usePathname()||'/';const router=useRouter();const [open,setOpen]=useState(false);const [collapsed,setCollapsed]=useState(false);
  useEffect(()=>{try{setCollapsed(localStorage.getItem('teachy-side')==='collapsed')}catch{}},[]);
  const isMobile=()=>typeof window!=='undefined'&&window.matchMedia('(max-width: 900px)').matches;

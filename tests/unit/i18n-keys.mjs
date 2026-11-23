@@ -46,6 +46,8 @@ export const DYNAMIC = [
   'Wat betekent dit?', 'Welk woord past?', 'Schrijf een korte zin met dit woord', 'Vul het ontbrekende woord in', 'Vul in zoals het goed is', 'Zeg de zin goed', 'Verbeter de zin', 'Welke zin is goed?',
   // v51: daily practice — production tasks (lib/daily.ts)
   'Schrijf een zin met dit woord in de verleden tijd', 'Beantwoord de vraag in een hele zin',
+  // v56: processing states of AI lesson reports (components/LessonCards.tsx STATE_TEXT)
+  'Geen toestemming voor AI-verslag', 'Opname verwerken', 'Transcriptie maken', 'AI-verslag genereren', 'Verslag beschikbaar', 'Verwerking mislukt', 'Verslag verborgen door je docent',
 ];
 
 function sourceFiles() {

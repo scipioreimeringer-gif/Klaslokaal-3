@@ -1091,7 +1091,7 @@ html[data-theme="dark"] .v53-views button,html[data-theme="dark"] .v53-seg butto
     <h2>Les opnemen?</h2>
     <p class="muted">Er wordt alleen <b>audio</b> opgenomen: jouw microfoon en die van je leerling. Je leerling krijgt eerst een verzoek en moet zelf toestemming geven. Tijdens de opname zien jullie allebei een rode indicator en kan ieder van jullie de opname stoppen.</p>
     <p class="muted">De opname wordt privé opgeslagen bij deze leerling. Alleen jij en je leerling kunnen hem beluisteren en verwijderen.</p>
-    <label class="consent"><input type="checkbox" id="recAiT"> Ook vragen om toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les getranscribeerd en samengevat. Jij controleert de analyse voordat je leerling die ziet.</label>
+    <label class="consent"><input type="checkbox" id="recAiT" checked> Ook vragen om toestemming voor een <b>AI-lesverslag</b>: na de les wordt de opname automatisch omgezet in tekst en verwerkt tot een verslag met woorden, verbeterpunten en oefeningen. Het verslag wordt direct gedeeld met je leerling; jij kunt het daarna aanpassen of verbergen.</label>
     <div class="row"><button class="btn primary" id="recStartYes" type="button">Ik stem in, vraag mijn leerling</button><button class="btn ghost" id="recStartNo" type="button">Annuleren</button></div>
   </div>
 </div>
@@ -1100,8 +1100,8 @@ html[data-theme="dark"] .v53-views button,html[data-theme="dark"] .v53-seg butto
     <h2>Mag deze les worden opgenomen?</h2>
     <p class="muted">Je docent wil een <b>audio-opname</b> maken van deze les: jouw stem en die van je docent. De opname wordt privé opgeslagen in jouw leerlingprofiel. Alleen jij en je docent kunnen hem beluisteren, en jullie kunnen hem allebei verwijderen.</p>
     <p class="muted">Je kunt de opname op elk moment stoppen met de rode knop bovenaan.</p>
-    <label class="consent" id="recAiWrap" hidden><input type="checkbox" id="recAiS"> Ik geef ook toestemming voor <b>AI-lesanalyse</b>: de opname wordt na de les automatisch omgezet in tekst en samengevat (via OpenAI). Je docent controleert de samenvatting voordat jij die ziet. Je kunt opname en analyse later verwijderen.</label>
-    <div class="row"><button class="btn primary" id="recYes" type="button">Ja, ik geef toestemming</button><button class="btn ghost" id="recNo" type="button">Nee, niet opnemen</button></div>
+    <p class="consent" id="recAiWrap" hidden><input type="checkbox" id="recAiS" hidden> Je docent vraagt ook toestemming voor een <b>AI-lesverslag</b>: na de les wordt de opname automatisch omgezet in tekst (via OpenAI) en verwerkt tot een verslag met nieuwe woorden, verbeterpunten en oefeningen. Het verslag verschijnt vanzelf bij jouw lessen. Je kunt opname en verslag later verwijderen.</p>
+    <div class="row"><button class="btn primary" id="recYes" type="button">Ja, ik geef toestemming</button><button class="btn ghost" id="recYesPlain" type="button" hidden>Alleen opnemen, zonder AI-verslag</button><button class="btn ghost" id="recNo" type="button">Nee, niet opnemen</button></div>
   </div>
 </div>
 <div class="ov" id="tidyOv" hidden data-teacher>
@@ -1351,7 +1351,7 @@ function onMessage(m){
       else if(!m.on && !screenStream && (!m.by || m.by === scrBy)) hideScreen(); /* only the screen of the one who stopped */
       break;
     case "cvpage": var pl = $("cvPageLbl"); if(pl){ pl.textContent = String(m.title || "").slice(0, 40) + " (" + m.i + "/" + m.n + ")"; } break;
-    case "recask": if(!isT){ $("recAiWrap").hidden = !m.ai; $("recAiS").checked = false; $("recOv").hidden = false; } break;
+    case "recask": if(!isT){ $("recAiWrap").hidden = !m.ai; $("recYesPlain").hidden = !m.ai; $("recAiS").checked = !!m.ai; $("recYes").textContent = m.ai ? "Ja, opnemen met AI-verslag" : "Ja, ik geef toestemming"; $("recOv").hidden = false; } break; /* v56: one clear choice, always active consent */
     case "recok": if(isT) recConsentReply(true, !!m.ai); break;
     case "recno": if(isT) recConsentReply(false); break;
     case "recon": if(!isT){ recBadge(true); $("recOv").hidden = true; } break;
@@ -1448,7 +1448,7 @@ function recFinish(){
   if(!b){ recDownload(blob); alert("Online opslaan niet beschikbaar. De opname is als bestand gedownload."); return; }
   toast("Opname veilig opslaan...");
   b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:REC.tConsent, studentConsentAt:REC.sConsent, aiTeacherAt:REC.aiS ? REC.aiT : null, aiStudentAt:REC.aiS}, tracks).then(function(r){
-    if(r && r.ok) toast(r.analysis === "started" ? "Opname opgeslagen. AI-lesanalyse gestart; je krijgt hem ter controle." : r.analysis ? "Opname opgeslagen. " + r.analysis : "Opname opgeslagen bij deze leerling");
+    if(r && r.ok) toast(r.analysis === "started" ? "Opname opgeslagen. Het AI-lesverslag wordt gemaakt en daarna automatisch gedeeld met je leerling." : r.analysis ? "Opname opgeslagen. " + r.analysis : "Opname opgeslagen bij deze leerling");
     else { recDownload(blob); alert("Online opslaan mislukt (" + ((r && r.error) || "onbekende fout") + "). De opname is als bestand gedownload, zodat er niets verloren gaat."); }
   }).catch(function(e){ recDownload(blob); alert("Online opslaan mislukt (" + ((e && e.message) || e) + "). De opname is als bestand gedownload."); });
 }$("recStartYes").addEventListener("click", function(){
@@ -1461,7 +1461,8 @@ function recFinish(){
   clearTimeout(REC.askT); REC.askT = setTimeout(function(){ if(REC.asked){ REC.asked = false; toast("Geen antwoord van je leerling; er wordt niet opgenomen"); } }, 60000);
 });
 $("recStartNo").addEventListener("click", function(){ $("recStartOv").hidden = true; });
-$("recYes").addEventListener("click", function(){ var ai = !$("recAiWrap").hidden && $("recAiS").checked; $("recOv").hidden = true; send({t:"recok", ai:ai}); toast(ai ? "Toestemming gegeven (opname en AI-analyse)" : "Toestemming gegeven (alleen opname)"); });
+$("recYes").addEventListener("click", function(){ var ai = !$("recAiWrap").hidden; $("recOv").hidden = true; send({t:"recok", ai:ai}); toast(ai ? "Toestemming gegeven (opname en AI-verslag)" : "Toestemming gegeven (alleen opname)"); });
+$("recYesPlain").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recok", ai:false}); toast("Toestemming gegeven (alleen opname)"); });
 $("recNo").addEventListener("click", function(){ $("recOv").hidden = true; send({t:"recno"}); });
 $("recBtn").addEventListener("click", recAsk);
 $("recBadge").addEventListener("click", function(){
@@ -3073,7 +3074,7 @@ if(isT){
   if(isT){ var cl = $("copyLink"); cl.classList.remove("btn","sm","ghost"); pop.appendChild(cl); }
   /* automatic recording at lesson start (teacher, per student) — still asks the student's consent */
   if(SB && isT && b){
-    var key = "klas-autorec-" + (b.studentId || ""), cfg = store(key) || {on:false, ai:false};
+    var key = "klas-autorec-" + (b.studentId || ""), cfg = store(key) || {on:false, ai:true}; /* v56: AI-verslag on by default (the student still consents) */
     pop.appendChild(document.createElement("hr")); head("Opname");
     function chk(label, prop){ var l = document.createElement("label"); var i = document.createElement("input"); i.type = "checkbox"; i.checked = !!cfg[prop]; i.addEventListener("change", function(){ cfg[prop] = i.checked; store(key, cfg); }); l.appendChild(i); l.appendChild(document.createTextNode(label)); pop.appendChild(l); }
     chk("Automatisch opnemen bij start (leerling geeft toestemming)", "on");

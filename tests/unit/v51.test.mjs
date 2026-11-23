@@ -99,7 +99,7 @@ test('report: identical errors once (capitals/punctuation ignored), with count a
 });
 test('daily practice uses deduplicated, approved report errors; one AI call per free answer only', () => {
   const c = read('components/DailyPractice.tsx');
-  assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status === 'approved'/);
+  assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status !== 'rejected'/);
   assert.match(c, /p_kind: qq\.source === 'mistake' \? 'error' : qq\.source === 'grammar' \? 'grammar' : 'homework'/, 'grammar items use the existing spaced repetition');
   assert.match(c, /\{!!q\.notes\?\.length && <ul className="dp-notes">/, 'feedback explains why');
   assert.equal((c.match(/authedPost</g) || []).length, 1, 'still one feedback call');

@@ -30,7 +30,7 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
     ]);
     // only mistakes the teacher APPROVED (older reports: already approved), never "for later" material
     const mistakes: Mistake[] = ((s.data || []) as {id: string; lesson_date: string; final: unknown}[]).flatMap(r =>
-      errorsOf(r.final as never).filter(e => e.status === 'approved' && !e.later && e.original && e.corrected)
+      errorsOf(r.final as never).filter(e => e.status !== 'rejected' && !e.later && e.original && e.corrected) // v56: reports are published without approval; only errors the teacher removed are left out
         .map(e => ({key: `err:${r.id}:${e.id}`.slice(0, 200), original: e.original, corrected: e.corrected, why: e.why, type: e.type, label: e.category, repeats: e.repeats, lesson_date: r.lesson_date})));
     const homework: HwItem[] = ((a.data || []) as {id: string; title: string; exercises: {items?: {type: string; prompt: string; options?: string[]; answer?: string; accept?: string[]; explanation?: string}[]} | null}[])
       .flatMap(x => (x.exercises?.items || []).map((it, i) => ({it, i, x})))

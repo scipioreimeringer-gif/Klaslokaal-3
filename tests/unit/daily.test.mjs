@@ -65,9 +65,9 @@ test('summary: correct/wrong, words and grammar that need attention', () => {
   const s = summaryOf([{q: {source: 'word', kind: 'mc', prompt: 'lopen', answers: ['to walk'], label: ''}, ok: false}, {q: {source: 'mistake', kind: 'correct', prompt: 'x', answers: ['y'], label: 'Inversie'}, ok: false}, {q: {source: 'word', kind: 'flash', prompt: 'x', answers: ['z'], label: ''}, ok: true}]);
   assert.deepEqual(s, {correct: 1, wrong: 2, words: ['lopen'], grammar: ['Inversie']});
 });
-test('wiring: own data via RLS, only APPROVED mistakes, results stored, one AI call only for free sentences', () => {
+test('wiring: own data via RLS, mistakes not removed by the teacher, results stored, one AI call only for free sentences', () => {
   const c = read('components/DailyPractice.tsx');
-  assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status === 'approved' && !e\.later/);
+  assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status !== 'rejected' && !e\.later/); // v56: no approval step; removed errors stay out
   assert.match(c, /db\.rpc\('record_vocab_practice', \{item: qq\.ref, correct: ok\}\)/);
   assert.match(c, /db\.rpc\('record_practice_item', \{p_student: studentId, p_key: qq\.ref/);
   assert.match(c, /kind: 'daily', score: s\.correct, total: s\.correct \+ s\.wrong/);

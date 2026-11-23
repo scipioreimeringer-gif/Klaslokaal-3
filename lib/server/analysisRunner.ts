@@ -9,6 +9,7 @@ import {formatDialogue, mergeSpeakers, speakingTime} from '../transcript';
 import {parseUtterances, wordCount, type Topic, type HistoryItem, type RawChunk} from '../analysis/core';
 import {runPipeline, PIPELINE_VERSION, type Ask, type Store, type AnalysisV2, type Stage} from '../analysis/pipeline';
 import {detectCanvasVocab} from './vocab';
+import {publishable} from '../analysis/catchup';
 import {normTerm} from '../vocab/core';
 
 export const LANG_GUIDE: Record<string, string> = {
@@ -118,12 +119,17 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
       },
       async finish(doc) {
         const t = new Date().toISOString();
+        // v56: published at once — but never an empty or broken report
+        if (!test && !publishable(doc)) { await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', draft: doc, error: 'Het verslag bevatte te weinig inhoud om te publiceren (te weinig gesproken lesinhoud in de opname?).', updated_at: t}).eq('id', analysisId); return; }
         await db.from('lesson_analyses').update(test
           ? {status: 'ready', draft: doc, stage: 'done', error: null, updated_at: t}
           : {status: 'approved', draft: doc, final: doc, stage: 'done', error: null, published_at: t, approved_at: t, updated_at: t}).eq('id', analysisId);
       },
       async fail(stage, message, partial) {
-        await db.from('lesson_analyses').update({status: 'failed', stage: partial ? 'partial_failed' : 'failed', stage_detail: {failed_step: stage}, error: message.slice(0, 500), updated_at: new Date().toISOString()}).eq('id', analysisId);
+        // v56: keep the number of automatic retries (the catch-up stops after 3), log the failed step
+        const {data: cur} = await db.from('lesson_analyses').select('stage_detail').eq('id', analysisId).maybeSingle();
+        const prev = ((cur as {stage_detail?: Record<string, unknown> | null} | null)?.stage_detail) || {};
+        await db.from('lesson_analyses').update({status: 'failed', stage: partial ? 'partial_failed' : 'failed', stage_detail: {auto_retries: prev.auto_retries || 0, failed_step: stage}, error: message.slice(0, 500), updated_at: new Date().toISOString()}).eq('id', analysisId);
       },
     };
     const res = await runPipeline({

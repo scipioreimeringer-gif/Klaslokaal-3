@@ -123,7 +123,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
   const r=await loadVocab(db,studentId);setDue(r.items.filter(i=>i.translation&&new Date(i.due_at).getTime()<=Date.now()).length);setOwn(practiceOrder(r.items.filter(i=>i.translation)).map(i=>({id:i.id,term:i.term,translation:i.translation,example:i.example,pos:i.pos,level:i.level})));
   // own mistakes: only those the teacher approved (never "for later" material), each unique mistake once
   const s=await db.rpc('student_lesson_summaries',{sid:studentId});const seen=new Set<string>();
-  setErrs(((s.data||[]) as {id:string;final:unknown}[]).flatMap(x=>errorsOf(x.final as never).filter(e=>e.status==='approved'&&!e.later&&e.original&&e.corrected).map(e=>({key:`err:${x.id}:${e.id}`.slice(0,200),original:e.original,corrected:e.corrected,why:e.why})))
+  setErrs(((s.data||[]) as {id:string;final:unknown}[]).flatMap(x=>errorsOf(x.final as never).filter(e=>e.status!=='rejected'&&!e.later&&e.original&&e.corrected).map(e=>({key:`err:${x.id}:${e.id}`.slice(0,200),original:e.original,corrected:e.corrected,why:e.why})))
    .filter(e=>{const k=(e.original+'|'+e.corrected).toLowerCase();if(seen.has(k))return false;seen.add(k);return true}));
   const p=await db.from('practice_sessions').select('kind,score,total,created_at,details').eq('student_id',studentId).in('kind',GAME_KINDS).order('created_at',{ascending:false}).limit(300);
   setSessions(p.error?[]:(p.data||[]) as SessionRow[])},[studentId,lang]);
