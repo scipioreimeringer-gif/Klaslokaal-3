@@ -1,16 +1,32 @@
 -- =====================================================================
 -- TeachyRooms — account consolidation, step 3: MERGE (only after 01 + 02 and your explicit approval)
 --
--- Moves the LEARNER side of scipreimer@gmail.com to the main account scipio.reimeringer@gmail.com:
---   * student profiles linked to the other account are linked to the main account (user_id). The profile rows
---     themselves (lessons, words, recordings, analyses, homework, timestamps) stay exactly where they are — they hang
---     on the student profile id, which does not change. No duplicates: nothing is copied.
---   * practice results, homework submissions, game turns and self-study languages follow the learner.
--- Does NOT delete anything: the other account, its login and its profile row stay (you can remove it later
--- yourself, or keep it). Teacher data of the main account is not touched. One transaction: all or nothing.
--- Undo: 04-undo.sql (uses the backup of 02-backup.sql).
+-- Moves the TEACHER side of scipreimer@gmail.com to the main account scipio.reimeringer@gmail.com, so ONE login
+-- has: teacher dashboard + admin, the 3 students with their 75 lessons, recordings, AI reports, homework and
+-- statistics, AND the own learning environment (the main account is already the learner of "Scipio" (pt) and
+-- "Scip test" (nl)).
+--
+-- What changes (only these links — the rows, their content and their timestamps stay as they are):
+--   * profiles: main account role → admin (was teacher); teaching languages / time zone / interface language /
+--     name copied from the other account only where the main account has none
+--   * students.teacher_id, student_invitations.teacher_id           → main account
+--   * lessons.teacher_id + created_by, lesson_sessions.teacher_id    → main account (update triggers paused so
+--     updated_at, bookings and Google Calendar queues are NOT touched)
+--   * lesson_recordings.created_by, lesson_analyses.created_by/approved_by, curriculum_goals.owner_teacher,
+--     classroom_states.updated_by, game_rounds.created_by/explainer, ai_usage.user_id → main account
+-- What does NOT change:
+--   * nothing is deleted or copied; the other account, its login and its profile stay (role stays admin)
+--   * the Google Calendar connection of the other account stays where it is and is NOT moved: lessons of the main
+--     account are therefore no longer synchronised to that (old/Preply) calendar. Connect the right Google account
+--     later from the main account.
+--   * storage files (recordings, images) are stored per student, not per account: nothing to move
+-- One transaction: all or nothing. Undo: 04-undo.sql.
 -- =====================================================================
 begin;
+alter table public.lessons disable trigger lessons_guard;
+alter table public.lessons disable trigger gcal_lessons_outbox;
+alter table public.lesson_analyses disable trigger analyses_consent;
+alter table public.lesson_analyses disable trigger analyses_test_guard;
 do $$
 declare m uuid; o uuid; n int;
 begin
@@ -18,33 +34,37 @@ begin
   if m is null or o is null then raise exception 'One of the two accounts was not found'; end if;
   if m = o then raise exception 'Same account'; end if;
 
-  -- 1. student profiles: link the learner to the main account. If the main account is ALREADY the learner of a profile
-  --    with the same teacher and language, nothing is moved for that one (reported below, decided by hand).
-  update public.students s set user_id = m, updated_at = now()
-   where s.user_id = o
-     and not exists (select 1 from public.students t where t.user_id = m and t.teacher_id = s.teacher_id
-                     and public.relation_language(t.curriculum_subject, t.subject, t.lesson_language) = public.relation_language(s.curriculum_subject, s.subject, s.lesson_language));
-  get diagnostics n = row_count; raise notice 'student profiles linked to the main account: %', n;
+  -- profile of the main account: admin + settings it does not have yet
+  update public.profiles p set role = 'admin',
+    teaching_languages = case when coalesce(array_length(p.teaching_languages, 1), 0) = 0 then q.teaching_languages else p.teaching_languages end,
+    timezone = coalesce(p.timezone, q.timezone), preferred_language = coalesce(p.preferred_language, q.preferred_language),
+    full_name = coalesce(nullif(p.full_name, ''), q.full_name)
+   from public.profiles q where p.id = m and q.id = o;
 
-  -- 2. results and work of the learner
-  update public.practice_sessions set user_id = m where user_id = o;            get diagnostics n = row_count; raise notice 'practice sessions: %', n;
-  update public.homework_submissions set student_user_id = m where student_user_id = o; get diagnostics n = row_count; raise notice 'homework submissions: %', n;
-  update public.game_rounds set explainer_user_id = m where explainer_user_id = o; get diagnostics n = row_count; raise notice 'game rounds: %', n;
-
-  -- 3. self-study languages: only languages the main account does not have yet (no duplicates)
-  update public.student_languages x set user_id = m where x.user_id = o
-     and not exists (select 1 from public.student_languages y where y.user_id = m and y.language = x.language);
-  get diagnostics n = row_count; raise notice 'self-study languages moved: %', n;
-
-  -- 4. Portuguese checklist: only when the main account has none
-  if not exists (select 1 from public.portuguese_checklists where user_id = m) then
-    update public.portuguese_checklists set user_id = m where user_id = o;
-  end if;
+  update public.students set teacher_id = m where teacher_id = o;                 get diagnostics n = row_count; raise notice 'students: %', n;
+  update public.student_invitations set teacher_id = m where teacher_id = o;
+  update public.lessons set teacher_id = m where teacher_id = o;                   get diagnostics n = row_count; raise notice 'lessons: %', n;
+  update public.lessons set created_by = m where created_by = o;
+  update public.lesson_sessions set teacher_id = m where teacher_id = o;
+  update public.lesson_recordings set created_by = m where created_by = o;         get diagnostics n = row_count; raise notice 'recordings: %', n;
+  update public.lesson_analyses set created_by = m where created_by = o;           get diagnostics n = row_count; raise notice 'analyses: %', n;
+  update public.lesson_analyses set approved_by = m where approved_by = o;
+  update public.curriculum_goals set owner_teacher = m where owner_teacher = o;
+  update public.classroom_states set updated_by = m where updated_by = o;
+  update public.game_rounds set created_by = m where created_by = o;
+  update public.game_rounds set explainer_user_id = m where explainer_user_id = o;
+  update public.ai_usage set user_id = m where user_id = o;                        get diagnostics n = row_count; raise notice 'ai usage rows: %', n;
 end $$;
+alter table public.lessons enable trigger lessons_guard;
+alter table public.lessons enable trigger gcal_lessons_outbox;
+alter table public.lesson_analyses enable trigger analyses_consent;
+alter table public.lesson_analyses enable trigger analyses_test_guard;
 
--- what stays with the other account (should be empty or only things you want to keep there)
+-- check: nothing of the teaching side is left on the other account
 select 'left on the other account' as what, json_build_object(
-  'student profiles', (select count(*) from public.students s, merge_backup_20261123.ids i where s.user_id = i.other_id),
-  'self-study languages', (select count(*) from public.student_languages x, merge_backup_20261123.ids i where x.user_id = i.other_id),
-  'teacher students', (select count(*) from public.students s, merge_backup_20261123.ids i where s.teacher_id = i.other_id)) as detail;
+  'students as teacher', (select count(*) from public.students s, merge_backup_20261123.ids i where s.teacher_id = i.other_id),
+  'lessons as teacher', (select count(*) from public.lessons l, merge_backup_20261123.ids i where l.teacher_id = i.other_id),
+  'recordings', (select count(*) from public.lesson_recordings r, merge_backup_20261123.ids i where r.created_by = i.other_id),
+  'analyses', (select count(*) from public.lesson_analyses a, merge_backup_20261123.ids i where a.created_by = i.other_id),
+  'main account role', (select role from public.profiles p, merge_backup_20261123.ids i where p.id = i.main_id)) as detail;
 commit;
