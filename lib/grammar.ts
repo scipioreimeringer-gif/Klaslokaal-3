@@ -9,8 +9,9 @@ const T = (k: string) => k;
 export type Note = {k: string; a?: string[]};
 export type GItem = {
   key: string; lang: 'pt' | 'nl'; level: number; topic: string; label: string;
-  kind: 'choose' | 'fill' | 'conjugate' | 'pick';   // pick = choose the correct sentence
+  kind: 'choose' | 'fill' | 'conjugate' | 'pick' | 'correct';   // pick = choose the correct sentence; correct = rewrite a wrong sentence (v54)
   sub: string; prompt: string; hint?: string; options?: string[]; answers: string[]; notes: Note[]; verb?: string;
+  /** v54: shown with conjugation exercises (infinitive · tense · person) */ tense?: string; person?: string;
 };
 // level index: A0 0, A1 1, A2 2, B1 3, B2 4
 const A1 = 1, A2 = 2, B1 = 3;
@@ -201,6 +202,82 @@ export const CONVERSATION: Record<'pt' | 'nl', [number, string, string][]> = {
   ],
 };
 
+/* ------------------------------------------------------------------ v54: B1, B2 and C1 (written per language, never translated) */
+// [level, kind, prompt, answers, hint, explanation (in the target language), verb, tense, person, options?]
+type Adv = [number, 'fill' | 'correct' | 'choose' | 'pick', string, string[], string, string, string?, string?, string?, string[]?];
+const B2 = 4, C1 = 5;
+const PT_ADV: Adv[] = [
+  [B1, 'fill', 'Enquanto eu _____ o jantar, o telefone tocou.', ['fazia'], '(fazer)', 'Ação em andamento no passado, interrompida por outra: pretérito imperfeito.', 'fazer', 'pretérito imperfeito', 'eu'],
+  [B1, 'fill', 'Eu já _____ esse filme duas vezes.', ['vi'], '(ver)', 'Ação concluída: pretérito perfeito.', 'ver', 'pretérito perfeito', 'eu'],
+  [B1, 'fill', 'Nós _____ em São Paulo de 2015 a 2019.', ['moramos', 'morávamos'], '(morar)', 'Período fechado no passado: perfeito (o imperfeito também se usa para descrever).', 'morar', 'pretérito perfeito', 'nós'],
+  [B1, 'correct', 'Quando eu era criança, eu fui à praia todo verão.', ['Quando eu era criança, eu ia à praia todo verão.'], '', 'Hábito no passado ("todo verão"): pretérito imperfeito.'],
+  [B1, 'correct', 'Ontem eu ia ao cinema e via um filme ótimo.', ['Ontem eu fui ao cinema e vi um filme ótimo.'], '', 'Ações concluídas num momento definido ("ontem"): pretérito perfeito.'],
+  [B1, 'correct', 'Eu estou cansado porque eu trabalhei muito ontem e eu dormi pouco e eu estou com sono.', ['Estou cansado porque trabalhei muito ontem e dormi pouco.'], '', 'Em português o sujeito "eu" costuma ficar implícito quando a forma do verbo já mostra a pessoa; evite repetir.'],
+  [B2, 'fill', 'Espero que você _____ bem amanhã.', ['esteja'], '(estar)', 'Depois de "espero que": presente do subjuntivo.', 'estar', 'presente do subjuntivo', 'você'],
+  [B2, 'fill', 'É importante que nós _____ cedo.', ['cheguemos'], '(chegar)', 'Expressão impessoal + "que": presente do subjuntivo.', 'chegar', 'presente do subjuntivo', 'nós'],
+  [B2, 'fill', 'Talvez eles _____ razão.', ['tenham'], '(ter)', 'Dúvida com "talvez" antes do verbo: subjuntivo.', 'ter', 'presente do subjuntivo', 'eles'],
+  [B2, 'fill', 'Se eu _____ mais tempo, viajaria mais.', ['tivesse'], '(ter)', 'Hipótese com "se" + futuro do pretérito: imperfeito do subjuntivo.', 'ter', 'imperfeito do subjuntivo', 'eu'],
+  [B2, 'fill', 'Quando você _____ ao Brasil, me avise.', ['vier'], '(vir)', 'Futuro com "quando": futuro do subjuntivo.', 'vir', 'futuro do subjuntivo', 'você'],
+  [B2, 'fill', 'Eu queria que ela me _____ a verdade.', ['dissesse'], '(dizer)', 'Desejo no passado ("queria que"): imperfeito do subjuntivo.', 'dizer', 'imperfeito do subjuntivo', 'ela'],
+  [B2, 'fill', 'Embora _____ cansada, ela foi à festa.', ['estivesse'], '(estar)', '"Embora" pede subjuntivo; no passado: imperfeito do subjuntivo.', 'estar', 'imperfeito do subjuntivo', 'ela'],
+  [B2, 'correct', 'Espero que você está bem.', ['Espero que você esteja bem.'], '', 'Depois de "espero que" usa-se o subjuntivo.'],
+  [B2, 'correct', 'Se eu tinha dinheiro, eu viajaria pelo mundo.', ['Se eu tivesse dinheiro, eu viajaria pelo mundo.', 'Se eu tivesse dinheiro, viajaria pelo mundo.'], '', 'Hipótese irreal: "se" + imperfeito do subjuntivo.'],
+  [B2, 'correct', 'O livro que eu te falei é muito bom.', ['O livro de que eu te falei é muito bom.', 'O livro sobre o qual eu te falei é muito bom.'], '', 'Na norma culta: "falar de" → "de que".'],
+  [C1, 'choose', 'O que significa "pisar na bola"?', ['cometer um erro'], '', '"Pisar na bola" = errar, falhar com alguém.', undefined, undefined, undefined, ['cometer um erro', 'jogar futebol bem', 'ter muita sorte']],
+  [C1, 'choose', 'O que significa "dar um jeito"?', ['encontrar uma solução'], '', '"Dar um jeito" = resolver, encontrar uma solução (muitas vezes improvisada).', undefined, undefined, undefined, ['encontrar uma solução', 'ser educado', 'desistir de algo']],
+  [C1, 'choose', 'O que significa "chover no molhado"?', ['repetir o óbvio'], '', '"Chover no molhado" = dizer algo que todos já sabem.', undefined, undefined, undefined, ['repetir o óbvio', 'ter azar', 'chorar muito']],
+  [C1, 'choose', 'O que significa "fazer vista grossa"?', ['fingir que não viu'], '', '"Fazer vista grossa" = ignorar algo de propósito.', undefined, undefined, undefined, ['fingir que não viu', 'precisar de óculos', 'olhar com atenção']],
+  [C1, 'choose', 'O que significa "custar os olhos da cara"?', ['ser muito caro'], '', 'Expressão informal para algo muito caro.', undefined, undefined, undefined, ['ser muito caro', 'ser muito bonito', 'cansar a vista']],
+  [C1, 'pick', 'Num e-mail para um cliente que você não conhece:', ['Prezado senhor, gostaria de confirmar a nossa reunião de amanhã.'], '', 'Registro formal: "Prezado(a)", "gostaria de". "E aí", "bora" e "beleza" são muito informais.', undefined, undefined, undefined, ['Prezado senhor, gostaria de confirmar a nossa reunião de amanhã.', 'E aí, beleza? Bora confirmar a reunião de amanhã?']],
+  [C1, 'correct', 'Fazem dois anos que moro aqui.', ['Faz dois anos que moro aqui.'], '', '"Fazer" indicando tempo decorrido é impessoal: fica no singular.'],
+  [C1, 'correct', 'Houveram muitos problemas na reunião.', ['Houve muitos problemas na reunião.'], '', '"Haver" no sentido de existir é impessoal: sempre no singular.'],
+  [C1, 'correct', 'Se eu ver o Pedro, eu falo com ele.', ['Se eu vir o Pedro, eu falo com ele.', 'Se eu vir o Pedro, falo com ele.'], '', 'Futuro do subjuntivo de "ver" é "vir" (se eu vir), não "ver".'],
+  [C1, 'correct', 'Prefiro mais café do que chá.', ['Prefiro café a chá.'], '', '"Preferir" já expressa comparação: preferir algo a algo (sem "mais" e sem "do que").'],
+];
+const NL_ADV: Adv[] = [
+  [B1, 'fill', 'Toen ik binnenkwam, _____ iedereen al aan tafel.', ['zat'], '(zitten)', 'Gisteren / toen: verleden tijd. Zitten is onregelmatig: zat.', 'zitten', 'verleden tijd', 'iedereen'],
+  [B1, 'fill', 'Ik weet niet of hij morgen _____.', ['komt'], '(komen)', 'In een bijzin met "of" staat de persoonsvorm achteraan.', 'komen', 'tegenwoordige tijd', 'hij'],
+  [B1, 'correct', 'Ik blijf thuis, omdat ik heb geen tijd.', ['Ik blijf thuis, omdat ik geen tijd heb.', 'Ik blijf thuis omdat ik geen tijd heb.'], '', 'In een bijzin met "omdat" staat de persoonsvorm aan het eind.'],
+  [B1, 'correct', 'Gisteren ik heb mijn moeder gebeld.', ['Gisteren heb ik mijn moeder gebeld.'], '', 'Begint de zin met "gisteren", dan staat de persoonsvorm op de tweede plaats (inversie).'],
+  [B2, 'fill', 'Toen ik op het station aankwam, _____ de trein al vertrokken.', ['was'], '(zijn)', 'Iets dat vóór een ander moment in het verleden gebeurde: voltooid verleden tijd (was + voltooid deelwoord).', 'zijn', 'voltooid verleden tijd', 'de trein'],
+  [B2, 'fill', 'Als ik meer tijd had, _____ ik vaker sporten.', ['zou'], '(zullen)', 'Een voorwaarde die niet waar is: "als … had", dan "zou" + infinitief.', 'zullen', 'voorwaardelijke wijs', 'ik'],
+  [B2, 'fill', 'Het huis _____ vorig jaar verkocht.', ['werd'], '(worden)', 'Lijdende vorm in de verleden tijd: werd + voltooid deelwoord.', 'worden', 'verleden tijd (passief)', 'het huis'],
+  [B2, 'fill', 'Ik had het boek al _____ voordat de film uitkwam.', ['gelezen'], '(lezen)', 'Voltooid verleden tijd: had + voltooid deelwoord.', 'lezen', 'voltooid verleden tijd', 'ik'],
+  [B2, 'correct', 'Ik weet niet waar is het station.', ['Ik weet niet waar het station is.'], '', 'In een vraagbijzin ("waar …") staat de persoonsvorm aan het eind.'],
+  [B2, 'correct', 'Het boek wat ik lees is spannend.', ['Het boek dat ik lees is spannend.'], '', 'Bij een het-woord is het betrekkelijk voornaamwoord "dat", niet "wat".'],
+  [B2, 'correct', 'Als ik rijk was, ik zou een huis kopen.', ['Als ik rijk was, zou ik een huis kopen.'], '', 'Na een bijzin aan het begin komt eerst de persoonsvorm van de hoofdzin.'],
+  [B2, 'correct', 'Hij heeft gisteren opgebeld mij.', ['Hij heeft me gisteren opgebeld.', 'Hij heeft mij gisteren opgebeld.'], '', 'Het voltooid deelwoord staat aan het eind van de zin; het voornaamwoord komt vroeg.'],
+  [C1, 'choose', 'Wat betekent "de kat uit de boom kijken"?', ['eerst afwachten hoe iets loopt'], '', 'Je wacht af voordat je iets doet of zegt.', undefined, undefined, undefined, ['eerst afwachten hoe iets loopt', 'een dier redden', 'heel nieuwsgierig zijn']],
+  [C1, 'choose', 'Wat betekent "met de deur in huis vallen"?', ['meteen ter zake komen'], '', 'Direct zeggen waar het om gaat, zonder inleiding.', undefined, undefined, undefined, ['meteen ter zake komen', 'onhandig binnenkomen', 'te laat komen']],
+  [C1, 'choose', 'Wat betekent "door de mand vallen"?', ['betrapt of ontmaskerd worden'], '', 'Het blijkt dat iemand niet de waarheid sprak of niet kon wat hij zei.', undefined, undefined, undefined, ['betrapt of ontmaskerd worden', 'boodschappen laten vallen', 'heel moe zijn']],
+  [C1, 'choose', 'Wat betekent "de kool en de geit sparen"?', ['geen partij kiezen om niemand te kwetsen'], '', 'Je probeert iedereen tevreden te houden.', undefined, undefined, undefined, ['geen partij kiezen om niemand te kwetsen', 'zuinig koken', 'voor dieren zorgen']],
+  [C1, 'choose', 'Wat betekent "een oogje in het zeil houden"?', ['opletten en toezicht houden'], '', 'Je houdt in de gaten dat alles goed gaat.', undefined, undefined, undefined, ['opletten en toezicht houden', 'gaan zeilen', 'één oog dichtdoen']],
+  [C1, 'pick', 'In een e-mail aan een klant die je niet kent:', ['Geachte heer Jansen, hierbij stuur ik u de offerte.'], '', 'Formeel register: "Geachte …", "u", "hierbij". "Hoi" en "hoor" zijn informeel.', undefined, undefined, undefined, ['Geachte heer Jansen, hierbij stuur ik u de offerte.', 'Hoi Jansen, hier is de offerte hoor.']],
+  [C1, 'correct', 'Dat is de man waarvan ik het boek heb gelezen.', ['Dat is de man van wie ik het boek heb gelezen.'], '', 'Bij personen gebruik je "van wie", niet "waarvan".'],
+  [C1, 'correct', 'Hij is veel groter als ik.', ['Hij is veel groter dan ik.'], '', 'Na een vergrotende trap gebruik je "dan".'],
+  [C1, 'correct', 'Hun hebben dat gisteren gezegd.', ['Zij hebben dat gisteren gezegd.', 'Ze hebben dat gisteren gezegd.'], '', '"Hun" is nooit onderwerp; het onderwerp is "zij" of "ze".'],
+  [C1, 'correct', 'Het meisje die daar loopt is mijn zus.', ['Het meisje dat daar loopt is mijn zus.'], '', '"Meisje" is een het-woord: het betrekkelijk voornaamwoord is "dat".'],
+];
+function advItems(lang: 'pt' | 'nl'): GItem[] {
+  return (lang === 'pt' ? PT_ADV : NL_ADV).map(([level, kind, prompt, answers, hint, why, verb, tense, person, options], i) => ({
+    key: `gr:${lang}:ad:${i}`, lang, level, kind, topic: kind === 'choose' ? 'idioms' : kind === 'pick' ? 'register' : verb ? 'conjugation' : 'word_order',
+    label: kind === 'choose' ? (lang === 'pt' ? 'Expressões idiomáticas' : 'Uitdrukkingen') : kind === 'pick' ? (lang === 'pt' ? 'Registro' : 'Register') : verb ? (tense || '') : (lang === 'pt' ? 'Correção' : 'Zinsbouw'),
+    sub: kind === 'fill' ? T('Vul de juiste vorm in') : kind === 'correct' ? T('Verbeter de zin') : kind === 'pick' ? T('Welke zin is goed?') : T('Kies de juiste betekenis'),
+    prompt, hint: hint || undefined, options, answers, notes: [{k: why}], verb, ...(tense ? {tense, person} : {}),
+  } as GItem));
+}
+
+/** v54: what a conjugation exercise asks — infinitive, tense and person — always complete (or null when unknown). */
+export function describe(g: GItem): {verb: string; tense: string; person: string} | null {
+  if (g.tense && g.person && g.verb) return {verb: g.verb, tense: g.tense, person: g.person};
+  const m = /^gr:(pt|nl):(?:ch|fi|cj):([^:]+):(pres|pf|imp|perf):(\d)$/.exec(g.key);
+  if (!m) return null;
+  const p = +m[4], lang = m[1];
+  const tense = lang === 'pt' ? PT_TENSE[m[3] as PTense] : NL_TENSE[(m[3] === 'pf' ? 'imp' : m[3]) as NTense];
+  const person = lang === 'pt' ? PT_P[p] : NL_P[p];
+  return tense && person ? {verb: m[2], tense, person} : null;
+}
+
 let cache: Record<string, GItem[]> = {};
 /** All built-in grammar items for a language ('pt' / 'nl'); other languages have none (the practice then uses the
  *  student's own words and mistakes only). */
@@ -217,10 +294,11 @@ export function grammarBank(lang: string): GItem[] {
       prompt: s, options: i % 2 ? undefined : uniq([right, ...wrong]), answers: [right], notes: [{k: T('Samentrekking: {0}.'), a: [rule]}]}));
     PT_ART.forEach(([s, right, wrong, note], i) => items.push({key: `gr:pt:ar:${i}`, lang: 'pt', level: A1, topic: /Meervoud|bijvoeglijk/i.test(note.k) ? 'plural' : 'articles', label: 'Artigos, gênero e plural', kind: 'choose', sub: T('Kies de juiste vorm'),
       prompt: s, options: uniq([right, ...wrong]), answers: [right], notes: [note]}));
+    items.push(...advItems('pt'));
     PT_ORDER.forEach(([right, wrong, note], i) => items.push({key: `gr:pt:wo:${i}`, lang: 'pt', level: A2, topic: 'word_order', label: 'Ordem das palavras', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '',
       options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
   } else {
-    items.push(...nlItems());
+    items.push(...nlItems(), ...advItems('nl'));
     NL_INV.forEach(([right, wrong, note], i) => items.push({key: `gr:nl:in:${i}`, lang: 'nl', level: A2, topic: 'inversion', label: 'Inversie', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '', options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
     NL_SUB.forEach(([right, wrong, note], i) => items.push({key: `gr:nl:bz:${i}`, lang: 'nl', level: B1, topic: 'subordinate_clause', label: 'Bijzinnen', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '', options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
   }

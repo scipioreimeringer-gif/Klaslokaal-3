@@ -1,5 +1,6 @@
 'use client';
-import {Suspense} from 'react';
+import {Suspense,useEffect} from 'react';
+import {useLearnerPrefs} from '../../components/LearnerPrefs';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import Nav from '../../components/Nav';
@@ -19,8 +20,11 @@ function Page(){
  // same list as the dashboard cards and the sidebar: only languages this account learns itself
  const mine=useMyLanguageCards();const cards=mine.cards;
  const wantedRel=items.find(s=>s.id===wanted);
- const code=taal||(wantedRel?subjectOf(wantedRel):cards[0]?.code);
+ // v54: without an explicit choice the ACTIVE learning language opens (not always the first one)
+ const prefs=useLearnerPrefs();const act=cards.some(c=>c.code===prefs.active)?prefs.active:'';
+ const code=taal||(wantedRel?subjectOf(wantedRel):act||cards[0]?.code);
  const card=cards.find(c=>c.code===code);
+ useEffect(()=>{if(card&&prefs.ready)prefs.setActive(card.code)},[card?.code,prefs.ready]);// eslint-disable-line react-hooks/exhaustive-deps
  const current=pickRelation(card,wanted);
  const go=(lang:string,student?:string)=>router.push('/mijn-profiel?taal='+lang+(student?'&student='+student:''));
  return <>

@@ -10,6 +10,7 @@ import {LessonCards,LessonDetail,useLessonCards} from './LessonCards';
 import {StudentProgress} from './StudentProgress';
 import {TeacherDailyOverview} from './DailyPractice';
 import {SelfPractice,VocabGames,VocabManager} from './Learning';
+import {asLvl} from '../lib/practice';
 import {LearningPath} from './LearningPath';
 import {subjectOf,authedPost} from '../lib/learning';
 import {Sparkles,Target,Gamepad2,TrendingUp,Video} from 'lucide-react';
@@ -192,7 +193,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='woorden'&&<section className="card"><h3>{t("Woorden")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&viewer==='teacher'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
   {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><TrendingUp size={17}/> {t("Voortgang")}</h3><StudentProgress studentId={studentId} progress={b.progress} lessons={mergeLessons(b.lessons,b.sessions)} lessonLang={lang}/></section>}
-  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} subject={lang}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
+  {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} lang={lang} level={asLvl(ws.level)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}
   {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} viewer={viewer} onChange={()=>void load()} onOpenAnalyses={()=>{setTab('lessen');setManage(true)}}/></section>}

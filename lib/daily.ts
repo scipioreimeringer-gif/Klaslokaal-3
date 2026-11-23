@@ -125,7 +125,7 @@ export function buildDaily(input: {studentId: string; day: string; level?: strin
     if (g.verb && usedVerb.has(g.verb)) continue;
     if ((perKind.get(g.kind) || 0) >= capKind) continue;
     if (g.verb) usedVerb.add(g.verb); perKind.set(g.kind, (perKind.get(g.kind) || 0) + 1);
-    const kind: QKind = g.kind === 'choose' || g.kind === 'pick' ? 'mc' : 'fill';
+    const kind: QKind = g.kind === 'choose' || g.kind === 'pick' ? 'mc' : g.kind === 'correct' ? 'correct' : 'fill';
     qs.push({id: 'g' + qs.length, kind, source: 'grammar', ref: g.key, label: g.label, prompt: g.prompt, sub: g.sub, hint: g.hint,
       options: g.options ? shuffle(g.options, rng(seedOf(g.key + input.day))) : undefined, answers: g.answers, explain: '', notes: g.notes});
   }

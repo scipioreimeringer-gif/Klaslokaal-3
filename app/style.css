@@ -1174,3 +1174,22 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .dp-teacher{display:grid;gap:8px}
 .dp-days{display:flex;gap:4px}.dp-days span{width:16px;height:16px;border-radius:5px;background:#eef1f4}.dp-days span.on{background:#13A89E}
 @media(max-width:640px){.dp-options.two{grid-template-columns:1fr}.dp-opt{min-height:56px}}
+/* v54: practice — language + level bar, feedback with explanation, conjugation header, progress per game */
+.pr-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px;padding:12px 14px;border-radius:16px;background:linear-gradient(135deg,var(--mint-100,#e6f6f3),#fff);border:1px solid #e1eeec;margin-bottom:14px}
+.pr-pick{display:grid;gap:4px;min-width:200px}.pr-pick .label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#0f7c78}
+.pr-tmp{align-self:center}.pr-set{display:inline-flex;align-items:center;gap:5px;margin-left:auto;align-self:center}
+div.drill-result{display:grid;gap:4px;padding:10px 12px;border-radius:12px}
+div.drill-result p{display:flex;align-items:center;gap:6px;margin:0}
+div.drill-result.correct{background:#e9f7ef}div.drill-result.accent{background:#fff7e6}div.drill-result.wrong{background:#fdf0ea}
+.pr-notes{margin:0;padding-left:18px;font-weight:400;color:#3b4a48;font-size:13.5px;display:grid;gap:2px}
+.pr-intro{margin:6px 0 0}
+.pr-conj{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.pr-conj span{display:grid;padding:5px 10px;border-radius:10px;background:#eef6f5;min-width:0}.pr-conj small{font-size:11px;color:#5a706d;text-transform:uppercase;letter-spacing:.04em}.pr-conj b{font-size:15px;color:#0b4f4c}
+.pr-bank{background:#eef3fd;color:#3b5fa8;margin-top:4px;justify-self:start}
+.pr-stat{color:#0f7c78;font-size:12px;font-weight:600}
+.pr-note{display:flex;align-items:center;gap:6px}
+.pr-often{margin-top:14px}.pr-often h4{margin:0 0 6px;font-size:13px}
+.lvl-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.lvl-list li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e3eeec;border-radius:14px;background:#fff}
+.lvl-list li .grow{display:grid;gap:1px}
+@media(max-width:640px){.pr-pick{min-width:0;flex:1 1 100%}.pr-set{margin-left:0}.lvl-list li{flex-wrap:wrap}}

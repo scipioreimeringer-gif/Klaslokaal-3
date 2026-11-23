@@ -114,7 +114,7 @@ test('wiring: dashboard section, student data via RLS only, compact report every
   const r = read('components/ReadyForYou.tsx');
   assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');
   assert.match(r, /\/oefenen\?student=\$\{rel\.id\}&spel=flashcards/);
-  assert.match(read('components/Learning.tsx'), /if\(start==='flashcards'&&items&&items\.length>=2&&!autoStarted\.current\)/);
+  assert.match(read('components/Learning.tsx'), /if\(start==='flashcards'&&sets&&sets\.words\.cards\.length>=2&&!autoStarted\.current\)/);
   assert.match(read('components/Analysis.tsx'), /<CompactAnalysis doc=\{shownDoc/, 'Mijn lessen → lesverslagen: compact, full version behind "Meer details"');
   assert.match(read('components/CompactAnalysis.tsx'), /<details className="compact-more"><summary>\{detailsLabel\|\|tt\("Meer details"\)\}/);
   assert.match(read('components/AnalysisV2.tsx'), /Zo ziet de leerling het/, 'teacher can preview the short version');

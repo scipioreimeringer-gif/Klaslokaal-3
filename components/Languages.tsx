@@ -7,6 +7,7 @@ import Link from 'next/link';
 import {Plus,ChevronRight,Video,X,BookOpen,Trash2} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {useAuth} from './Auth';
+import {useLearnerPrefs} from './LearnerPrefs';
 import {Flag} from './Flag';
 import {Avatar,usePeople} from './Avatar';
 import {LANGUAGES,LEVELS,languageName,ownLearningCards,cardStats,type LanguageCard,type SelfLanguage} from '../lib/languages';
@@ -123,13 +124,15 @@ export function useMyLanguageCards(){
 }
 export function SideLanguages({onNavigate}:{onNavigate:()=>void}){
  const {pendingLinks}=useAuth();const {cards}=useMyLanguageCards();const path=usePathname()||'';const taal=useQueryParam('taal');const sid=useQueryParam('student');
- const onLang=path.startsWith('/mijn-profiel');
- const current=!onLang?'':(taal||cards.find(c=>c.relations.some(r=>r.id===sid))?.code||cards[0]?.code||'');
+ // v54: the ACTIVE learning language stays highlighted everywhere (practice, lessons, …) until the student picks another
+ const prefs=useLearnerPrefs();const onLang=path.startsWith('/mijn-profiel');
+ const active=cards.some(c=>c.code===prefs.active)?prefs.active:cards[0]?.code||'';
+ const current=onLang?(taal||cards.find(c=>c.relations.some(r=>r.id===sid))?.code||active):active;
  if(!cards.length&&!pendingLinks.length)return null;
  return <div className="side-langs">
   <div className="navlabel">{t('Mijn talen')}</div>
   <nav className="navlinks" aria-label={t('Mijn talen')}>
-   {cards.map(c=><Link key={c.code} href={'/mijn-profiel?taal='+c.code} className={current===c.code?'active':''} aria-current={current===c.code?'page':undefined} onClick={onNavigate}>
+   {cards.map(c=><Link key={c.code} href={'/mijn-profiel?taal='+c.code} className={current===c.code?'active':''} aria-current={current===c.code?'page':undefined} onClick={()=>{prefs.setActive(c.code);onNavigate()}}>
     <Flag code={c.code} size={20}/><span className="grow">{languageName(c.code)}</span>{c.relations.length>1&&<small className="side-count" title={t('{0} docenten',c.relations.length)}>{c.relations.length}</small>}{!c.relations.length&&<small className="side-self">{t('zelfstudie')}</small>}</Link>)}
    {pendingLinks.length>0&&<Link href="/" className="side-invite" onClick={onNavigate}><span className="side-dot" aria-hidden/>{t('{0} uitnodiging(en) om te accepteren',pendingLinks.length)}</Link>}
   </nav>
