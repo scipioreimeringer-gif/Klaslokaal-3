@@ -1396,10 +1396,30 @@ function recAddStream(s, who){
     return true;
   }catch(e){ return false; }
 }
-function recMake(stream, bits, mime){
+/* v58: every recorded second is also kept in this browser (IndexedDB) until the upload succeeded. Leaving the lesson
+   in ANY way (Verlaten, closing the tab, going back in the app, losing power) therefore never loses a recording:
+   a normal leave stops and saves at once; anything else is saved the next time the teacher opens this classroom. */
+var RECDB = null;
+function recDb(){
+  if(RECDB) return RECDB;
+  RECDB = new Promise(function(ok){
+    try{
+      var q = indexedDB.open("teachy-rec", 1);
+      q.onupgradeneeded = function(){ var d = q.result; if(!d.objectStoreNames.contains("meta")) d.createObjectStore("meta", {keyPath:"sid"}); if(!d.objectStoreNames.contains("chunks")){ var s = d.createObjectStore("chunks", {autoIncrement:true}); s.createIndex("sid", "sid"); } };
+      q.onsuccess = function(){ ok(q.result); }; q.onerror = function(){ ok(null); };
+    }catch(e){ ok(null); }
+  });
+  return RECDB;
+}
+function recIdb(store, mode, fn){ return recDb().then(function(d){ if(!d) return null; return new Promise(function(ok){ try{ var tx = d.transaction(store, mode), r = fn(tx); tx.oncomplete = function(){ ok(r && r.result !== undefined ? r.result : true); }; tx.onerror = tx.onabort = function(){ ok(null); }; }catch(e){ ok(null); } }); }); }
+function recSaveMeta(m){ return recIdb("meta", "readwrite", function(tx){ tx.objectStore("meta").put(m); }); }
+function recSaveChunk(sid, part, blob){ return recIdb("chunks", "readwrite", function(tx){ tx.objectStore("chunks").add({sid:sid, part:part, blob:blob}); }); }
+function recForget(sid){ return recIdb(["meta", "chunks"], "readwrite", function(tx){ tx.objectStore("meta").delete(sid); var ix = tx.objectStore("chunks").index("sid"); ix.openKeyCursor(IDBKeyRange.only(sid)).onsuccess = function(e){ var c = e.target.result; if(c){ tx.objectStore("chunks").delete(c.primaryKey); c.continue(); } }; }); }
+function recToday(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function recMake(stream, bits, mime, part){
   var o = {audioBitsPerSecond:bits}; if(mime) o.mimeType = mime;
-  var r = {rec:new MediaRecorder(stream, o), chunks:[]};
-  r.rec.ondataavailable = function(e){ if(e.data && e.data.size) r.chunks.push(e.data); };
+  var r = {rec:new MediaRecorder(stream, o), chunks:[]}, sid = REC.sid;
+  r.rec.ondataavailable = function(e){ if(e.data && e.data.size){ r.chunks.push(e.data); if(sid && REC.sid === sid){ recSaveChunk(sid, part, e.data); if(part === "mix" && REC.meta){ REC.meta.lastAt = Date.now(); recSaveMeta(REC.meta); } } } };
   r.rec.onstop = function(){ REC.pending--; if(REC.pending <= 0) recFinish(); };
   return r;
 }
@@ -1413,8 +1433,15 @@ function recStart(){
     Object.keys(remoteStreams).forEach(function(k){ if(recAddStream(remoteStreams[k], "student")) theirs++; });
     if(!mine && !theirs){ REC.on = false; ctx.close(); toast("Geen microfoon gevonden: er is niets om op te nemen"); send({t:"recoff"}); return; }
     var mime = recMime();
-    REC.parts = {mix:recMake(REC.dest.stream, 32000, mime)};
-    if(split){ REC.parts.teacher = recMake(REC.destT.stream, 24000, mime); REC.parts.student = recMake(REC.destS.stream, 24000, mime); }
+    /* v58: the bridge, student, lesson and date are fixed at the start, so a save while leaving (or later) still goes
+       to the right student and lesson, also when the app already left this classroom */
+    var br = bridge();
+    REC.bridge = br; REC.sid = "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    REC.meta = {sid:REC.sid, studentId:br && br.studentId, lessonId:(br && br.lessonId) || null, lessonDate:recToday(), startedAt:Date.now(), lastAt:Date.now(),
+      mime:mime || "audio/webm", tConsent:REC.tConsent, sConsent:REC.sConsent, aiT:REC.aiS ? REC.aiT : null, aiS:REC.aiS || null, uploading:0};
+    if(br && br.studentId) recSaveMeta(REC.meta);
+    REC.parts = {mix:recMake(REC.dest.stream, 32000, mime, "mix")};
+    if(split){ REC.parts.teacher = recMake(REC.destT.stream, 24000, mime, "teacher"); REC.parts.student = recMake(REC.destS.stream, 24000, mime, "student"); }
     REC.pending = 0; REC.finished = false;
     Object.keys(REC.parts).forEach(function(k){ REC.parts[k].rec.start(1000); REC.pending++; });
     if(ctx.state === "suspended" && ctx.resume) ctx.resume();
@@ -1424,17 +1451,19 @@ function recStart(){
     clearTimeout(REC.maxT); REC.maxT = setTimeout(function(){ if(REC.on){ toast("Maximale opnameduur bereikt (2,5 uur)"); recStop(); } }, 150 * 60 * 1000);
   }catch(e){ REC.on = false; recBadge(false); send({t:"recoff"}); toast("Opname kon niet starten: " + ((e && e.message) || e)); }
 }
-function recStop(){
+/* now = true while the page is going away: save at once with what was recorded so far (at most the last second is
+   missing) instead of waiting for the recorders, which a closing page may never let finish */
+function recStop(now){
   if(!REC.on) return;
   REC.on = false; clearTimeout(REC.maxT); recBadge(false); send({t:"recoff"});
   var any = false;
-  Object.keys(REC.parts || {}).forEach(function(k){ try{ if(REC.parts[k].rec.state !== "inactive"){ REC.parts[k].rec.stop(); any = true; } }catch(e){} });
-  if(!any) recFinish();
+  Object.keys(REC.parts || {}).forEach(function(k){ try{ if(REC.parts[k].rec.state !== "inactive"){ if(now && REC.parts[k].rec.requestData) REC.parts[k].rec.requestData(); REC.parts[k].rec.stop(); any = true; } }catch(e){} });
+  if(!any || now) recFinish(now);
 }function recDownload(blob){
   var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "lesopname-" + new Date().toISOString().slice(0, 10) + (/mp4/.test(blob.type) ? ".m4a" : ".webm");
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 20000);
 }
-function recFinish(){
+function recFinish(leaving){
   if(REC.finished) return; REC.finished = true;
   var type = (REC.mime || "audio/webm").split(";")[0], parts = REC.parts || {};
   function blobOf(k){ return parts[k] ? new Blob(parts[k].chunks, {type:type}) : null; }
@@ -1442,16 +1471,50 @@ function recFinish(){
   REC.parts = null;
   try{ if(REC.ctx) REC.ctx.close(); }catch(e){}
   REC.ctx = null; REC.dest = null; REC.destT = null; REC.destS = null;
-  var dur = (Date.now() - REC.startedAt) / 1000;
-  if(!blob.size){ toast("De opname was leeg"); return; }
-  var b = bridge();
-  if(!b){ recDownload(blob); alert("Online opslaan niet beschikbaar. De opname is als bestand gedownload."); return; }
+  var dur = (Date.now() - REC.startedAt) / 1000, meta = REC.meta, sid = REC.sid;
+  REC.meta = null; REC.sid = null;
+  if(!blob.size){ toast("De opname was leeg"); if(sid) recForget(sid); return; }
+  var b = REC.bridge || bridge(); REC.bridge = null;
+  if(!b){ if(leaving) return; recDownload(blob); alert("Online opslaan niet beschikbaar. De opname is als bestand gedownload."); return; }
   toast("Opname veilig opslaan...");
-  b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:REC.tConsent, studentConsentAt:REC.sConsent, aiTeacherAt:REC.aiS ? REC.aiT : null, aiStudentAt:REC.aiS}, tracks).then(function(r){
-    if(r && r.ok) toast(r.analysis === "started" ? "Opname opgeslagen. Het AI-lesverslag wordt gemaakt en daarna automatisch gedeeld met je leerling." : r.analysis ? "Opname opgeslagen. " + r.analysis : "Opname opgeslagen bij deze leerling");
-    else { recDownload(blob); alert("Online opslaan mislukt (" + ((r && r.error) || "onbekende fout") + "). De opname is als bestand gedownload, zodat er niets verloren gaat."); }
-  }).catch(function(e){ recDownload(blob); alert("Online opslaan mislukt (" + ((e && e.message) || e) + "). De opname is als bestand gedownload."); });
-}$("recStartYes").addEventListener("click", function(){
+  if(meta){ meta.uploading = Date.now(); recSaveMeta(meta); }
+  recUpload(b, blob, tracks, dur, meta || {tConsent:REC.tConsent, sConsent:REC.sConsent, aiT:REC.aiS ? REC.aiT : null, aiS:REC.aiS}).then(function(r){
+    if(r && r.ok){ if(sid) recForget(sid); toast(r.analysis === "started" ? "Opname opgeslagen. Het AI-lesverslag wordt gemaakt en daarna automatisch gedeeld met je leerling." : r.analysis ? "Opname opgeslagen. " + r.analysis : "Opname opgeslagen bij deze leerling"); }
+    else if(!leaving){ recDownload(blob); alert("Online opslaan mislukt (" + ((r && r.error) || "onbekende fout") + "). De opname is als bestand gedownload, zodat er niets verloren gaat. TeachyRooms probeert het de volgende keer ook zelf opnieuw."); }
+  }).catch(function(e){ if(!leaving){ recDownload(blob); alert("Online opslaan mislukt (" + ((e && e.message) || e) + "). De opname is als bestand gedownload."); } });
+}
+function recUpload(b, blob, tracks, dur, m){
+  return b.uploadRecording(blob, {durationSeconds:dur, teacherConsentAt:m.tConsent, studentConsentAt:m.sConsent, aiTeacherAt:m.aiS ? m.aiT : null, aiStudentAt:m.aiS || null,
+    lessonDate:m.lessonDate || null, lessonId:m.lessonId || null}, tracks);
+}
+/* v58: recordings of an earlier lesson with this student that were not saved (tab closed, crash, no internet) are
+   saved now — with their own date and lesson, never twice (removed here after a successful upload) */
+function recRecover(){
+  var b = bridge(); if(!b || b.role !== "teacher" || !b.studentId) return;
+  recIdb("meta", "readonly", function(tx){ return tx.objectStore("meta").getAll(); }).then(function(all){
+    (all || []).forEach(function(m){
+      if(m.sid === REC.sid) return;
+      if(Date.now() - (m.lastAt || 0) > 14 * 86400e3){ recForget(m.sid); return; }      /* privacy: never kept longer than 14 days */
+      if(m.studentId !== b.studentId) return;                                          /* only into the right student's classroom */
+      if(m.uploading && Date.now() - m.uploading < 10 * 60e3) return;                   /* an upload may still be running */
+      recIdb("chunks", "readonly", function(tx){ return tx.objectStore("chunks").index("sid").getAll(IDBKeyRange.only(m.sid)); }).then(function(rows){
+        var type = (m.mime || "audio/webm").split(";")[0], by = {mix:[], teacher:[], student:[]};
+        (rows || []).forEach(function(r){ if(by[r.part]) by[r.part].push(r.blob); });
+        if(!by.mix.length){ recForget(m.sid); return; }
+        var blob = new Blob(by.mix, {type:type}), tracks = {teacher:by.teacher.length ? new Blob(by.teacher, {type:type}) : null, student:by.student.length ? new Blob(by.student, {type:type}) : null};
+        m.uploading = Date.now(); recSaveMeta(m);
+        recUpload(b, blob, tracks, Math.max(1, ((m.lastAt || m.startedAt) - m.startedAt) / 1000), m).then(function(r){
+          if(r && r.ok){ recForget(m.sid); toast(r.analysis === "started" ? "De opname van een eerdere les is alsnog opgeslagen; het AI-lesverslag wordt gemaakt." : "De opname van een eerdere les is alsnog opgeslagen."); }
+          else { m.uploading = 0; recSaveMeta(m); }
+        }).catch(function(){ m.uploading = 0; recSaveMeta(m); });
+      });
+    });
+  });
+}
+/* v58: leaving the lesson in any way stops the recording: closing/reloading the tab or leaving the classroom page in
+   the app saves it right away; the browser first asks for confirmation while a recording is running */
+window.addEventListener("pagehide", function(){ if(REC.on) recStop(true); });
+window.addEventListener("beforeunload", function(e){ if(REC.on){ e.preventDefault(); e.returnValue = ""; return ""; } });$("recStartYes").addEventListener("click", function(){
   $("recStartOv").hidden = true;
   if(!online()){ toast("Je leerling is niet meer verbonden"); return; }
   REC.tConsent = new Date().toISOString(); REC.asked = true;
@@ -1469,7 +1532,7 @@ $("recBadge").addEventListener("click", function(){
   if(isT){ if(confirm("Opname stoppen en opslaan?")) recStop(); }
   else if(confirm("Wil je de opname stoppen?")){ send({t:"recstop"}); }
 });
-if(SB && isT && bridge().role === "teacher") $("recBtn").hidden = false;
+if(SB && isT && bridge().role === "teacher"){ $("recBtn").hidden = false; setTimeout(recRecover, 4000); }
 function status(head, msg){
   var show = !!(head || msg);
   $("vph").hidden = !show || $("remotes").children.length > 0 && !head;

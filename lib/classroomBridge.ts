@@ -34,7 +34,11 @@ export type TeachyBridge = {
   /** Why there is (no) TURN: ok, missing, invalid, no_turn, http_401/403/404/500, error. Never contains credentials. */
   iceStatus?(): string;
   switchStudent(id: string): void;
-  uploadRecording(blob: Blob, meta: {durationSeconds: number; teacherConsentAt: string; studentConsentAt: string; aiTeacherAt?: string | null; aiStudentAt?: string | null}, tracks?: RecordingTracks): Promise<{ok: boolean; error?: string; analysis?: string}>;
+  /** v58: lessonDate / lessonId are fixed when the recording STARTS (a recording saved later, e.g. after the tab was
+   *  closed, keeps its own lesson); without them: today and the lesson of this classroom session. */
+  uploadRecording(blob: Blob, meta: {durationSeconds: number; teacherConsentAt: string; studentConsentAt: string; aiTeacherAt?: string | null; aiStudentAt?: string | null; lessonDate?: string | null; lessonId?: string | null}, tracks?: RecordingTracks): Promise<{ok: boolean; error?: string; analysis?: string}>;
+  /** v58 teacher only: the planned lesson of this classroom session (if any). */
+  lessonId?: string | null;
   previewImport(backup: unknown): Promise<{oldName: string; newName: string | null}[]>;
   importBackup(backup: unknown): Promise<string>;
   /** Personal hover translation (never written to the shared canvas). */
@@ -179,7 +183,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
   }
 
   return {
-    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId), lessonStartsAt: opts.lessonStartsAt || null,
+    version: 1, role: 'teacher', studentId: opts.studentId, studentName: opts.studentName, liveUrl: liveUrl(opts.studentId), lessonStartsAt: opts.lessonStartsAt || null, lessonId: opts.lessonId || null,
     async get(key) {
       const k = parseKey(key);
       if (!k) return null;
@@ -205,7 +209,9 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
     switchStudent(id) { if (allowed.has(id) && id !== opts.studentId) opts.onSwitch(id); },
     async uploadRecording(blob, meta, tracks) {
       const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
-      const stem = `${opts.studentId}/${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID()}`;
+      const day = meta.lessonDate && /^\d{4}-\d{2}-\d{2}$/.test(meta.lessonDate) ? meta.lessonDate : localDate();
+      const lessonId = meta.lessonId !== undefined && meta.lessonId !== null ? meta.lessonId : opts.lessonId;
+      const stem = `${opts.studentId}/${day}-${crypto.randomUUID()}`;
       const path = `${stem}.${ext}`;
       const type = (blob.type || 'audio/webm').split(';')[0];
       const up = await db.storage.from('recordings').upload(path, blob, {contentType: type, upsert: false});
@@ -225,11 +231,11 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
         student_consent_at: meta.studentConsentAt, created_by: opts.userId,
       };
       let row = await db.from('lesson_recordings').insert({
-        ...base, lesson_date: localDate(), ...(opts.lessonId ? {lesson_id: opts.lessonId} : {}),
+        ...base, lesson_date: day, ...(lessonId ? {lesson_id: lessonId} : {}),
         ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {}),
       }).select('id').single();
       let v28 = true;
-      if (row.error && opts.lessonId && /lesson_id/.test(row.error.message)) row = await db.from('lesson_recordings').insert({...base, lesson_date: localDate(), ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {})}).select('id').single(); // v30 not run yet
+      if (row.error && lessonId && /lesson_id/.test(row.error.message)) row = await db.from('lesson_recordings').insert({...base, lesson_date: day, ...(ai ? {ai_consent_teacher_at: meta.aiTeacherAt, ai_consent_student_at: meta.aiStudentAt, ...trackPaths} : {})}).select('id').single(); // v30 not run yet
       if (row.error && isMissingMigration(row.error)) { v28 = false; row = await db.from('lesson_recordings').insert(base).select('id').single(); } // v28.sql not run yet
       const extra = Object.values(trackPaths);
       if (!v28 && extra.length) await db.storage.from('recordings').remove(extra);
