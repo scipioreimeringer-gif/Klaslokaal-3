@@ -89,6 +89,27 @@ export function conjugationSet(lang: string, level: Lvl, n: number, seed: number
   return out.filter(validItem);
 }
 
+/** v62: conjugation items from the student's OWN verbs in the central word bank — only verbs with a complete,
+ *  valid conjugation (6 forms); Portuguese only the unambiguous persons (eu, ele/ela, nós, eles/elas). */
+const PRON: Record<string, [number, string][]> = {nl: [[0, 'ik'], [1, 'jij'], [2, 'hij/zij'], [3, 'wij'], [4, 'jullie'], [5, 'zij']], pt: [[0, 'eu'], [2, 'ele/ela'], [3, 'nós'], [5, 'eles/elas']]};
+export function ownConjugations(own: (OwnWord & {grammar?: {pos?: string; conj_present?: string[]; conj_past?: string[]} | null})[], lang: string, level: Lvl, n: number, seed: number): TItem[] {
+  const r = rng(seed), P = PRON[lang]; if (!P) return [];
+  const out: TItem[] = [];
+  for (const w of shuffle(own, r)) {
+    if (out.length >= n) break;
+    const g = w.grammar; if (!g || g.pos !== 'verb') continue;
+    const tenses: [string, string[] | undefined][] = [['tegenwoordige tijd', g.conj_present], ...(levelNum(level) > 1 ? [['verleden tijd', g.conj_past] as [string, string[] | undefined]] : [])];
+    const ok = tenses.filter(([, f]) => Array.isArray(f) && f.length >= 6 && f.every(x => typeof x === 'string' && x.trim()));
+    if (!ok.length) continue;
+    const [tense, forms] = ok[Math.floor(r() * ok.length)], [i, pron] = P[Math.floor(r() * P.length)];
+    const form = forms![i].trim().replace(new RegExp('^' + pron.split('/')[0] + '\\s+', 'i'), '');      // "ik loop" → "loop"
+    const inf = (w.term || '').trim();
+    if (!form || !inf || form.toLowerCase() === inf.toLowerCase() && tense !== 'tegenwoordige tijd') continue;
+    out.push({key: 'own-conj:' + w.id + ':' + tense + ':' + i, vocabId: w.id, prompt: `${pron} ___ (${inf})`, hint: `${inf} · ${tense} · ${pron}`, answers: [form], notes: [], source: 'own', label: tense});
+  }
+  return out.filter(validItem);
+}
+
 /** Sentence completion: own example sentences first, then grammar in context (articles, prepositions, ser/estar,
  *  verb forms at the level); the word to fill in is never in the prompt. */
 export function sentenceSet(own: OwnWord[], lang: string, level: Lvl, n: number, seed: number): TItem[] {

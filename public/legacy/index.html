@@ -628,6 +628,18 @@ body .top .conn.conn-dot:before{display:none}
 .cvtb::-webkit-scrollbar{display:none}.cvtb .tbpage{display:inline-flex;align-items:center;flex:none}
 .cvtb .tbselect,.cvtb .pgsel{height:32px;max-width:150px;border:1px solid #dbe8e5;border-radius:8px;padding:0 6px;font:inherit;font-size:13px;background:#fff;color:#2a4a52}
 .cvtb #cvPageLbl{font-size:12.5px;color:#5b7076;padding:0 6px;white-space:nowrap}
+/* v62: page menu */
+.pgm{position:relative;display:inline-flex}
+.pgm-btn{display:inline-flex;align-items:center;gap:6px;max-width:220px;height:30px;padding:0 10px;border:1px solid #d6e6e3;border-radius:9px;background:#fff;color:#123c44;font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}
+.pgm-btn:hover,.pgm-btn[aria-expanded=true]{background:#eef8f6;border-color:#9fd8cf}
+.pgm-cur{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm-pop{position:fixed;z-index:2147483000;max-width:min(360px,calc(100vw - 16px));overflow-y:auto;padding:6px;border:1px solid #d6e6e3;border-radius:12px;background:#fff;box-shadow:0 14px 34px rgba(15,60,70,.18);display:grid;gap:2px}
+.pgm-pop[hidden]{display:none}
+.pgm-item{display:flex;align-items:flex-start;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:9px;background:transparent;text-align:left;font:inherit;color:#123c44;cursor:pointer}
+.pgm-item:hover,.pgm-item:focus-visible{background:#eef8f6;outline:none}
+.pgm-item.on{background:#dff3ef}.pgm-item.on .pgm-n{background:#13a89e;color:#fff}
+.pgm-n{flex:0 0 auto;min-width:24px;height:24px;border-radius:7px;background:#eef1f3;display:grid;place-items:center;font-size:12px;font-weight:800}
+.pgm-t{display:grid;min-width:0}.pgm-t b{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pgm-t small{font-size:11.5px;color:#6b7a86}
 .cvtb.narrow .ovf{display:none}
 .cvpop{position:fixed;z-index:9999;min-width:200px;max-width:min(320px,calc(100vw - 16px));max-height:min(70vh,420px);overflow:auto;padding:6px;background:#fff;border:1px solid #dbe8e5;border-radius:12px;box-shadow:0 12px 32px rgba(12,72,83,.16),0 2px 6px rgba(12,72,83,.06);font-family:'Plus Jakarta Sans',var(--font,system-ui),sans-serif;animation:cvpop-in .16s ease-out}
 .cvpop.wide{min-width:260px}
@@ -864,7 +876,7 @@ html[data-theme="dark"] .v53-views button,html[data-theme="dark"] .v53-seg butto
         <button class="ib" id="cvPageRen" data-teacher type="button" title="Pagina hernoemen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
         <button class="ib" id="cvPageDel" data-teacher type="button" title="Pagina verwijderen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <button class="btn sm" id="aiCanvasWords" data-teacher type="button" title="AI haalt de woorden uit deze pagina en sorteert ze op een nieuwe pagina">✨ Woorden</button>
-        <button class="btn sm sbonly" id="tidyBtn" data-teacher type="button" title="AI stelt een overzichtelijke versie van deze pagina voor (eerst voorbeeld)" hidden>✨ Orden</button>
+        <button class="btn sm sbonly" id="tidyBtn" data-teacher type="button" title="AI maakt een woordenlijst van deze pagina, geordend per woordsoort met grammatica (eerst voorbeeld)" hidden>✨ Woordenlijst</button>
         <button class="ib sbonly" id="tidyUndo" data-teacher type="button" title="Terug naar de versie van vóór het ordenen" hidden>↶</button>
         <button class="btn sm sbonly trbtn" id="trBtn" type="button" aria-pressed="false" title="Vertalen aan/uit: beweeg over een woord (op tablet: tik). Alleen jij ziet de vertaling." hidden>🌐 Vertalen</button>
         <button class="ib" data-cmd="wipe" data-teacher type="button" title="Canvas leegmaken"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
@@ -1106,8 +1118,8 @@ html[data-theme="dark"] .v53-views button,html[data-theme="dark"] .v53-seg butto
 </div>
 <div class="ov" id="tidyOv" hidden data-teacher>
   <div class="dlg" style="max-width:680px">
-    <h2>Voorstel: geordende pagina</h2>
-    <p class="muted">Dit is een voorstel van AI. Er verandert niets totdat je op Toepassen klikt. De originele versie blijft bewaard (knop ↶).</p>
+    <h2 id="tidyTitle">Woordenlijst van deze pagina</h2>
+    <p class="muted" id="tidyNote">De woorden staan al in de woordenbank van je leerling. Met Toepassen komt deze lijst op een nieuwe pagina; de originele pagina blijft ongewijzigd.</p>
     <div class="tidyprev" id="tidyPrev"></div>
     <ul class="tidychanges" id="tidyChanges"></ul>
     <div class="row"><button class="btn primary" id="tidyApply" type="button">Toepassen</button><button class="btn ghost" id="tidyCancel" type="button">Annuleren</button></div>
@@ -2699,7 +2711,7 @@ if(isT){
   var cvOwner = null, cvDoc = null, cvSaveT = null;
   function cvKey(id){ return "canvas:" + (id || "algemeen"); }
   function localCv(id){ if(SB) return null; try{ var j = localStorage.getItem("klas-canvas2-" + (id || "algemeen")); if(j) return JSON.parse(j); var old = localStorage.getItem("klas-canvas-" + (id || "algemeen")); if(old) return {pages:[{id:uid(), title:"Pagina 1", html:old}], cur:0}; }catch(e){} return null; }
-  function newDoc(){ return {pages:[{id:uid(), title:"Pagina 1", html:""}], cur:0}; }
+  function newDoc(){ return {pages:[{id:uid(), title:"Pagina 1", html:"", created:new Date().toISOString()}], cur:0}; }
   function curPage(){ return cvDoc.pages[Math.min(cvDoc.cur, cvDoc.pages.length - 1)]; }
   function persistCv(){
     if(!cvDoc || !cvReady) return;
@@ -2709,10 +2721,68 @@ if(isT){
     queueCloud(cvKey(owner), function(){ return doc; });
   }
   window.cvSave = function(){ clearTimeout(cvSaveT); cvSaveT = setTimeout(persistCv, 500); };
+  /* v62: modern page menu (replaces the look of the native select, which stays as the source of truth). Opens on
+     hover or click, stays open while the pointer moves into it, keyboard and touch work, never clipped (fixed
+     position above everything). Per page: number, name, lesson and REAL date (created / linked lesson) — pages from
+     before v62 have no date and show none. */
+  var pgMenu = null, pgPop = null, pgHideT = null;
+  function pgDate(iso){ try{ return new Date(iso).toLocaleDateString(document.documentElement.lang || "nl", {day:"numeric", month:"short", year:"numeric"}); }catch(e){ return ""; } }
+  function pgClose(){ clearTimeout(pgHideT); if(pgPop){ pgPop.hidden = true; } if(pgMenu) pgMenu.querySelector(".pgm-btn").setAttribute("aria-expanded", "false"); }
+  function pgOpen(focus){
+    if(!pgMenu || !cvDoc) return; clearTimeout(pgHideT);
+    var b = pgMenu.querySelector(".pgm-btn"), r = b.getBoundingClientRect();
+    pgPop.innerHTML = "";
+    cvDoc.pages.forEach(function(p, i){
+      var it = document.createElement("button"); it.type = "button"; it.className = "pgm-item" + (i === cvDoc.cur ? " on" : ""); it.setAttribute("role", "menuitemradio"); it.setAttribute("aria-checked", i === cvDoc.cur ? "true" : "false");
+      var meta = [p.lesson ? "Les " + pgDate(p.lesson) : "", p.created && !p.lesson ? pgDate(p.created) : ""].filter(Boolean).join(" · ");
+      it.innerHTML = '<span class="pgm-n">' + (i + 1) + '</span><span class="pgm-t"><b></b><small></small></span>';
+      it.querySelector("b").textContent = p.title; it.querySelector("small").textContent = meta;
+      it.addEventListener("click", function(){ pgClose(); if(i !== cvDoc.cur) openPage(i); });
+      pgPop.appendChild(it);
+    });
+    var w = Math.max(240, r.width), left = Math.min(r.left, window.innerWidth - w - 8);
+    pgPop.style.left = Math.max(8, left) + "px"; pgPop.style.top = (r.bottom + 4) + "px"; pgPop.style.minWidth = w + "px";
+    pgPop.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 16) + "px";
+    pgPop.hidden = false; b.setAttribute("aria-expanded", "true");
+    var on = pgPop.querySelector(".pgm-item.on") || pgPop.firstChild;
+    if(on){ try{ on.scrollIntoView({block:"nearest"}); }catch(e){} if(focus) on.focus(); }
+  }
+  function pgEnsure(sel){
+    if(!isT) return;
+    if(!pgMenu){
+      pgMenu = document.createElement("span"); pgMenu.className = "pgm"; pgMenu.setAttribute("data-teacher", "");
+      pgMenu.innerHTML = '<button type="button" class="pgm-btn" aria-haspopup="menu" aria-expanded="false" title="Pagina kiezen"><span class="pgm-cur"></span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg></button>';
+      pgPop = document.createElement("div"); pgPop.className = "pgm-pop"; pgPop.setAttribute("role", "menu"); pgPop.hidden = true;
+      document.body.appendChild(pgPop);
+      try{ var ff = getComputedStyle(window.parent.document.body).fontFamily; if(ff){ pgMenu.style.fontFamily = ff; pgPop.style.fontFamily = ff; } }catch(e){}
+      var b = pgMenu.querySelector(".pgm-btn");
+      b.addEventListener("click", function(){ if(pgPop.hidden) pgOpen(false); else pgClose(); });
+      b.addEventListener("keydown", function(e){ if(e.key === "ArrowDown" || e.key === "Enter" || e.key === " "){ e.preventDefault(); pgOpen(true); } });
+      var hover = window.matchMedia && window.matchMedia("(hover: hover)").matches;
+      if(hover){
+        pgMenu.addEventListener("mouseenter", function(){ pgOpen(false); });
+        [pgMenu, pgPop].forEach(function(el){ el.addEventListener("mouseleave", function(){ clearTimeout(pgHideT); pgHideT = setTimeout(pgClose, 280); }); el.addEventListener("mouseenter", function(){ clearTimeout(pgHideT); }); });
+      }
+      pgPop.addEventListener("keydown", function(e){
+        var items = [].slice.call(pgPop.querySelectorAll(".pgm-item")), k = items.indexOf(document.activeElement);
+        if(e.key === "ArrowDown"){ e.preventDefault(); (items[k + 1] || items[0]).focus(); }
+        else if(e.key === "ArrowUp"){ e.preventDefault(); (items[k - 1] || items[items.length - 1]).focus(); }
+        else if(e.key === "Escape"){ e.preventDefault(); pgClose(); b.focus(); }
+        else if(e.key === "Tab"){ pgClose(); }
+      });
+      document.addEventListener("mousedown", function(e){ if(pgPop && !pgPop.hidden && !pgPop.contains(e.target) && !pgMenu.contains(e.target)) pgClose(); });
+      window.addEventListener("resize", pgClose); window.addEventListener("scroll", function(e){ if(pgPop && !pgPop.contains(e.target)) pgClose(); }, true);
+    }
+    if(sel.nextSibling !== pgMenu) sel.parentNode.insertBefore(pgMenu, sel.nextSibling);
+    sel.style.display = "none";
+    pgMenu.querySelector(".pgm-cur").textContent = (cvDoc.cur + 1) + "/" + cvDoc.pages.length + " · " + curPage().title;
+    if(pgPop && !pgPop.hidden) pgOpen(false);
+  }
   function renderPages(){
     var sel = $("cvPageSel"); sel.innerHTML = "";
     cvDoc.pages.forEach(function(p, i){ var o = document.createElement("option"); o.value = i; o.textContent = (i + 1) + ". " + p.title; sel.appendChild(o); });
     sel.value = cvDoc.cur;
+    pgEnsure(sel);
     if(typeof tidyUndoState === "function") tidyUndoState();
     send({t:"cvpage", title:curPage().title, i:cvDoc.cur + 1, n:cvDoc.pages.length});
   }
@@ -2739,9 +2809,11 @@ if(isT){
   }
   function addPage(title, html){
     clearTimeout(cvSaveT); curPage().html = cvOut(CV.innerHTML);
-    cvDoc.pages.push({id:uid(), title:title || ("Pagina " + (cvDoc.pages.length + 1)), html:html || ""});
+    var br = SB ? bridge() : null, ls = br && br.lessonStartsAt ? String(br.lessonStartsAt) : null;
+    cvDoc.pages.push({id:uid(), title:title || ("Pagina " + (cvDoc.pages.length + 1)), html:html || "", created:new Date().toISOString(), lesson:ls});   /* v62: real dates only */
     openPage(cvDoc.pages.length - 1);
   }
+  window.__cvRenderPages = function(){ if(cvDoc) renderPages(); };   /* v62: the toolbar moves the select → menu follows */
   window.sendCvPage = function(){ if(cvDoc) send({t:"cvpage", title:curPage().title, i:cvDoc.cur + 1, n:cvDoc.pages.length}); };
   $("cvPageSel").addEventListener("change", function(){ openPage(+this.value); });
   $("cvPageAdd").addEventListener("click", function(){ addPage(); });
@@ -2760,25 +2832,61 @@ if(isT){
   function tidyUndoState(){ var b = $("tidyUndo"); if(b) b.hidden = !(SB && cvDoc && curPage().prev); }
   if(SB){
     $("tidyBtn").hidden = false;
+    /* v62: the AI button makes ONLY a vocabulary list (no lesson summary): grouped by word class with grammar,
+       from the central word bank (new words are added first; known words reuse their stored grammar). */
+    var VG = [["noun","Zelfstandige naamwoorden"],["verb","Werkwoorden"],["adjective","Bijvoeglijke naamwoorden"],["adverb","Bijwoorden"],["preposition","Voorzetsels"],["conjunction","Voegwoorden"],["expression","Uitdrukkingen en vaste combinaties"],["other","Overige woorden"]];
+    var POSL = {noun:/^(znw|n\.|subst|sust|nom|subst\.)/i, verb:/^(ww|v\.|verbo|verbe|verb)/i, adjective:/^(bnw|adj)/i, adverb:/^(bijw|adv)/i, preposition:/^(vz|prep|präp)/i, conjunction:/^(vw|conj|konj)/i, expression:/^(uitdrukking|expression|express|ausdruck)/i};
+    function vKind(w){ var g = w.grammar || {}; if(g.pos && g.pos !== "sentence") return VG.some(function(x){ return x[0] === g.pos; }) ? g.pos : "other";
+      var p = String(w.pos || ""); for(var k in POSL) if(POSL[k].test(p)) return k; return w.kind === "expression" ? "expression" : "other"; }
+    function vLine(w){
+      var g = w.grammar || {}, k = vKind(w), tr = w.translation ? " — " + w.translation : "", t = g.base || w.term;
+      if(k === "noun") return ((g.article ? g.article + " " : "") + t + (g.gender ? " (" + g.gender + ")" : "") + (g.plural ? " · mv. " + g.plural : "") + tr);
+      if(k === "verb"){ var past = g.past_sg ? g.past_sg + (g.past_pl ? " / " + g.past_pl : "") : "";
+        return [t, g.present, past, g.participle ? g.participle + (g.aux ? " (" + g.aux + ")" : "") : ""].filter(Boolean).join(" · ") + (g.separable === "yes" ? " · scheidbaar" : g.separable === "no" ? " · onscheidbaar" : "") + tr + (g.aux === "H/Z" && g.aux_note ? " [" + g.aux_note + "]" : ""); }
+      if(k === "adjective") return [t + (g.inflected ? " / " + g.inflected : ""), g.comparative, g.superlative].filter(Boolean).join(" · ") + tr;
+      return w.term + tr;
+    }
+    function vBlocks(list){
+      var out = [];
+      VG.forEach(function(gr){ var ws = list.filter(function(w){ return vKind(w) === gr[0]; }); if(!ws.length) return;
+        out.push({type:"h", text:gr[1]}); ws.sort(function(a, b){ return (a.grammar && a.grammar.base || a.term).localeCompare(b.grammar && b.grammar.base || b.term); }).forEach(function(w){ out.push({type:"li", text:vLine(w)}); }); });
+      return out;
+    }
+    function saveNow(){ clearTimeout(cvSaveT); persistCv(); try{ if(typeof flushCloud === "function") flushCloud(); }catch(e){} return new Promise(function(r){ setTimeout(r, 1200); }); }
     $("tidyBtn").addEventListener("click", function(){
       if(!cvDoc) return; cvNormalize();
-      var blocks = cvBlocks().map(function(b){ return {t:b.getAttribute("data-t") || "p", text:b.innerText}; }).filter(function(x){ return x.text.trim(); });
-      if(!blocks.length){ toast("Deze canvaspagina is nog leeg"); return; }
-      var btn = this; busy(btn, true, "AI ordent...");
-      bridge().tidy(blocks).then(function(r){
-        tidyResult = JSON.parse(JSON.stringify(r));
-        $("tidyPrev").innerHTML = tidyResult.blocks.map(function(b){ return '<div class="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + tidyInline(b.text) + "</div>"; }).join("");
-        $("tidyChanges").innerHTML = (tidyResult.changes || []).map(function(c){ return "<li>" + tidyEsc(c) + "</li>"; }).join("");
+      if(!CV.innerText.trim()){ toast("Deze canvaspagina is nog leeg"); return; }
+      var b = bridge(); if(!b.vocab){ toast("Woordenlijst is niet beschikbaar"); return; }
+      var btn = this, page = cvDoc.cur; busy(btn, true, "Woorden verzamelen...");
+      saveNow().then(function(){ return b.vocab({page:page, list:true}); }).then(function(r){
+        var list = (r && r.list) || [];
+        if(!list.length){ toast("Geen woordenschat gevonden op deze pagina"); return; }
+        tidyResult = {blocks:vBlocks(list), title:"Woordenlijst · " + curPage().title};
+        $("tidyPrev").innerHTML = tidyResult.blocks.map(function(x){ return '<div class="' + (x.type === "h" ? "h" : "li") + '">' + tidyEsc(x.text) + "</div>"; }).join("");
+        $("tidyChanges").innerHTML = "<li>" + tidyEsc((r.added || 0) + " nieuwe woorden toegevoegd, " + (r.known || 0) + " bestaande woorden herkend") + "</li>";
         $("tidyOv").hidden = false;
-      }).catch(function(e){ toast((e && e.message) || "Ordenen mislukt"); }).then(function(){ busy(btn, false); });
+      }).catch(function(e){ toast((e && e.message) || "Woordenlijst maken mislukt"); }).then(function(){ busy(btn, false); });
     });
+    /* v62: import into the central word bank — this page or all pages (historical lists); also automatically a
+       while after the teacher stopped typing (never per keystroke; unchanged pages cost nothing: page hash) */
+    var vocabAutoT = null, vocabBusy = false;
+    window.__cvVocab = function(all, silent){
+      var b = bridge(); if(!b || !b.vocab || vocabBusy || !cvDoc) return;
+      vocabBusy = true; if(!silent) toast(all ? "Alle pagina's verwerken..." : "Pagina verwerken...");
+      saveNow().then(function(){ return b.vocab({page:all ? null : cvDoc.cur}); }).then(function(r){
+        var a = (r && r.added) || 0, k = (r && r.known) || 0;
+        if(!silent || a) toast(a + " nieuwe woorden toegevoegd, " + k + " bestaande woorden herkend");
+      }).catch(function(e){ if(!silent) toast((e && e.message) || "Verwerken mislukt"); }).then(function(){ vocabBusy = false; });
+    };
+    if(isT && CV) CV.addEventListener("input", function(){ clearTimeout(vocabAutoT); vocabAutoT = setTimeout(function(){ window.__cvVocab(false, true); }, 120000); });
     $("tidyCancel").addEventListener("click", function(){ $("tidyOv").hidden = true; tidyResult = null; });
     $("tidyApply").addEventListener("click", function(){
       if(!tidyResult || !cvDoc) return;
-      var page = curPage(); page.prev = cvOut(CV.innerHTML); page.prevAt = new Date().toISOString();
-      var html = tidyResult.blocks.map(function(b){ return '<div class="b" data-t="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + (tidyInline(b.text) || "<br>") + "</div>"; }).join("");
-      cvLoad(html); persistCv(); $("tidyOv").hidden = true; tidyResult = null; tidyUndoState();
-      toast("Pagina geordend. Met ↶ zet je de originele versie terug.");
+      var html = tidyResult.blocks.map(function(b){ return '<div class="b" data-t="' + (b.type === "h" ? "h" : b.type === "li" ? "li" : "p") + '">' + (tidyEsc(b.text) || "<br>") + "</div>"; }).join("");
+      var title = (tidyResult.title || "Woordenlijst").slice(0, 60);
+      $("tidyOv").hidden = true; tidyResult = null;
+      addPage(title, html);   /* v62: always a NEW page — the original canvas page stays exactly as it was */
+      toast("Woordenlijst op een nieuwe pagina gezet");
     });
     $("tidyUndo").addEventListener("click", function(){
       var page = curPage(); if(!page.prev) return;
@@ -3910,7 +4018,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   sep();
   /* ---- 6. page selector, new page ---- */
   var pageWrap = document.createElement("span"); pageWrap.className = "tbpage"; tb.appendChild(pageWrap);
-  if($("cvPageSel")){ pageWrap.appendChild($("cvPageSel")); $("cvPageSel").classList.add("tbselect"); }
+  if($("cvPageSel")){ pageWrap.appendChild($("cvPageSel")); $("cvPageSel").classList.add("tbselect"); if(window.__cvRenderPages) window.__cvRenderPages(); }
   if($("cvPageLbl")) pageWrap.appendChild($("cvPageLbl"));
   if(isT) btn(svg(P.plus), "Nieuwe pagina", function(){ $("cvPageAdd").click(); });
   sep("ovf");
@@ -3931,6 +4039,9 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
       item(pop, P.copy, "Tekst kopiëren", function(){ copy(CV.innerText.trim(), "Tekst van het canvas gekopieerd"); });
       item(pop, P.eraser, "Opmaak verwijderen", function(){ exec("removeFormat"); });
       if(isT){
+        if(SB && window.__cvVocab){ group(pop, "Woordenbank");
+          item(pop, P.copy, "Deze pagina verwerken", function(){ window.__cvVocab(false); });
+          item(pop, P.copy, "Alle Canvas-pagina's verwerken", function(){ window.__cvVocab(true); }); }
         group(pop, "Pagina");
         item(pop, P.pen, "Pagina hernoemen", function(){ $("cvPageRen").click(); });
         item(pop, P.trash, "Pagina verwijderen", function(){ $("cvPageDel").click(); }, {danger:true});

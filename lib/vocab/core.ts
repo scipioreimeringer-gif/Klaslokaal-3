@@ -13,7 +13,8 @@ export function canvasBlocks(html: string): Block[] {
     any = true;
     // v40: Kop 2 / Kop 3 (data-t="h2" / "h3") are headings too
     const t = (/data-t="(h[23]?|li|p)"/.exec(m[2])?.[1]?.replace(/^h[23]$/, 'h') as Block['type'] | undefined) || (/^h/i.test(m[1]) ? 'h' : m[1].toLowerCase() === 'li' ? 'li' : 'p');
-    for (const line of decode(m[3].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).split('\n')) { const s = line.replace(/\s+/g, ' ').trim(); if (s) out.push({type: t as Block['type'], text: s}); }
+    // v62: pasted tables keep their cells apart ("huis | house") and one row per line
+    for (const line of decode(m[3].replace(/<br\s*\/?>/gi, '\n').replace(/<\/t[dh]>\s*(?=<t[dh])/gi, ' | ').replace(/<\/tr>/gi, '\n').replace(/<[^>]+>/g, '')).split('\n')) { const s = line.replace(/\s+/g, ' ').trim(); if (s) out.push({type: t as Block['type'], text: s}); }
   }
   if (!any) for (const line of decode(String(html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '\n')).split('\n')) { const s = line.replace(/\s+/g, ' ').trim(); if (s) out.push({type: 'p', text: s}); }
   return out;
@@ -25,7 +26,7 @@ export const normTerm = (s: string) => String(s || '').toLowerCase().replace(/[�
 
 const ARTICLE = /^(de|het|een|the|a|an|o|os|as|um|uma|el|la|los|las|un|una|le|les|l'|der|die|das|ein|eine|to)$/i;
 export type Candidate = {term: string; translation: string; example: string; page: string; kind: 'word' | 'expression'; reason: 'pair' | 'list' | 'short'};
-const PAIR = /^\s*(.{1,80}?)\s+(?:=|–|—|->|→|:|-)\s+(.{1,160})$/u;
+const PAIR = /^\s*(.{1,80}?)\s*(?:\s(?:=|–|—|->|→|:|-)\s|\t+|\s\|\s)\s*(.{1,160})$/u;   // v62: also tab / table cell separators
 const PAREN = /^\s*([^()]{1,60}?)\s*\(([^()]{1,100})\)\s*$/u;
 /** Sentence-like text (grammar explanations, example sentences): never a word card on its own. */
 export function isSentence(s: string) {
@@ -95,9 +96,19 @@ export function selectWords(all: Word[], sel: Selection): Word[] {
 /** Priority: difficult / not yet mastered and recent first; words used earlier in this session last (no repeats until needed). */
 export function pickRound(pool: Word[], n: number, used: Set<string>, seed: number) {
   let s = seed >>> 0; const rnd = () => ((s = Math.imul(s ^ (s >>> 15), 2246822507) + 0x9e3779b9 >>> 0) / 4294967296);
-  const score = (w: Word) => (used.has(w.id) ? 100 : 0) + (w.status === 'mastered' ? 20 : 0) - (isDifficult(w) ? 10 : 0) - (w.status === 'new' ? 4 : 0) + rnd() * 6
-    - Math.max(0, 10 - (Date.now() - new Date(dateOf(w)).getTime()) / 864e5) / 2;
-  return pool.map(w => ({w, k: score(w)})).sort((a, b) => a.k - b.k).slice(0, n).map(x => x.w);
+  // v62: practice results steer it (difficult / wrong more often, mastered and often right less), recent AND older words
+  const score = (w: Word) => (used.has(w.id) ? 100 : 0) + (w.status === 'mastered' ? 20 : 0) - (isDifficult(w) ? 10 : 0) - (w.status === 'new' ? 4 : 0) + rnd() * 10
+    + Math.min(8, Math.max(0, (w.correct_count || 0) - (w.wrong_count || 0))) - Math.max(0, 10 - (Date.now() - new Date(dateOf(w)).getTime()) / 864e5) / 3;
+  const seen = new Set<string>(), out: Word[] = [];
+  for (const x of pool.map(w => ({w, k: score(w)})).sort((a, b) => a.k - b.k)) {   // never the same word twice in one round
+    const key = normTerm(x.w.term); if (!key || seen.has(key)) continue; seen.add(key); out.push(x.w); if (out.length >= n) break;
+  }
+  return out;
+}
+/** v62: words that can really be described in 30 Seconds / Taboo (no sentences, no grammar words, not too long). */
+export function describable(w: {term: string; pos?: string | null; kind?: string | null}) {
+  const t = String(w.term || '').trim(); if (!t || isSentence(t) || words(t).length > 3) return false;
+  return !/^(vz|vw|prep|conj|präp|konj|voorbeeldzin|example sentence|frase)/i.test(String(w.pos || '').trim());
 }
 
 /* ---------------- taboo cards ---------------- */

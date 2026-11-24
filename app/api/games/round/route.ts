@@ -1,7 +1,7 @@
 import {authUser, enforceLimit, HttpError, jsonError, langName, type UsageCtx} from '../../../../lib/server/ai';
 import {studentAccess, subjectCode} from '../../../../lib/server/context';
 import {tabooFor} from '../../../../lib/server/vocab';
-import {pickRound, selectWords, type Selection, type Word} from '../../../../lib/vocab/core';
+import {describable, pickRound, selectWords, type Selection, type Word} from '../../../../lib/vocab/core';
 import {BANKS, bankPool, hasBank, loadBank, isCat, isLevel, pickBank, termKey, widen, type BankFilter, type BankItem} from '../../../../lib/wordbank';
 
 type Card = {vocab_id: string | null; bank_id?: string; term: string; hint: string; forbidden: string[]};
@@ -43,9 +43,10 @@ export async function POST(req: Request) {
     } else {
       /* ---------- the student's personal word list ---------- */
       const sel = (b.selection && typeof b.selection === 'object' ? b.selection : {mode: 'all'}) as Selection;
-      const {data, error} = await db.from('vocab_items').select('id,term,translation,example,status,lesson_date,created_at,correct_count,wrong_count,difficult,due_at').eq('student_id', student.id);
+      const {data, error} = await db.from('vocab_items').select('id,term,translation,example,status,lesson_date,created_at,correct_count,wrong_count,difficult,due_at,pos,kind').eq('student_id', student.id);
       if (error) throw new HttpError(400, /difficult/.test(error.message) ? 'Voer eerst supabase/v35.sql uit.' : error.message);
-      const pool = selectWords((data || []) as Word[], sel).filter(w => w.term.trim());
+      // v62: only words that can be described (from canvas, lessons and AI reports alike — one central list)
+      const pool = selectWords((data || []) as Word[], sel).filter(w => w.term.trim() && describable(w as Word & {pos?: string | null; kind?: string | null}));
       // v41: too few personal words → top up with built-in words when asked (fillBank), never silently
       const lang = subjectCode(student), canFill = b.fillBank === true && hasBank(lang);
       await loadBank(lang); // for topping up and for the checked forbidden words (no-op for other languages)

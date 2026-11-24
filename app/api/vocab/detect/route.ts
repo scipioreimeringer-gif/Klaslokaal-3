@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     await enforceLimit(db, user.id, 'vocab');
     const ui = await uiLanguage(db, user.id, body.uiLang);
     const lessonId = typeof body.lessonId === 'string' && /^[0-9a-f-]{36}$/i.test(body.lessonId) ? body.lessonId : null;
-    try { return Response.json(await detectCanvasVocab(db, student, {userId: user.id, ui, lessonId})); }
+    // v62: page = one canvas page (index) or all pages; list = also return the grammar word list of that page
+    const page = Number.isInteger(body.page) && (body.page as number) >= 0 && (body.page as number) < 500 ? body.page as number : null;
+    try { return Response.json(await detectCanvasVocab(db, student, {userId: user.id, ui, lessonId, page, list: body.list === true && page !== null})); }
     catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
   } catch (e) { return jsonError(e); }
 }

@@ -19,7 +19,7 @@ const own = [{id: 'w1', term: 'a praia', translation: 'het strand', example: 'N�
 test('root cause fixed: conjugation questions are never " · " / " — " again', () => {
   const c = read('components/Learning.tsx');
   assert.ok(!/prompt:` · `|hint:` — `/.test(c), 'the broken template is gone');
-  assert.match(c, /conjugate:conjugationSet\(lang,level,10,seed\)/);
+  assert.match(c, /conjugationSet\(lang,level,10-mine\.length,seed\)/); // v62: own verbs (complete conjugation) first, then the bank
 });
 test('every question of every game is complete — 2 languages × 5 levels × many seeds', () => {
   for (const lang of ['pt', 'nl']) for (const lv of LVLS) for (let seed = 1; seed < 40; seed += 7) {

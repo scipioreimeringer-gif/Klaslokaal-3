@@ -5,7 +5,7 @@ import {niceDate} from '../lib/data';
 import {supabase} from '../lib/supabase';
 import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
-import {wordDeck,quizOptions,sentenceSet,conjugationSet,correctionSet,idiomQuestions,progressOf,levelNum,rng,shuffle,DECK,MATCH,type Lvl,type OwnWord,type Card,type TItem,type SessionRow} from '../lib/practice';
+import {wordDeck,quizOptions,sentenceSet,conjugationSet,correctionSet,idiomQuestions,progressOf,levelNum,rng,shuffle,DECK,MATCH,type Lvl,type OwnWord,type Card,type TItem,type SessionRow,ownConjugations} from '../lib/practice';
 import {grammarBank,type GItem,type Note} from '../lib/grammar';
 import {loadBank,type BankItem} from '../lib/wordbank';
 import {errorsOf} from '../lib/analysis/core';
@@ -47,6 +47,17 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
  </section>
 }
 
+/* v62: grammar of a word from the central word bank — compact line, full conjugation only when unfolded */
+type Gram={pos?:string;article?:string;plural?:string;gender?:string;present?:string;past_sg?:string;past_pl?:string;participle?:string;aux?:string;aux_note?:string;separable?:string;conj_present?:string[];conj_past?:string[];inflected?:string;comparative?:string;superlative?:string};
+function GrammarInfo({g}:{g?:Gram|null}){
+ if(!g)return null;
+ const line=g.pos==='noun'?[g.article,g.gender&&'('+g.gender+')',g.plural&&tt('mv.')+' '+g.plural].filter(Boolean).join(' ')
+  :g.pos==='verb'?[g.present,[g.past_sg,g.past_pl].filter(Boolean).join(' / '),g.participle&&g.participle+(g.aux?' ('+g.aux+')':''),g.separable==='yes'?tt('scheidbaar'):g.separable==='no'?tt('onscheidbaar'):''].filter(Boolean).join(' · ')
+  :g.pos==='adjective'?[g.inflected,g.comparative,g.superlative].filter(Boolean).join(' · '):'';
+ if(!line&&!g.conj_present)return null;
+ return <small className="block muted gram">{line}{g.aux==='H/Z'&&g.aux_note?' — '+g.aux_note:''}
+  {(g.conj_present||g.conj_past)&&<details><summary>{tt('Vervoeging')}</summary>{g.conj_present&&<p>{g.conj_present.join(' · ')}</p>}{g.conj_past&&<p>{g.conj_past.join(' · ')}</p>}</details>}</small>
+}
 export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teacher'|'student'}){
  const [items,setItems]=useState<VocabItem[]|null>(null);const [err,setErr]=useState('');const [q,setQ]=useState('');const [filter,setFilter]=useState<'all'|VocabItem['status']>('all');
  const [term,setTerm]=useState('');const [tr,setTr]=useState('');const [ex,setEx]=useState('');
@@ -82,7 +93,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
   <label className="searchbox"><Search size={16}/><input placeholder={tt("Zoeken…")} value={q} onChange={e=>setQ(e.target.value)}/></label>
   {!shown.length?<p className="muted">{tt("Nog geen woorden. Woorden uit de live les, goedgekeurde AI-analyses en woorden die je hier toevoegt, komen in deze lijst.")}</p>:
   <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Les")}</th><th>{tt("Bron")}</th><th/></tr></thead>{/* v46: grouped per word class */}{POS_GROUP_ORDER.map(k=>[k,shown.filter(v=>posKindOf(v.pos)===k)] as const).filter(([,g])=>g.length).map(([k,g])=><tbody key={k}><tr className="pos-group"><th colSpan={7}>{posIcon(g[0].pos)} {tt(POS_GROUP_TITLE[k])} <small className="muted">{g.length}</small></th></tr>{g.map(v=><tr key={v.id}>
-   <td>{canEdit(v)?<input className="cell" value={v.term} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,term:e.target.value}:i)||null)} onBlur={e=>void patch(v,{term:e.target.value})}/>:<b>{v.term}</b>}</td>
+   <td>{canEdit(v)?<input className="cell" value={v.term} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,term:e.target.value}:i)||null)} onBlur={e=>void patch(v,{term:e.target.value})}/>:<b>{v.term}</b>}<GrammarInfo g={(v as {grammar?:Gram|null}).grammar}/></td>
    <td>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
    <td className="muted">{canEdit(v)?<input className="cell" value={v.example} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,example:e.target.value}:i)||null)} onBlur={e=>void patch(v,{example:e.target.value})}/>:v.example}</td>
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
@@ -120,7 +131,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
  const load=useCallback(async()=>{const db=supabase()!;
   setBank(await loadBank(lang));
   if(!studentId){setOwn([]);setErrs([]);setSessions([]);return}
-  const r=await loadVocab(db,studentId);setDue(r.items.filter(i=>i.translation&&new Date(i.due_at).getTime()<=Date.now()).length);setOwn(practiceOrder(r.items.filter(i=>i.translation)).map(i=>({id:i.id,term:i.term,translation:i.translation,example:i.example,pos:i.pos,level:i.level})));
+  const r=await loadVocab(db,studentId);setDue(r.items.filter(i=>i.translation&&new Date(i.due_at).getTime()<=Date.now()).length);setOwn(practiceOrder(r.items.filter(i=>i.translation)).map(i=>({id:i.id,term:i.term,translation:i.translation,example:i.example,pos:i.pos,level:i.level,grammar:(i as {grammar?:unknown}).grammar as never})));
   // own mistakes: only those the teacher approved (never "for later" material), each unique mistake once
   const s=await db.rpc('student_lesson_summaries',{sid:studentId});const seen=new Set<string>();
   setErrs(((s.data||[]) as {id:string;final:unknown}[]).flatMap(x=>errorsOf(x.final as never).filter(e=>e.status!=='rejected'&&!e.later&&e.original&&e.corrected).map(e=>({key:`err:${x.id}:${e.id}`.slice(0,200),original:e.original,corrected:e.corrected,why:e.why})))
@@ -132,7 +143,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
  const sets=useMemo(()=>{if(!own)return null;const n=DECK[level];
   const words=wordDeck(own,bank,level,n,seed),pairs=wordDeck(own,bank,level,MATCH[level],seed+1);
   return {words,pairs,quizPool:[...words.cards,...wordDeck([],bank,level,24,seed+2).cards],idioms:idiomQuestions(lang,level,seed),
-   sentence:sentenceSet(own,lang,level,10,seed),conjugate:conjugationSet(lang,level,10,seed),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed]);
+   sentence:sentenceSet(own,lang,level,10,seed),conjugate:(()=>{const mine=ownConjugations(own as Parameters<typeof ownConjugations>[0],lang,level,4,seed);return [...mine,...conjugationSet(lang,level,10-mine.length,seed)]})(),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed]);
  const autoStarted=useRef(false);
  useEffect(()=>{if(start==='flashcards'&&sets&&sets.words.cards.length>=2&&!autoStarted.current){autoStarted.current=true;setGame('flashcards')}},[start,sets]);
  if(!sets)return <div className="loader small"/>;

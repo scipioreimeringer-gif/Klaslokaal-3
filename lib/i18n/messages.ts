@@ -1657,4 +1657,8 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Lespakket van {0} bijna op": ["Lesson package of {0} almost used up","Pacote de aulas de {0} quase acabando","Paquete de clases de {0} casi agotado","Forfait de {0} presque épuisé","Stundenpaket von {0} fast aufgebraucht"],
  "Nieuw lespakket registreren voor {0}": ["Register a new lesson package for {0}","Registrar novo pacote de aulas para {0}","Registrar un nuevo paquete de clases para {0}","Enregistrer un nouveau forfait pour {0}","Neues Stundenpaket für {0} erfassen"],
  "Registreren": ["Register","Registrar","Registrar","Enregistrer","Erfassen"],
+ "mv.": ["pl.","pl.","pl.","pl.","Pl."],
+ "scheidbaar": ["separable","separável","separable","séparable","trennbar"],
+ "onscheidbaar": ["inseparable","inseparável","inseparable","inséparable","untrennbar"],
+ "Vervoeging": ["Conjugation","Conjugação","Conjugación","Conjugaison","Konjugation"],
 };
