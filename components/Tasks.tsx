@@ -27,7 +27,12 @@ async function loadTasks(uid:string,canTeach:boolean,teacherName:(sid:string)=>s
     db.from('lessons').select('student_id,starts_at,status').eq('teacher_id',uid).gte('starts_at',new Date(now).toISOString()).lt('starts_at',new Date(now+14*86400e3).toISOString()),
     db.from('homework_submissions').select('id,assignment_id,submitted_at,feedback_published_at,assignments!inner(title,student_id)').is('feedback_published_at',null).in('assignments.student_id',ids).order('submitted_at').limit(100),
     db.from('lesson_analyses').select('id,student_id,lesson_date,is_test').eq('status','failed').in('student_id',ids).limit(50)]);
-   const input:TeacherInput={students:st,upcomingLessons:(les.data||[]) as TeacherInput['upcomingLessons'],
+   // v61: payment tasks (only when billing is on; absent before v61.sql)
+   const bill=await db.from('profiles').select('billing_enabled').eq('id',uid).maybeSingle().then(r=>!r.error&&!!(r.data as {billing_enabled?:boolean}|null)?.billing_enabled,()=>false);
+   const pays=bill?await db.from('lessons').select('id,student_id,ends_at,payment_status').eq('teacher_id',uid).in('payment_status',['open','reported']).gte('ends_at',new Date(now-120*86400e3).toISOString()).lte('ends_at',new Date(now).toISOString()).limit(60).then(r=>(r.data||[]) as NonNullable<TeacherInput['payments']>):[];
+   const modes=bill?await db.from('student_billing').select('student_id,mode').then(r=>new Map(((r.data||[]) as {student_id:string;mode:string}[]).map(x=>[x.student_id,x.mode]))):new Map<string,string>();
+   const pkgs=bill?(await Promise.all(ids.map(id=>db.rpc('package_balance',{sid:id}).then(r=>{const l=(r.data||[]) as {id:string;remaining:number}[];return l.map((p,i)=>({id:p.id,student_id:id,remaining:p.remaining,mode:modes.get(id)||null,newest:i===l.length-1}))})))).flat():[];
+   const input:TeacherInput={payments:pays,packages:pkgs,students:st,upcomingLessons:(les.data||[]) as TeacherInput['upcomingLessons'],
     submissions:((subs.data||[]) as unknown as {id:string;assignment_id:string;submitted_at:string;feedback_published_at:string|null;assignments:{title:string;student_id:string}|{title:string;student_id:string}[]}[]).map(s=>{const a=Array.isArray(s.assignments)?s.assignments[0]:s.assignments;return {id:s.id,assignment_id:s.assignment_id,submitted_at:s.submitted_at,feedback_published_at:s.feedback_published_at,title:a?.title||'',student_id:a?.student_id||''}}),
     failedReports:((fail.data||[]) as {id:string;student_id:string;lesson_date:string;is_test?:boolean}[]).filter(a=>!a.is_test)};
    lists.push(teacherTasks(input,now,tz))}}

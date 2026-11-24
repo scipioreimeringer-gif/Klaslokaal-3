@@ -12,6 +12,8 @@ const TFN = new Set(['t', 'tt', 'tx', 'T']);
 
 /** Texts passed to t() through a variable (tab labels, field labels, server messages). */
 export const DYNAMIC = [
+  // v61 payments (PAY_LABEL, task titles)
+  'Openstaand', 'Betaling gemeld', 'Betaald', 'Niet van toepassing', 'Betaling van {0} controleren', 'Openstaande betaling van {0} opvolgen', 'Lespakket van {0} bijna op', 'Nieuw lespakket registreren voor {0}', 'Registreren', 'Betalingen',
   // v60 AI memory (status labels, tab)
   'Nieuw', 'Aan het leren', 'Redelijk beheerst', 'Beheerst', 'Herhaling nodig', 'AI-geheugen', 'onzeker',
   // v57 tasks (lib/tasks.ts titles/actions/priorities, translated in components/Tasks.tsx)

@@ -16,6 +16,8 @@ export type TeacherInput = {
   upcomingLessons: {student_id: string; starts_at: string; status: string}[];          // next 14 days
   submissions: {id: string; assignment_id: string; title: string; student_id: string; submitted_at: string; feedback_published_at: string | null}[];
   failedReports: {id: string; student_id: string; lesson_date: string}[];
+  /* v61 payments (optional) */ payments?: {id: string; student_id: string; ends_at: string; payment_status: string | null}[];
+  packages?: {id: string; student_id: string; remaining: number; mode?: string | null; newest: boolean}[];
 };
 export type StudentInput = {
   assignments: {id: string; title: string; student_id: string; due_at: string | null; published_at: string | null}[];
@@ -47,6 +49,15 @@ export function teacherTasks(d: TeacherInput, now: number, tz: string): Task[] {
     if (s.archived_at || planned.has(s.id) || !s.user_id) continue;
     out.push({key: `plan:${s.id}:${wk}`, source: 'auto', role: 'teacher', title: 'Les inplannen met {0}', arg: s.name, detail: 'Geen les in de komende 2 weken',
       priority: 'low', due: null, href: '/agenda?nieuw=1', action: 'Inplannen', done: false, studentId: s.id});
+  }
+  for (const l of d.payments || []) {
+    if (l.payment_status === 'reported') out.push({key: 'pay-check:' + l.id, source: 'auto', role: 'teacher', title: 'Betaling van {0} controleren', arg: name(l.student_id), priority: 'high', due: null, href: '/agenda?les=' + enc(l.id), action: 'Bekijken', done: false, studentId: l.student_id});
+    else if (l.payment_status === 'open' && now - Date.parse(l.ends_at) > 3 * DAY) out.push({key: 'pay-open:' + l.id, source: 'auto', role: 'teacher', title: 'Openstaande betaling van {0} opvolgen', arg: name(l.student_id), priority: 'normal', due: null, href: '/agenda?les=' + enc(l.id), action: 'Bekijken', done: false, studentId: l.student_id});
+  }
+  for (const p of d.packages || []) {
+    if (!p.newest) continue;                                                            // only the latest package per student
+    if (p.remaining === 1) out.push({key: 'pkg-low:' + p.id, source: 'auto', role: 'teacher', title: 'Lespakket van {0} bijna op', arg: name(p.student_id), priority: 'normal', due: null, href: '/betalingen', action: 'Bekijken', done: false, studentId: p.student_id});
+    if (p.remaining <= 0 && p.mode === 'package') out.push({key: 'pkg-new:' + p.id, source: 'auto', role: 'teacher', title: 'Nieuw lespakket registreren voor {0}', arg: name(p.student_id), priority: 'high', due: null, href: '/betalingen', action: 'Registreren', done: false, studentId: p.student_id});
   }
   return out;
 }

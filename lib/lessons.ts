@@ -4,21 +4,23 @@ import {t, locale} from './i18n.ts';
 
 export type Lesson = {
   id: string; student_id: string; teacher_id: string; starts_at: string; ends_at: string; timezone: string;
-  language: string | null; status: 'scheduled' | 'completed' | 'cancelled'; series_id: string | null; cancelled_at: string | null;
+  language: string | null; status: 'scheduled' | 'completed' | 'cancelled' | 'no_show_student' | 'no_show_teacher'; series_id: string | null; cancelled_at: string | null;
+  /* v61 (optional: absent before v61.sql) */ payment_status?: 'open' | 'reported' | 'paid' | 'na' | null; price_cents?: number | null; currency?: string | null; payment_confirmed_at?: string | null;
 };
-export type LessonState = 'scheduled' | 'live' | 'completed' | 'cancelled';
-export const LESSON_COLUMNS = 'id,student_id,teacher_id,starts_at,ends_at,timezone,language,status,series_id,cancelled_at';
+export type LessonState = 'scheduled' | 'live' | 'completed' | 'cancelled' | 'no_show';
+export const LESSON_COLUMNS = '*'; // v61: payment fields when present; '*' keeps working before v61.sql
 
 /** Shown status: cancelled > explicitly completed > live (now between start and end) > completed (ended) > scheduled. */
 export function lessonState(l: Pick<Lesson, 'status' | 'starts_at' | 'ends_at'>, now = Date.now()): LessonState {
   if (l.status === 'cancelled') return 'cancelled';
+  if (l.status === 'no_show_student' || l.status === 'no_show_teacher') return 'no_show';
   if (l.status === 'completed') return 'completed';
   const s = Date.parse(l.starts_at), e = Date.parse(l.ends_at);
   if (now >= s && now < e) return 'live';
   if (now >= e) return 'completed';
   return 'scheduled';
 }
-export const stateLabel = (s: LessonState) => ({scheduled: t('Gepland'), live: t('Bezig'), completed: t('Afgerond'), cancelled: t('Geannuleerd')})[s];
+export const stateLabel = (s: LessonState) => ({scheduled: t('Gepland'), live: t('Bezig'), completed: t('Afgerond'), cancelled: t('Geannuleerd'), no_show: t('Niet verschenen')})[s];
 
 /** The viewer's time zone (browser). */
 export function browserTimeZone() {

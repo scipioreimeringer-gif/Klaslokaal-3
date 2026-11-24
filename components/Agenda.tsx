@@ -11,6 +11,7 @@ import {useAuth} from './Auth';
 import {Avatar} from './Avatar';
 import {Flag} from './Flag';
 import {GoogleCalendarPanel,requestCalendarSync} from './GoogleCalendar';
+import {PayIcon,LessonPayment} from './Payments';
 import {loadStudents,type StudentRecord} from '../lib/data';
 import {languageName,relationLanguage} from '../lib/languages';
 import {LESSON_COLUMNS,type Lesson,type LessonState,type View,lessonState,stateLabel,browserTimeZone,dayKey,addDays,clock,fmtDay,fmtWhen,minutesOf,gridDays,shift,byDay,nextLesson,countdown,planningError,classroomHref,timeZones} from '../lib/lessons';
@@ -170,7 +171,7 @@ export function AgendaView({openNew,openId}:{openNew?:boolean;openId?:string|nul
      return <button key={i.key} className={'agenda-item k-'+i.kind+(blk?' k-block':'')+' '+st} onClick={()=>setOpen(i)} title={lbl+' · '+text} aria-label={lbl+' · '+text+' · '+clock(i.starts_at,tz)}>
      <span className="ai-time">{blk&&(dayKey(i.starts_at,tz)<d||clock(i.starts_at,tz)==='00:00')&&(dayKey(Date.parse(i.ends_at)-1,tz)>d||clock(i.ends_at,tz)==='00:00')?t('Hele dag'):<>{clock(i.starts_at,tz)}{view!=='month'&&'–'+clock(i.ends_at,tz)}</>}</span>
      <span className="ai-who"><I size={13} aria-hidden className="ai-kind"/>{view!=='month'&&<span className="ai-role">{lbl} ·</span>} {lang&&<Flag code={lang} size={14}/>} {text}</span>
-     {i.kind!=='personal'&&i.lesson.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}</button>})}
+     {i.kind!=='personal'&&i.lesson.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}{i.kind!=='personal'&&<PayIcon status={i.lesson.payment_status}/>}</button>})}
     {!list.length&&view!=='month'&&<p className="agenda-none">{t('Geen afspraken')}</p>}
    </div>})}
   </div>}
@@ -350,6 +351,7 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
   {st==='scheduled'&&<p className="next-count">{countdown(l.starts_at,now)}</p>}
   {st!=='cancelled'&&<div className="row"><Link className="button" href={classroomHref(l,mode)}><Video size={16}/> {t('Naar het klaslokaal')}</Link>
    {st==='scheduled'&&<AddToCalendar item={{kind:mode==='teacher'?'teach':'learn',item_id:l.id,student_id:l.student_id,starts_at:l.starts_at,ends_at:l.ends_at,timezone:l.timezone,language:lang||null,teacher_name:teacherName(l.student_id)||null,student_name:rel?.name||null}}/>}</div>}
+  <LessonPayment lesson={l} mode={mode} onChanged={onChanged}/>
   {links&&<div className="ld-links"><h4>{t('Bij deze les')}</h4><ul>
    {mode==='teacher'&&<li><Sparkles size={15}/> {links.analysis?<Link href={base+'analyses'}>{t('Lesanalyse bekijken')} · {links.analysis.status==='approved'?t('Goedgekeurd'):links.analysis.status==='ready'?t('Klaar voor controle'):links.analysis.status==='failed'?t('Verwerking mislukt'):t('In verwerking')}</Link>:<span className="muted">{t('Nog geen lesanalyse')}</span>}</li>}
    <li><Mic size={15}/> {links.recordings?<Link href={base+'opnames'}>{t('{0} opname(s)',links.recordings)}</Link>:<span className="muted">{t('Geen opname')}</span>}</li>
