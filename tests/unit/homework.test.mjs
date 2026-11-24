@@ -53,9 +53,10 @@ test('route: "Vanuit mijn les" uses the chosen lesson (or the latest) as the sou
 test('form: compact card, default "Vanuit mijn les", 5–30 min, all exercise types, AI only on the button, no double request, reuse', () => {
   const l = read('components/Learning.tsx');
   // v64: focus (default automatic; a report topic presets specific topics), level, duration 5–45 min
-  assert.match(l, /useState<Focus>\(initialTopic\?'topics':'auto'\)/);
+  // v66: five focus options; a report topic presets 'choose' with that topic
+  assert.match(l, /useState<ShownFocus>\(initialTopic\?'choose':'auto'\)/);
   assert.match(l, /const DURATIONS=\[5,10,15,20,30,45\]/);
-  for (const k of ['auto', 'last_lesson', 'weak', 'review', 'vocab', 'topics']) assert.ok(l.includes(k + ':'), k);
+  for (const k of ['auto', 'last_lesson', 'mix', 'developing', 'choose']) assert.ok(l.includes(k + ':'), k);
   assert.match(l, /if\(inFlight\.current\)return;/, 'double click ignored');
   assert.match(l, /if\(!force&&exCache\.has\(key\)\)\{setReused\(true\)/, 'same choices → same set, no AI call');
   const f = l.slice(l.indexOf('export function ExerciseForm'), l.indexOf('export function ExercisePlayer'));

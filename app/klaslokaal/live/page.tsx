@@ -26,10 +26,10 @@ import {useLanguage} from '../../../components/I18n';
 
 type Room={student:StudentRecord;as:'teacher'|'student'};
 /** The planned lesson this classroom belongs to: the one in the link, else one happening now (15 min margin). Without one the classroom still works. */
-async function findLesson(db:ReturnType<typeof supabase>&{},sid:string,param:string|null):Promise<{id:string;starts_at:string|null}|null>{
+async function findLesson(db:ReturnType<typeof supabase>&{},sid:string,param:string|null):Promise<{id:string;starts_at:string|null;ends_at?:string|null}|null>{
  // v42: also the planned start (same single query), for the lesson timer
- if(param&&/^[0-9a-f-]{36}$/i.test(param)){const r=await db.from('lessons').select('id,starts_at').eq('id',param).eq('student_id',sid).maybeSingle();if(r.data)return r.data as {id:string;starts_at:string|null}}
- const now=Date.now();const r=await db.from('lessons').select('id,starts_at').eq('student_id',sid).neq('status','cancelled').lte('starts_at',new Date(now+15*60e3).toISOString()).gte('ends_at',new Date(now-15*60e3).toISOString()).order('starts_at').limit(1);
+ if(param&&/^[0-9a-f-]{36}$/i.test(param)){const r=await db.from('lessons').select('id,starts_at,ends_at').eq('id',param).eq('student_id',sid).maybeSingle();if(r.data)return r.data as {id:string;starts_at:string|null;ends_at:string|null}}
+ const now=Date.now();const r=await db.from('lessons').select('id,starts_at,ends_at').eq('student_id',sid).neq('status','cancelled').lte('starts_at',new Date(now+60*60e3).toISOString()).gte('ends_at',new Date(now-15*60e3).toISOString()).order('starts_at').limit(1);
  return r.error?null:((r.data||[])[0] as {id:string;starts_at:string|null}|undefined)||null;
 }
 
@@ -57,14 +57,17 @@ function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:
   const as:Room['as']|null=isTeacher&&isStudent?(asParam==='leerling'?'student':asParam==='docent'?'teacher':mode==='student'?'student':'teacher'):isTeacher?'teacher':isStudent?'student':null;
   if(!as){setError(t("Geen toegang tot dit klaslokaal."));return}
   if(!s.room_code){setError(t(MIGRATION_HINT));return}
-  const lesson=as==='teacher'?await findLesson(db,s.id,lessonParam):null;const lessonId=lesson?.id||null;if(cancelled)return;
+  // v66: teacher AND student know the planned lesson → the same timer (countdown, elapsed, overrun)
+  const lesson=await findLesson(db,s.id,lessonParam);const lessonId=lesson?.id||null;if(cancelled)return;
   window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,lessonStartsAt:lesson?.starts_at||null,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
+  {const tb=window.teachyBridge as unknown as {lessonStartsAt?:string|null;lessonEndsAt?:string|null};tb.lessonStartsAt=lesson?.starts_at||null;tb.lessonEndsAt=lesson?.ends_at||null;}
   window.teachyBridge.ui={setLang:(l:string)=>{if(isLang(l))setLangRef.current(l)},back:()=>router.push(as==='teacher'?'/leerlingen?student='+s.id:'/mijn-profiel?student='+s.id),dashboard:()=>router.push('/'),privateNotes:as==='teacher'?()=>setPrivOpen(o=>!o):undefined,assistant:()=>setAssistOpen(true),games:()=>frameCall('__klasTab','games','user')};
   setRoom({student:s,as});setReady(true);
  })();return()=>{cancelled=true}},[studentId,lessonParam,asParam,user?.id,canTeach,mode,router]);
  useEffect(()=>()=>{delete window.teachyBridge},[]);
+ useEffect(()=>{if(!ready||!room)return;const i=setInterval(()=>{const tb=window.teachyBridge as unknown as {lessonStartsAt?:string|null;lessonEndsAt?:string|null}|undefined;if(!tb)return;void findLesson(supabase()!,room.student.id,lessonParam).then(l=>{if(l&&window.teachyBridge){tb.lessonStartsAt=l.starts_at;tb.lessonEndsAt=l.ends_at||null}})},60000);return()=>clearInterval(i)},[ready,room,lessonParam]);
  // v36: mount point for the games inside the classroom's work panel (re-attached after every classroom reload)
  useEffect(()=>{if(!ready)return;let stop=false;setGamesHost(null);const attach=()=>{if(stop)return;const el=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentDocument?.getElementById('gamesHost');if(!el){setTimeout(attach,400);return}
   const fd=el.ownerDocument;if(!fd.querySelector('style[data-app-fonts]')){const fs=fd.createElement('style');fs.setAttribute('data-app-fonts','');fs.textContent=fontFaces();fd.head.appendChild(fs)}

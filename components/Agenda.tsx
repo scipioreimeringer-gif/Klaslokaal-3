@@ -267,7 +267,7 @@ function BookingForm({relations,teacherName,tz,onClose,onBooked}:{relations:Stud
     :<p className="muted small">{t('Geen vrije tijden op deze dag. Kies een andere datum.')}</p>}</div>
   <label className="row small"><input type="checkbox" checked={weekly} onChange={e=>setWeekly(e.target.checked)}/> <Repeat size={14}/> {t('Elke week op dit moment')}</label>
   {weekly&&<label className="row small">{t('Aantal weken')} <input className="field inline" type="number" min={2} max={12} value={weeks} onChange={e=>setWeeks(Math.max(2,Math.min(12,+e.target.value||2)))}/></label>}
-  <details className="agenda-more"><summary>{t('Meer opties')}</summary><label className="row small">{t('Lesduur')} <select className="field inline" value={minutes} onChange={e=>setMinutes(+e.target.value)}>{[30,45,60,90].map(m=><option key={m} value={m}>{m} {t('min')}</option>)}</select></label></details>
+  <details className="agenda-more"><summary>{t('Meer opties')}</summary><label className="row small">{t('Lesduur')} <DurationPicker value={minutes} onChange={setMinutes} min={15} max={240} startMs={pick?Date.parse(pick):undefined} tz={tz}/></label></details>
   {msg&&<p className="notice" role="alert">{msg}</p>}
   <div className="row"><button className="button" disabled={saving||!pick} onClick={()=>void book()}>{saving?t('Opslaan…'):weekly?t('{0} lessen boeken',weeks):t('Les boeken')}</button><button className="button secondary" onClick={onClose}>{t('Annuleren')}</button></div>
  </Modal>
@@ -327,7 +327,7 @@ function PersonalForm({initial,day,tz,busy,onClose,onSaved}:{initial?:PersonalEv
 function localToInstant(date:string,time:string,tz:string){try{const guess=Date.parse(`${date}T${time}:00Z`);if(Number.isNaN(guess))return NaN;const off=(x:number)=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:tz,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(x));const g=(k:string)=>Number(p.find(q=>q.type===k)?.value);return Date.UTC(g('year'),g('month')-1,g('day'),g('hour'),g('minute'))-x};const first=guess-off(guess);return guess-off(first)}catch{return NaN}}
 
 /* ---------------- details of one lesson ---------------- */
-type Links={recordings:number;analysis:{id:string;status:string}|null;homework:number;notes:boolean};
+type Links={recordings:number;analysis:{id:string;status:string}|null;homework:number;notes:boolean;joint?:number;recMin?:number};
 function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{lesson:Lesson;rel?:StudentRecord;mode:'teacher'|'student';teacherName:(id:string)=>string;onClose:()=>void;onEdit:()=>void;onChanged:()=>void}){
  const now=useNow();const tz=browserTimeZone();const people=usePeopleTz();const st=lessonState(l,now);const lang=langOf(l,rel);
  const [notes,setNotes]=useState('');const [savedNotes,setSavedNotes]=useState('');const [msg,setMsg]=useState('');const [links,setLinks]=useState<Links|null>(null);
@@ -336,8 +336,10 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
  useEffect(()=>{const db=supabase();if(mode!=='teacher'||!db)return;void db.from('lesson_teacher_notes').select('notes').eq('lesson_id',l.id).maybeSingle().then(({data})=>{const n=(data as {notes?:string}|null)?.notes||'';setNotes(n);setSavedNotes(n)})},[l.id,mode]);
  useEffect(()=>{const db=supabase();if(st==='scheduled'||st==='cancelled'||!db)return;void(async()=>{
   const day=dayKey(l.starts_at,l.timezone);
-  const [r,a,h,e]=await Promise.all([db.from('lesson_recordings').select('id',{count:'exact',head:true}).eq('lesson_id',l.id),mode==='teacher'?db.from('lesson_analyses').select('id,status').eq('lesson_id',l.id).maybeSingle():Promise.resolve({data:null}),db.from('assignments').select('id',{count:'exact',head:true}).eq('lesson_id',l.id),db.from('lesson_entries').select('id').eq('student_id',l.student_id).eq('lesson_date',day).maybeSingle()]);
-  setLinks({recordings:r.count||0,analysis:(a.data as Links['analysis'])||null,homework:h.count||0,notes:!!e.data})})()},[l.id,st,mode]);// eslint-disable-line react-hooks/exhaustive-deps
+  const [r,a,h,e,js]=await Promise.all([db.from('lesson_recordings').select('duration_seconds',{count:'exact'}).eq('lesson_id',l.id),mode==='teacher'?db.from('lesson_analyses').select('id,status').eq('lesson_id',l.id).maybeSingle():Promise.resolve({data:null}),db.from('assignments').select('id',{count:'exact',head:true}).eq('lesson_id',l.id),db.from('lesson_entries').select('id').eq('student_id',l.student_id).eq('lesson_date',day).maybeSingle(),db.from('lesson_sessions').select('joint_seconds').eq('lesson_id',l.id)]);
+  // v66: planned time, real joint presence and recording length are kept apart
+  const joint=((js.data||[]) as {joint_seconds:number}[]).reduce((n,x)=>n+(x.joint_seconds||0),0),recSec=((r.data||[]) as {duration_seconds:number|null}[]).reduce((n,x)=>n+(x.duration_seconds||0),0);
+  setLinks({joint:Math.round(joint/60),recMin:Math.round(recSec/60),recordings:r.count||0,analysis:(a.data as Links['analysis'])||null,homework:h.count||0,notes:!!e.data})})()},[l.id,st,mode]);// eslint-disable-line react-hooks/exhaustive-deps
  async function saveNotes(){const {error}=await supabase()!.from('lesson_teacher_notes').upsert({lesson_id:l.id,notes,updated_at:new Date().toISOString()},{onConflict:'lesson_id'});setMsg(error?error.message:t('Opgeslagen ✓'));if(!error)setSavedNotes(notes)}
  async function cancel(all:boolean){if(!confirm(all?t('Deze en alle volgende lessen van deze reeks annuleren?'):t('Deze les annuleren? Je leerling ziet de les als geannuleerd.')))return;
   let q=supabase()!.from('lessons').update({status:'cancelled'});q=all&&l.series_id?q.eq('series_id',l.series_id).gte('starts_at',l.starts_at):q.eq('id',l.id);const {error}=await q;if(error){setMsg(planningError(error.message));return}onChanged()}
@@ -352,6 +354,7 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
   {st!=='cancelled'&&<div className="row"><Link className="button" href={classroomHref(l,mode)}><Video size={16}/> {t('Naar het klaslokaal')}</Link>
    {st==='scheduled'&&<AddToCalendar item={{kind:mode==='teacher'?'teach':'learn',item_id:l.id,student_id:l.student_id,starts_at:l.starts_at,ends_at:l.ends_at,timezone:l.timezone,language:lang||null,teacher_name:teacherName(l.student_id)||null,student_name:rel?.name||null}}/>}</div>}
   <LessonPayment lesson={l} mode={mode} onChanged={onChanged}/>
+  {links&&(links.joint||links.recMin)?<p className="muted small ld-times">{t('Gepland {0} min',minutesOf(l))}{links.joint?' · '+t('samen aanwezig {0} min',links.joint):''}{links.recMin?' · '+t('opname {0} min',links.recMin):''}</p>:null}
   {links&&<div className="ld-links"><h4>{t('Bij deze les')}</h4><ul>
    {mode==='teacher'&&<li><Sparkles size={15}/> {links.analysis?<Link href={base+'analyses'}>{t('Lesanalyse bekijken')} · {links.analysis.status==='approved'?t('Goedgekeurd'):links.analysis.status==='ready'?t('Klaar voor controle'):links.analysis.status==='failed'?t('Verwerking mislukt'):t('In verwerking')}</Link>:<span className="muted">{t('Nog geen lesanalyse')}</span>}</li>}
    <li><Mic size={15}/> {links.recordings?<Link href={base+'opnames'}>{t('{0} opname(s)',links.recordings)}</Link>:<span className="muted">{t('Geen opname')}</span>}</li>
@@ -370,7 +373,16 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
 }
 
 /* ---------------- plan / change a lesson (teacher) ---------------- */
-const DURATIONS=[30,45,60,75,90,120];
+/* v66: lesson length — 30 / 60 / 90 minutes or "Zelf bepalen" (any number of minutes); the end time is shown */
+const DURATIONS=[30,60,90];
+export function DurationPicker({value,onChange,min=10,max=480,startMs,tz}:{value:number;onChange:(m:number)=>void;min?:number;max?:number;startMs?:number;tz?:string}){
+ const [custom,setCustom]=useState(!DURATIONS.includes(value));
+ const end=startMs!=null&&!Number.isNaN(startMs)&&tz?clock(startMs+value*60e3,tz):'';
+ return <span className="dur-pick"><select className="field" value={custom?'custom':String(value)} aria-label={t('Lesduur')} onChange={e=>{if(e.target.value==='custom'){setCustom(true)}else{setCustom(false);onChange(+e.target.value)}}}>
+  {DURATIONS.map(m=><option key={m} value={m}>{m} {t('minuten')}</option>)}<option value="custom">{t('Zelf bepalen')}</option></select>
+  {custom&&<input className="field dur-min" type="number" min={min} max={max} step={5} value={value} aria-label={t('Aantal minuten')} onChange={e=>onChange(Math.max(min,Math.min(max,Math.round(+e.target.value||min))))}/>}
+  {end&&<small className="muted dur-end">{t('tot {0}',end)}</small>}</span>
+}
 function LessonForm({initial,day,relations,busy=[],onClose,onSaved}:{initial?:Lesson;day?:string;relations:StudentRecord[];busy?:AgendaItem[];onClose:()=>void;onSaved:()=>void}){
  const people=usePeopleTz();const myTz=browserTimeZone();
  const [student,setStudent]=useState(initial?.student_id||relations[0]?.id||'');
@@ -401,7 +413,7 @@ function LessonForm({initial,day,relations,busy=[],onClose,onSaved}:{initial?:Le
   <div className="grid2">
    <label className="stack"><span className="label">{t('Datum')}</span><input className="field" type="date" value={date} onChange={e=>setDate(e.target.value)} required/></label>
    <label className="stack"><span className="label">{t('Begintijd')}</span><input className="field" type="time" value={time} step={300} onChange={e=>setTime(e.target.value)} required/></label>
-   <label className="stack"><span className="label">{t('Lesduur')}</span><select className="field" value={minutes} onChange={e=>setMinutes(+e.target.value)}>{[...new Set([...DURATIONS,minutes])].sort((a,b)=>a-b).map(m=><option key={m} value={m}>{m} {t('min')}</option>)}</select></label>
+   <label className="stack"><span className="label">{t('Lesduur')}</span><DurationPicker value={minutes} onChange={setMinutes} startMs={startPreview} tz={tz}/></label>
    <label className="stack"><span className="label">{t('Taal van de les')}</span><select className="field" value={language} onChange={e=>setLanguage(e.target.value)}><option value="">{rel?languageName(relationLanguage(rel)):'—'}</option>{['nl','pt','en','es','fr','de','it'].filter(c=>!rel||c!==relationLanguage(rel)).map(c=><option key={c} value={c}>{languageName(c)}</option>)}</select></label>
   </div>
   <label className="stack"><span className="label">{t('Tijdzone van de begintijd')}</span><select className="field" value={tz} onChange={e=>setTz(e.target.value)}>{(zones.includes(tz)?zones:[tz,...zones]).map(z=><option key={z} value={z}>{z.replace(/_/g,' ')}</option>)}</select></label>

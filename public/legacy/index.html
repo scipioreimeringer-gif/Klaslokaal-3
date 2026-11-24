@@ -1812,10 +1812,20 @@ setInterval(function(){
   c.classList.toggle("ok", p.st === "ok");
   lssTick();
   /* v42: the lesson timer runs from the shared lesson start (planned or teacher start), else from joining */
+  /* v66: a PLANNED lesson: the timer follows the agenda for teacher and student alike (absolute times → the same on
+     every device, after refresh/reconnect, in every time zone; a moved lesson is picked up by the page): before the
+     start a countdown, from the start 00:00, after the planned end the overrun. Unplanned: from the teacher's start. */
+  var fmt = function(s){ var h = Math.floor(s / 3600); return (h ? h + ":" + String(Math.floor(s / 60) % 60).padStart(2, "0") : String(Math.floor(s / 60)).padStart(2, "0")) + ":" + String(s % 60).padStart(2, "0"); };
+  var bb = SB ? bridge() : null, pStart = bb && bb.lessonStartsAt ? Date.parse(bb.lessonStartsAt) : 0, pEnd = bb && bb.lessonEndsAt ? Date.parse(bb.lessonEndsAt) : 0, nowT = Date.now();
+  if(pStart && nowT - pStart < 6 * 3600e3){
+    var tEl = $("timer");
+    if(nowT < pStart){ var w = Math.ceil((pStart - nowT) / 1000); tEl.textContent = T("Les begint over") + " " + (w >= 3600 ? fmt(w) : Math.floor(w / 60) + ":" + String(w % 60).padStart(2, "0")); tEl.title = T("Geplande begintijd uit de agenda"); return; }
+    var over = pEnd && nowT > pEnd ? Math.floor((nowT - pEnd) / 60000) : -1;
+    tEl.textContent = fmt(Math.floor((nowT - pStart) / 1000)) + (over >= 1 ? " · +" + over + " min" : ""); tEl.title = over >= 1 ? "De les loopt " + over + " min uit" : "Sinds de geplande begintijd"; return;
+  }
   var since = lessonStart || joinedAt;
   if(!since || !peer){ $("timer").textContent = "00:00"; return; }
-  var s = Math.max(0, Math.floor((Date.now() - since) / 1000)), h = Math.floor(s / 3600);
-  $("timer").textContent = (h ? h + ":" + String(Math.floor(s / 60) % 60).padStart(2, "0") : String(Math.floor(s / 60)).padStart(2, "0")) + ":" + String(s % 60).padStart(2, "0");
+  $("timer").textContent = fmt(Math.max(0, Math.floor((Date.now() - since) / 1000)));
 }, 1000);
 setInterval(function(){
   if(peer && !peer.destroyed && peer.disconnected){ try{ peer.reconnect(); }catch(e){} }

@@ -1,6 +1,9 @@
 /* TeachyRooms classroom interface translations. Key = Dutch text; row = [en, pt-BR, es, fr, de].
    Generated; checked by tests/unit/i18n.test.mjs. Never applied to lesson content (canvas, notes, names). */
 window.KLAS_I18N = {
+"Les begint over":["Lesson starts in","A aula começa em","La clase empieza en","Le cours commence dans","Unterricht beginnt in"],
+"Geplande begintijd uit de agenda":["Planned start time from the calendar","Horário de início planejado da agenda","Hora de inicio prevista de la agenda","Heure de début prévue de l’agenda","Geplante Startzeit aus dem Kalender"],
+"Geplande lestijd uit de agenda":["Planned lesson time from the calendar","Horário planejado da aula na agenda","Hora de clase prevista de la agenda","Horaire prévu du cours dans l’agenda","Geplante Unterrichtszeit aus dem Kalender"],
 "Scherm":["Screen","Tela","Pantalla","Écran","Bildschirm"],
 "Werkpaneel":["Work panel","Painel de trabalho","Panel de trabajo","Panneau de travail","Arbeitsbereich"],
 "Volledige video":["Full video","Vídeo em tela cheia","Vídeo completo","Vidéo plein écran","Vollbild-Video"],

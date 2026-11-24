@@ -1218,6 +1218,19 @@ details.danger-zone>summary h3{font-size:14px;color:var(--ink-2)}
 .ex-fb{margin-top:6px;padding:10px 12px;border-radius:12px;background:#f8fafb;border:1px solid var(--line,#e6ecef);font-size:13px;display:grid;gap:4px}
 .ex-fb p{margin:0}.ex-fb .ok{color:#166534}.ex-fb .bad{color:#b45309}
 
+/* ===== v66: homework focus topics + teacher draft editor ===== */
+.hw-topics{display:grid;gap:8px}
+.hw-chips{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:2px}
+.hw-chip{border:1px solid var(--line,#e2e8ec);background:#fff;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:#33434f;transition:background .15s,border-color .15s}
+.hw-chip:hover{border-color:var(--teal-400)}.hw-chip.st-in_progress{border-left:3px solid var(--teal-400)}.hw-chip.st-review{border-left:3px solid #f0b44c}
+.hw-chip.on{background:var(--teal-50);border-color:var(--teal-500);color:var(--petrol-800);font-weight:650}
+.hw-draft{display:grid;gap:14px;margin:10px 0}
+.hw-draft-block{padding:12px 14px;border-radius:14px;border:1px solid #d9eee9;background:#fbfdfd;display:grid;gap:8px}
+.hw-draft-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.hw-draft-title{font-weight:700;max-width:420px}
+.hw-draft-ex{margin:0}.hw-draft-model summary,.hw-draft-passage summary{cursor:pointer;font-size:12.5px;color:#4b5a66;margin-top:4px}
+.hw-draft-model{display:grid;gap:4px}.hw-draft .spin{animation:spin66 1s linear infinite}@keyframes spin66{to{transform:rotate(360deg)}}
+.dur-pick{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}.dur-pick .dur-min{width:90px}.dur-end{white-space:nowrap}
+
 /* ===== v57: tasks ===== */
 .nav-badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#d0523a;color:#fff;font-size:11.5px;font-weight:800;display:inline-grid;place-items:center}
 .task-filters{justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
