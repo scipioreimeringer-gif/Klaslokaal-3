@@ -1725,4 +1725,10 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "B1 → B2": ["B1 → B2","B1 → B2","B1 → B2","B1 → B2","B1 → B2"],
  "B2 → C1": ["B2 → C1","B2 → C1","B2 → C1","B2 → C1","B2 → C1"],
  "Doorlopende leerlijnen": ["Continuous learning lines","Trilhas contínuas","Líneas continuas","Lignes continues","Durchgehende Lernlinien"],
+ "Voltooide tijd met hebben": ["Perfect tense with hebben","Perfeito com hebben","Perfecto con hebben","Passé composé avec hebben","Perfekt mit hebben"],
+ "Voltooide tijd met zijn (beweging met richting of verandering van toestand)": ["Perfect tense with zijn (movement with a direction or change of state)","Perfeito com zijn (movimento com direção ou mudança de estado)","Perfecto con zijn (movimiento con dirección o cambio de estado)","Passé composé avec zijn (mouvement avec direction ou changement d’état)","Perfekt mit zijn (Bewegung mit Richtung oder Zustandsänderung)"],
+ "hebben of zijn, afhankelijk van de betekenis: zijn bij een richting of verandering, anders hebben": ["hebben or zijn, depending on the meaning: zijn with a direction or change, otherwise hebben","hebben ou zijn, conforme o sentido: zijn com direção ou mudança, senão hebben","hebben o zijn, según el significado: zijn con dirección o cambio, si no hebben","hebben ou zijn selon le sens : zijn avec une direction ou un changement, sinon hebben","hebben oder zijn je nach Bedeutung: zijn bei Richtung oder Veränderung, sonst hebben"],
+ "Werkwoordsvormen aanvullen…": ["Completing verb forms…","Completando formas verbais…","Completando formas verbales…","Complétion des formes verbales…","Verbformen werden ergänzt…"],
+ "{0} werkwoorden aangevuld": ["{0} verbs completed","{0} verbos completados","{0} verbos completados","{0} verbes complétés","{0} Verben ergänzt"],
+ "vertaling": ["translation","tradução","traducción","traduction","Übersetzung"],
 };

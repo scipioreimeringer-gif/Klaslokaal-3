@@ -50,8 +50,13 @@ function Suggestions({studentId,onAdded}:{studentId:string;onAdded:()=>void}){
 
 /* v62: grammar of a word from the central word bank — compact line, full conjugation only when unfolded */
 type Gram={pos?:string;article?:string;plural?:string;gender?:string;present?:string;past_sg?:string;past_pl?:string;participle?:string;aux?:string;aux_note?:string;separable?:string;conj_present?:string[];conj_past?:string[];inflected?:string;comparative?:string;superlative?:string};
+const auxTip=(aux?:string,note?:string)=>(aux==='H'?tt('Voltooide tijd met hebben'):aux==='Z'?tt('Voltooide tijd met zijn (beweging met richting of verandering van toestand)'):tt('hebben of zijn, afhankelijk van de betekenis: zijn bij een richting of verandering, anders hebben'))+(note?' — '+note:'');
+const isNlVerb=(v:{grammar?:unknown})=>{const g=v.grammar as Gram|null|undefined;return !!g&&g.pos==='verb'&&!!g.aux};
 function GrammarInfo({g}:{g?:Gram|null}){
  if(!g)return null;
+ // v65: Dutch verbs (H/Z) — past sg / past pl · participle (H/Z), with a short explanation on hover; no translation
+ if(g.pos==='verb'&&g.aux)return <small className="block gram nl-verb">{[[g.past_sg,g.past_pl].filter(Boolean).join(' / '),g.participle?g.participle+' ':''].filter(Boolean).join(' · ')}{g.participle&&<abbr className="aux" title={auxTip(g.aux,g.aux_note)}>({g.aux})</abbr>}{g.separable==='yes'?' · '+tt('scheidbaar'):''}
+  {(g.conj_present||g.conj_past)&&<details><summary>{tt('Vervoeging')}</summary>{g.conj_present&&<p>{g.conj_present.join(' · ')}</p>}{g.conj_past&&<p>{g.conj_past.join(' · ')}</p>}</details>}</small>;
  const line=g.pos==='noun'?[g.article,g.gender&&'('+g.gender+')',g.plural&&tt('mv.')+' '+g.plural].filter(Boolean).join(' ')
   :g.pos==='verb'?[g.present,[g.past_sg,g.past_pl].filter(Boolean).join(' / '),g.participle&&g.participle+(g.aux?' ('+g.aux+')':''),g.separable==='yes'?tt('scheidbaar'):g.separable==='no'?tt('onscheidbaar'):''].filter(Boolean).join(' · ')
   :g.pos==='adjective'?[g.inflected,g.comparative,g.superlative].filter(Boolean).join(' · '):'';
@@ -68,6 +73,14 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
   // v46: every lesson a word appeared in (v47 table; without it: the word's own lesson date)
   const l=await db.from('vocab_lessons').select('vocab_id,lesson_date').eq('student_id',studentId);const m=new Map<string,string[]>();if(!l.error)for(const x of (l.data||[]) as {vocab_id:string;lesson_date:string}[])m.set(x.vocab_id,[...(m.get(x.vocab_id)||[]),x.lesson_date]);setLinks(m)},[studentId]);
  useEffect(()=>{void load()},[load]);
+ // v65: Dutch verbs imported earlier get their forms (past tense, participle, H/Z) once — only the missing ones, in
+ // batches of 40, in the background; nothing is overwritten (no-op for other languages)
+ const [filling,setFilling]=useState('');
+ useEffect(()=>{if(viewer!=='teacher'||!items)return;const k='teachy-verbfill-'+studentId;try{if(sessionStorage.getItem(k))return}catch{}
+  const need=items.some(i=>{const g=(i as {grammar?:Gram|null}).grammar;return g?(g.pos==='verb'&&(!g.aux||!g.past_pl)&&!(g as {checked?:boolean}).checked):(!i.pos||/^(ww|v\.|verb)/i.test(i.pos))});if(!need)return;
+  try{sessionStorage.setItem(k,'1')}catch{}
+  void(async()=>{let rounds=0,upd=0;try{while(rounds++<6){setFilling(tt('Werkwoordsvormen aanvullen…'));const r=await authedPost<{updated:number;remaining:number}>(supabase()!,'/api/vocab/detect',{studentId,action:'fill'});upd+=r.updated||0;if(!r.remaining)break}}catch{/* next visit */}
+   setFilling(upd?tt('{0} werkwoorden aangevuld',upd):'');if(upd)await load()})()},[items,viewer,studentId,load]);
  const canEdit=(v:VocabItem)=>viewer==='teacher'||v.source==='student';
  async function add(){if(!term.trim())return;const r=await addVocab(supabase()!,studentId,[{term,translation:tr,example:ex}],viewer==='teacher'?'teacher':'student');if(!r.added)setErr(tt("Dit woord staat al in de lijst."));else{setErr('');setTerm('');setTr('');setEx('')}await load()}
  async function patch(v:VocabItem,p:Partial<VocabItem>){setItems(x=>x?.map(i=>i.id===v.id?{...i,...p}:i)||null);const r=await supabase()!.from('vocab_items').update({...p,updated_at:new Date().toISOString()}).eq('id',v.id);if(r.error)setErr(r.error.message)}
@@ -80,6 +93,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
  const shown=filterVocab(rows,{...fx,status:filter,q});
  return <div>
   {err&&<div className="notice">{err}</div>}
+  {filling&&<p className="muted small" role="status">{filling}</p>}
   {viewer==='teacher'&&<Suggestions studentId={studentId} onAdded={()=>void load()}/>}
   <div className="chipbar"><button aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>{tt("Alle ({0})", items.length)}</button>{(['new','practicing','mastered'] as const).map(s=><button key={s} aria-pressed={filter===s} onClick={()=>setFilter(s)}>{VOCAB_STATUS_LABEL[s]} ({counts[s]})</button>)}</div>
   <div className="vocab-filters" role="group" aria-label={tt("Filters")}>
@@ -95,7 +109,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
   {!shown.length?<p className="muted">{tt("Nog geen woorden. Woorden uit de live les, goedgekeurde AI-analyses en woorden die je hier toevoegt, komen in deze lijst.")}</p>:
   <table className="vocab"><thead><tr><th>{tt("Woord")}</th><th>{tt("Betekenis")}</th><th>{tt("Voorbeeld")}</th><th>{tt("Status")}</th><th>{tt("Les")}</th><th>{tt("Bron")}</th><th/></tr></thead>{/* v46: grouped per word class */}{POS_GROUP_ORDER.map(k=>[k,shown.filter(v=>posKindOf(v.pos)===k)] as const).filter(([,g])=>g.length).map(([k,g])=><tbody key={k}><tr className="pos-group"><th colSpan={7}>{posIcon(g[0].pos)} {tt(POS_GROUP_TITLE[k])} <small className="muted">{g.length}</small></th></tr>{g.map(v=><tr key={v.id}>
    <td>{canEdit(v)?<input className="cell" value={v.term} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,term:e.target.value}:i)||null)} onBlur={e=>void patch(v,{term:e.target.value})}/>:<b>{v.term}</b>}<GrammarInfo g={(v as {grammar?:Gram|null}).grammar}/></td>
-   <td>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
+   <td>{isNlVerb(v as {grammar?:unknown})?<details className="tr-hidden"><summary className="muted small">{tt('vertaling')}</summary>{canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</details>:canEdit(v)?<input className="cell" value={v.translation} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,translation:e.target.value}:i)||null)} onBlur={e=>void patch(v,{translation:e.target.value})}/>:v.translation}</td>
    <td className="muted">{canEdit(v)?<input className="cell" value={v.example} onChange={e=>setItems(x=>x?.map(i=>i.id===v.id?{...i,example:e.target.value}:i)||null)} onBlur={e=>void patch(v,{example:e.target.value})}/>:v.example}</td>
    <td>{viewer==='teacher'?<select className="cell" value={v.status} onChange={e=>void patch(v,{status:e.target.value as VocabItem['status']})}>{(['new','practicing','mastered'] as const).map(s=><option key={s} value={s}>{VOCAB_STATUS_LABEL[s]}</option>)}</select>:<span className={'vstat vs-'+v.status}>{VOCAB_STATUS_LABEL[v.status]}</span>}<small className="muted block">{v.correct_count}✓ {v.wrong_count}✗</small></td>
    <td className="muted small-print">{v.lesson_date?niceDate(v.lesson_date):niceDate(v.created_at)}{v.lesson_dates.length>1&&<small className="block">{tt('in {0} lessen',v.lesson_dates.length)}</small>}{v.pos?<small className="block">{(posIcon(v.pos)+' '+v.pos).trim()}</small>:null}</td>

@@ -46,7 +46,7 @@ export type TeachyBridge = {
   /** Teacher only: AI proposal for a tidier canvas page (preview first, nothing is written). */
   tidy(blocks: {t: string; text: string}[]): Promise<{blocks: {type: 'h' | 'p' | 'li'; text: string}[]; changes: string[]}>;
   /** v62 teacher only: canvas vocabulary → central word bank. */
-  vocab?(o: {page?: number | null; list?: boolean}): Promise<{added?: number; known?: number; aiCalls?: number; list?: {term: string; translation: string; pos: string | null; kind: string; grammar: Record<string, unknown> | null}[]}>;
+  vocab?(o: {page?: number | null; list?: boolean; listOnly?: boolean; action?: string}): Promise<{added?: number; known?: number; skipped?: number; total?: number; next?: number; done?: boolean; failed?: boolean; retry?: boolean; error?: string; skippedTerms?: string[]; pending?: {page_index: number; status: string}[]; aiCalls?: number; list?: {term: string; translation: string; pos: string | null; kind: string; grammar: Record<string, unknown> | null}[]}>;
   /** Page-level actions shown in the classroom's own menu (one combined top bar). */
   ui?: {back(): void; dashboard(): void; privateNotes?(): void; assistant(): void; setLang?(lang: string): void; games?(): void};
   /** v35 word games: messages {t:'game'} from the other player, and (teacher) the student (re)connected. */
@@ -259,7 +259,7 @@ export function createTeacherBridge(db: SupabaseClient, opts: {teacherId: string
     ...canvasImages(db, opts.studentId),
     tidy: blocks => postJson(db, '/api/ai/tidy', {studentId: opts.studentId, blocks}),
     // v62: canvas → central word bank (one page or all pages; list = grammar word list of that page)
-    vocab: (o: {page?: number | null; list?: boolean}) => postJson(db, '/api/vocab/detect', {studentId: opts.studentId, lessonId: opts.lessonId || null, page: o.page ?? null, list: !!o.list}),
+    vocab: (o: {page?: number | null; list?: boolean; listOnly?: boolean; action?: string}) => postJson(db, '/api/vocab/detect', {studentId: opts.studentId, lessonId: opts.lessonId || null, page: o.page ?? null, list: !!o.list, listOnly: !!o.listOnly, action: o.action || null}),
     async previewImport(backup) {
       if (!students.length) await loadNotes();
       return matchBackupStudents(backup as Parameters<typeof matchBackupStudents>[0], students).map(m => ({oldName: m.oldName, newName: m.newName}));

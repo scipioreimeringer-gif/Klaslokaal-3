@@ -51,7 +51,7 @@ export function cleanGrammar(x: z.infer<typeof VocabCheckSchema>['items'][number
   if (x.pos === 'noun') { g.article = cap(x.article, 8); g.plural = cap(x.plural); if (!nl) g.gender = /^(m|f)$/.test(x.gender) ? x.gender : ''; }
   if (x.pos === 'verb') {
     g.present = cap(x.present, 120); g.past_sg = cap(x.past_sg, 120); g.participle = cap(x.participle);
-    if (nl) { g.past_pl = cap(x.past_pl); g.aux = ['H', 'Z', 'H/Z'].includes(x.aux) ? x.aux : ''; g.aux_note = g.aux === 'H/Z' ? cap(x.aux_note, 160) : ''; g.separable = ['yes', 'no'].includes(x.separable) ? x.separable : ''; }
+    if (nl) { g.past_pl = cap(x.past_pl); g.aux = ['H', 'Z', 'H/Z'].includes(x.aux) ? x.aux : ''; g.aux_note = cap(x.aux_note, 160); /* v65: also the replacing infinitive of modal verbs */ g.separable = ['yes', 'no'].includes(x.separable) ? x.separable : ''; }
     const six = (a: string[]) => Array.isArray(a) && a.length >= 5 && a.length <= 8 && a.every(f => typeof f === 'string' && f.trim() && f.length <= 60) ? a.map(f => f.trim()) : undefined;
     g.conj_present = six(x.conj_present); g.conj_past = six(x.conj_past);
   }
@@ -74,21 +74,29 @@ export async function detectPages(pages: Page[], opts: {existing: string[]; scan
       .slice(0, opts.maxCandidates || MAX_PER_PAGE);
     let kept: Suggestion[] = [];
     if (cands.length && obvious(cands) && !opts.enrich?.size) kept = cands.map(c => ({...c, pos: ''}));
-    else for (let i = 0; i < cands.length; i += BATCH) {
-      const batch = cands.slice(i, i + BATCH); aiCalls++;
-      const r = await opts.ask(VocabCheckSchema, [
-        `You check text from a ${opts.targetName} lesson canvas (student level ${opts.level}). Decide for each numbered candidate whether it is vocabulary to study (a word or a fixed expression).`,
-        'keep=false for: instructions, headings, names of people, dates, numbers, grammar terms or explanations, full sentences, exercise numbering, words in another language than the target language, single conjugated forms from a conjugation table.',
-        `translation: short meaning in ${opts.explainName}. If the candidate already has a meaning written on the canvas, keep that meaning. Words with several different meanings: separate them with "; ".`,
-        'Never change or correct the candidate itself. Decide the word class from the context (the same word can be a noun or a verb).',
-        `Grammar strictly following ${opts.targetName} grammar (never apply Dutch rules to another language): nouns article/plural${opts.targetCode === 'nl' ? '' : '/gender'}; verbs infinitive, present, past, participle${opts.targetCode === 'nl' ? ', hebben/zijn as H, Z or H/Z with a short note, separable' : ''}, full present and past conjugation; adjectives comparative/superlative${opts.targetCode === 'nl' ? ' and inflected form' : ''}. Leave fields empty when not applicable.`,
-      ].join('\n'), JSON.stringify({candidates: batch.map((c, k) => ({index: k, text: c.term, meaning_on_canvas: c.translation || null, next_line: c.example || null}))}));
-      const byIdx = new Map(r.items.map(x => [x.index, x]));
-      const early = /^(A0|A1)$/.test(opts.level);
-      kept = [...kept, ...batch.flatMap((c, k) => { const x = byIdx.get(k); return x?.keep ? [{...c, translation: c.translation || x.translation.trim().slice(0, 300),
-        pos: grammarLabel({pos: x.pos, article: x.article, plural: early ? '' : x.plural}, opts.explainCode || 'en', opts.targetCode || ''), kind: x.kind, grammar: cleanGrammar(x, opts.targetCode || '')}] : []; })];
-    }
+    else for (let i = 0; i < cands.length; i += BATCH) { aiCalls++; kept = [...kept, ...(await checkBatch(cands.slice(i, i + BATCH), opts)).kept]; }
     all = [...all, ...kept]; hashes.push({hash, found: kept.length});
   }
   return {suggestions: all, hashes, aiCalls, known};
+}
+
+/** v65: ONE AI check of at most 40 candidates (shared by the canvas scan and the batched import of big lists).
+ *  Returns the kept words (with grammar) AND the dropped ones, so nothing is skipped silently. */
+export async function checkBatch(batch: Candidate[], opts: {targetName: string; explainName: string; level: string; ask: Ask; explainCode?: string; targetCode?: string}): Promise<{kept: Suggestion[]; dropped: Candidate[]}> {
+  if (!batch.length) return {kept: [], dropped: []};
+  const r = await opts.ask(VocabCheckSchema, [
+    `You check text from a ${opts.targetName} lesson canvas (student level ${opts.level}). Decide for each numbered candidate whether it is vocabulary to study (a word or a fixed expression).`,
+    'keep=false for: instructions, headings, names of people, dates, numbers, grammar terms or explanations, full sentences, exercise numbering, words in another language than the target language, single conjugated forms from a conjugation table.',
+    `translation: short meaning in ${opts.explainName}. If the candidate already has a meaning written on the canvas, keep that meaning. Words with several different meanings: separate them with "; ".`,
+    'Never change or correct the candidate itself. Decide the word class from the context (the same word can be a noun or a verb).',
+    opts.targetCode === 'nl' ? 'Dutch verbs: base = infinitive (reflexive with "zich", e.g. "zich vergissen"); past_sg/past_pl as used with the separated prefix for separable verbs ("sprak af" / "spraken af"; participle "afgesproken"); strong, weak and irregular forms exactly right; aux H (hebben), Z (zijn) or H/Z only when both are used depending on meaning (e.g. zwemmen: Z with a direction) with a short aux_note; modal verbs: give the participle (gekund) and mention the replacing infinitive in aux_note ("Ik heb het niet kunnen doen"). Dutch nouns: article de/het and plural.' : '',
+    `Grammar strictly following ${opts.targetName} grammar (never apply Dutch rules to another language): nouns article/plural${opts.targetCode === 'nl' ? '' : '/gender'}; verbs infinitive, present, past, participle${opts.targetCode === 'nl' ? ', hebben/zijn as H, Z or H/Z with a short note, separable' : ''}, full present and past conjugation; adjectives comparative/superlative${opts.targetCode === 'nl' ? ' and inflected form' : ''}. Leave fields empty when not applicable.`,
+  ].filter(Boolean).join('\n'), JSON.stringify({candidates: batch.map((c, k) => ({index: k, text: c.term, meaning_on_canvas: c.translation || null, next_line: c.example || null}))}));
+  const byIdx = new Map(r.items.map(x => [x.index, x]));
+  const early = /^(A0|A1)$/.test(opts.level);
+  const kept: Suggestion[] = [], dropped: Candidate[] = [];
+  batch.forEach((c, k) => { const x = byIdx.get(k);
+    if (x?.keep) kept.push({...c, translation: c.translation || x.translation.trim().slice(0, 300), pos: grammarLabel({pos: x.pos, article: x.article, plural: early ? '' : x.plural}, opts.explainCode || 'en', opts.targetCode || ''), kind: x.kind, grammar: cleanGrammar(x, opts.targetCode || '')});
+    else dropped.push(c); });
+  return {kept, dropped};
 }

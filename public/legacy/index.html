@@ -629,6 +629,8 @@ body .top .conn.conn-dot:before{display:none}
 .cvtb .tbselect,.cvtb .pgsel{height:32px;max-width:150px;border:1px solid #dbe8e5;border-radius:8px;padding:0 6px;font:inherit;font-size:13px;background:#fff;color:#2a4a52}
 .cvtb #cvPageLbl{font-size:12.5px;color:#5b7076;padding:0 6px;white-space:nowrap}
 /* v62: page menu */
+.vocab-prog{position:fixed;left:16px;bottom:72px;z-index:2147482000;max-width:min(420px,calc(100vw - 32px));display:grid;gap:3px;padding:10px 14px;border-radius:14px;background:#fff;border:1px solid #d6e6e3;box-shadow:0 12px 30px rgba(15,60,70,.16);font-size:12.5px;color:#123c44}
+.vocab-prog[hidden]{display:none}.vocab-prog b{font-size:13px}.vocab-prog.done{border-color:#9fdcbc}.vocab-prog.err{border-color:#f3d9a6}.vocab-prog .err{color:#8a5200}.vocab-prog details{margin-top:4px}.vocab-prog details p{max-height:120px;overflow:auto;margin:4px 0 0;color:#4b5a66}
 .pgm{position:relative;display:inline-flex}
 .pgm-btn{display:inline-flex;align-items:center;gap:6px;max-width:220px;height:30px;padding:0 10px;border:1px solid #d6e6e3;border-radius:9px;background:#fff;color:#123c44;font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}
 .pgm-btn:hover,.pgm-btn[aria-expanded=true]{background:#eef8f6;border-color:#9fd8cf}
@@ -2841,6 +2843,9 @@ if(isT){
     function vLine(w){
       var g = w.grammar || {}, k = vKind(w), tr = w.translation ? " — " + w.translation : "", t = g.base || w.term;
       if(k === "noun") return ((g.article ? g.article + " " : "") + t + (g.gender ? " (" + g.gender + ")" : "") + (g.plural ? " · mv. " + g.plural : "") + tr);
+      /* v65: Dutch verbs (they carry H/Z) — infinitive · past sg / past pl · participle (H/Z), no translation shown
+         (the translation stays stored for flashcards and games) */
+      if(k === "verb" && g.aux) return [t, g.past_sg && g.past_pl ? g.past_sg + " / " + g.past_pl : g.past_sg, g.participle ? g.participle + " (" + g.aux + ")" : ""].filter(Boolean).join(" · ");
       if(k === "verb"){ var past = g.past_sg ? g.past_sg + (g.past_pl ? " / " + g.past_pl : "") : "";
         return [t, g.present, past, g.participle ? g.participle + (g.aux ? " (" + g.aux + ")" : "") : ""].filter(Boolean).join(" · ") + (g.separable === "yes" ? " · scheidbaar" : g.separable === "no" ? " · onscheidbaar" : "") + tr + (g.aux === "H/Z" && g.aux_note ? " [" + g.aux_note + "]" : ""); }
       if(k === "adjective") return [t + (g.inflected ? " / " + g.inflected : ""), g.comparative, g.superlative].filter(Boolean).join(" · ") + tr;
@@ -2858,26 +2863,64 @@ if(isT){
       if(!CV.innerText.trim()){ toast("Deze canvaspagina is nog leeg"); return; }
       var b = bridge(); if(!b.vocab){ toast("Woordenlijst is niet beschikbaar"); return; }
       var btn = this, page = cvDoc.cur; busy(btn, true, "Woorden verzamelen...");
-      saveNow().then(function(){ return b.vocab({page:page, list:true}); }).then(function(r){
+      saveNow().then(function(){ return importPages([page], false); }).then(function(){ return b.vocab({page:page, listOnly:true}); }).then(function(r){
         var list = (r && r.list) || [];
         if(!list.length){ toast("Geen woordenschat gevonden op deze pagina"); return; }
         tidyResult = {blocks:vBlocks(list), title:"Woordenlijst · " + curPage().title};
         $("tidyPrev").innerHTML = tidyResult.blocks.map(function(x){ return '<div class="' + (x.type === "h" ? "h" : "li") + '">' + tidyEsc(x.text) + "</div>"; }).join("");
-        $("tidyChanges").innerHTML = "<li>" + tidyEsc((r.added || 0) + " nieuwe woorden toegevoegd, " + (r.known || 0) + " bestaande woorden herkend") + "</li>";
+        $("tidyChanges").innerHTML = "<li>" + tidyEsc(list.length + " woorden van deze pagina in de woordenbank") + "</li>";
         $("tidyOv").hidden = false;
       }).catch(function(e){ toast((e && e.message) || "Woordenlijst maken mislukt"); }).then(function(){ busy(btn, false); });
     });
     /* v62: import into the central word bank — this page or all pages (historical lists); also automatically a
        while after the teacher stopped typing (never per keystroke; unchanged pages cost nothing: page hash) */
-    var vocabAutoT = null, vocabBusy = false;
+    /* v65: big historical lists — batch by batch (40 words), every batch saved at once, progress stored on the server
+       (continues after closing the page or switching students), failed batches retried (max 3), the daily limit pauses
+       instead of failing, words that are not vocabulary are listed — never skipped silently */
+    var vocabAutoT = null, vocabBusy = false, vp = null;
+    function vpShow(txt, kind){
+      if(!vp){ vp = document.createElement("div"); vp.className = "vocab-prog"; vp.setAttribute("role", "status"); document.body.appendChild(vp); }
+      vp.className = "vocab-prog" + (kind ? " " + kind : ""); vp.innerHTML = txt; vp.hidden = false;
+    }
+    function vpLine(r, title){
+      var left = Math.max(0, (r.total || 0) - (r.next || 0));
+      return "<b>" + tidyEsc(title) + "</b><span>" + (r.next || 0) + " / " + (r.total || 0) + " verwerkt · " + (r.added || 0) + " toegevoegd · " + (r.known || 0) + " al aanwezig · " + (r.skipped || 0) + " geen woord · " + left + " te gaan</span>";
+    }
+    function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+    function importPage(b, i, silent){
+      var title = (cvDoc && cvDoc.pages[i] && cvDoc.pages[i].title) || ("Pagina " + (i + 1));
+      function step(){
+        return b.vocab({action:"batch", page:i}).then(function(r){
+          if(!silent || (r && r.total > 40)) vpShow(vpLine(r || {}, title), r && r.done ? "done" : "");
+          if(r && r.done) return r;
+          if(r && r.failed){ vpShow(vpLine(r, title) + "<span class=\"err\">Een deel lukte niet (" + tidyEsc(r.error || "fout") + "). Het gaat de volgende keer automatisch verder.</span>", "err"); return r; }
+          return wait(r && r.retry ? 4000 : 300).then(step);
+        }, function(e){
+          var m = (e && e.message) || String(e);
+          vpShow("<b>" + tidyEsc(title) + "</b><span class=\"err\">" + (/Daglimiet/.test(m) ? "Daglimiet bereikt: de import gaat later vanzelf verder." : tidyEsc(m) + " — de import gaat later vanzelf verder.") + "</span>", "err");
+          throw e;
+        });
+      }
+      return step();
+    }
+    function importPages(list, silent){
+      var b = bridge(); if(!b || !b.vocab || vocabBusy) return Promise.resolve(null);
+      vocabBusy = true;
+      var chain = Promise.resolve(null), last = null;
+      list.forEach(function(i){ chain = chain.then(function(){ return importPage(b, i, silent).then(function(r){ last = r; }); }); });
+      return chain.then(function(){ vocabBusy = false;
+        if(last && last.done && vp && !vp.classList.contains("err")){ if(last.skippedTerms && last.skippedTerms.length) vp.innerHTML += "<details><summary>Niet als woord herkend (" + last.skippedTerms.length + ")</summary><p>" + tidyEsc(last.skippedTerms.join(", ")) + "</p></details>"; setTimeout(function(){ if(vp && !vp.querySelector("details[open]")) vp.hidden = true; }, 12000); }
+        return last; }, function(e){ vocabBusy = false; throw e; });
+    }
     window.__cvVocab = function(all, silent){
-      var b = bridge(); if(!b || !b.vocab || vocabBusy || !cvDoc) return;
-      vocabBusy = true; if(!silent) toast(all ? "Alle pagina's verwerken..." : "Pagina verwerken...");
-      saveNow().then(function(){ return b.vocab({page:all ? null : cvDoc.cur}); }).then(function(r){
-        var a = (r && r.added) || 0, k = (r && r.known) || 0;
-        if(!silent || a) toast(a + " nieuwe woorden toegevoegd, " + k + " bestaande woorden herkend");
-      }).catch(function(e){ if(!silent) toast((e && e.message) || "Verwerken mislukt"); }).then(function(){ vocabBusy = false; });
+      if(!cvDoc) return;
+      saveNow().then(function(){ return importPages(all ? cvDoc.pages.map(function(_, i){ return i; }) : [cvDoc.cur], !!silent); }).catch(function(){});
     };
+    /* continue unfinished imports of this student automatically */
+    if(isT && SB) setTimeout(function(){ var b = bridge(); if(!b || !b.vocab) return;
+      b.vocab({action:"pending"}).then(function(r){ var idx = ((r && r.pending) || []).filter(function(x){ return x.status === "running" || x.status === "failed"; }).map(function(x){ return x.page_index; });
+        idx = idx.filter(function(i, k){ return idx.indexOf(i) === k && cvDoc && i < cvDoc.pages.length; });
+        if(idx.length) importPages(idx, false).catch(function(){}); }).catch(function(){}); }, 6000);
     if(isT && CV) CV.addEventListener("input", function(){ clearTimeout(vocabAutoT); vocabAutoT = setTimeout(function(){ window.__cvVocab(false, true); }, 120000); });
     $("tidyCancel").addEventListener("click", function(){ $("tidyOv").hidden = true; tidyResult = null; });
     $("tidyApply").addEventListener("click", function(){

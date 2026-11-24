@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     /* ---------- compact context (database queries only, capped) ---------- */
     const [vocab, summaries, focusRows, prog, practice] = await Promise.all([
-      db.from('vocab_items').select('term,translation,status,wrong_count,difficult,due_at,lesson_date').eq('student_id', student.id).limit(400).then(r => (r.data || []) as {term: string; translation: string; status: string; wrong_count: number; difficult?: boolean; due_at?: string; lesson_date?: string | null}[]),
+      db.from('vocab_items').select('term,translation,status,wrong_count,difficult,due_at,lesson_date,grammar').eq('student_id', student.id).limit(400).then(r => (r.data || []) as {term: string; translation: string; status: string; wrong_count: number; difficult?: boolean; due_at?: string; lesson_date?: string | null; grammar?: {pos?: string; past_sg?: string; past_pl?: string; participle?: string; aux?: string} | null}[]),
       db.rpc('student_lesson_summaries', {sid: student.id}).then(r => (r.data || []) as {lesson_date: string; final: unknown}[]),
       db.rpc('memory_focus', {sid: student.id}).then(r => (r.error ? [] : r.data || []) as {label: string; status: string}[], () => []),
       db.from('student_goal_progress').select('status,lesson_date,updated_at,curriculum_goals(title,code,subject)').eq('student_id', student.id).then(r => (r.error ? [] : r.data || []) as unknown as {status: string; lesson_date: string | null; updated_at: string; curriculum_goals: {title: string; code: string | null; subject: string} | null}[]),
@@ -83,6 +83,7 @@ export async function POST(req: Request) {
       .sort((a, b) => a.k - b.k).map(x => x.v);
     const words = (focus === 'last_lesson' && mat.vocab.length ? mat.vocab.map(t => ({term: t, translation: ''})) : wordsRanked).slice(0, 24);
     const errors = mat.errors.slice(0, 10);
+    const verbs = wordsRanked.filter(v => v.grammar?.pos === 'verb' && v.grammar.participle).slice(0, 30).map(v => `${v.term}: ${[v.grammar!.past_sg, v.grammar!.past_pl].filter(Boolean).join('/')}, ${v.grammar!.participle}${v.grammar!.aux ? ' (' + v.grammar!.aux + ')' : ''}`);
     const recentWrong = Array.from(new Set(practice.flatMap(p => ((p.details as {wrong?: string[]} | null)?.wrong) || []))).slice(0, 8);
     const [tMin, tMax] = textLength(level, minutes);
 
@@ -100,6 +101,8 @@ export async function POST(req: Request) {
       if (b.type === 'reading') base.push(`Write a reading text of ${tMin}-${tMax} words (passage) on an everyday theme using the topic and words, then ${b.count} OPEN questions (type reading) the learner must answer in own words — not by copying a sentence. answer = model answer.`);
       if (b.type === 'write') base.push(`One writing task (type write) of about ${Math.round(tMin * 0.6)}-${Math.round(tMax * 0.6)} words in which the learner uses the topic and some of the words; answer = short model text.`);
       if (b.type === 'conjugate') base.push('type conjugate: give infinitive, person and tense in the prompt.');
+      // v65: the stored forms of the learner's own verbs (correct and checked) — use them for the answers
+      if ((b.type === 'conjugate' || b.type === 'fill_in' || b.type === 'correct_error') && verbs.length) base.push(`Learner's verbs with their forms (use these exactly): ${verbs.slice((b.i * 4) % verbs.length).concat(verbs).slice(0, 8).join('; ')}`);
       if (b.type === 'correct_error') base.push('type correct_error: an incorrect sentence like the learner\'s own errors; answer = corrected sentence.');
       if (b.type === 'transform') base.push('type make_sentence: rewrite/transform a sentence using the topic (e.g. main clause → subordinate clause); accept several correct versions.');
       if (b.type === 'make_sentence') base.push('type make_sentence: the learner writes a short sentence with a given word/structure; answer = model sentence.');
