@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = f => readFileSync(path.join(root, f), 'utf8');
-import {templateFor, itemProblem} from '../../lib/homework/templates.ts';
+import {templateFor, itemProblem, AVOID_WORDS} from '../../lib/homework/templates.ts';
 import {planBlocks, assignTopics, applyTemplates, cleanItems, blocksFor} from '../../lib/homework/plan.ts';
 
 test('duration: 30/60/90 or own minutes, end time shown, used for lessons and bookings', () => {
@@ -35,6 +35,9 @@ test('templates: the topic decides a proven exercise form; unknown topics get th
   // found in the real A1–B2 test: these NT2 titles must get the right template
   assert.equal(templateFor('Hoofdzin: werkwoord op plaats 2').id, 'word_order');
   assert.equal(templateFor('Bijzinnen en woordvolgorde').id, 'subclause');
+  assert.match(templateFor('Lidwoorden de/het/een').how, /de or het ONLY \(never een\)/, 'no de/een ambiguity');
+  assert.match(templateFor('Inversie').how, /keep the tense and all words/);
+  assert.ok(AVOID_WORDS.test('gezeik') && !AVOID_WORDS.test('lobby'), 'slang words are not offered as learner words');
   const b = applyTemplates(assignTopics(planBlocks(10, 'A2', 'choose'), {recent: [], weak: [], review: [], topics: ['Perfectum', 'Bijzinnen']}));
   assert.deepEqual(b.map(x => x.type), ['conjugate', 'make_sentence']);
   assert.ok(b[1].open && b[1].count === 4);

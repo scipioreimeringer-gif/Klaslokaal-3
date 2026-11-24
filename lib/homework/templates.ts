@@ -10,8 +10,8 @@ const T: [RegExp, Template][] = [
   [/scheidbare|separable/i, {id: 'separable', type: 'conjugate', how: 'Sentences in main clause, with a modal verb and in the perfect, so the learner must split or keep the separable verb. Gap(s) for the verb parts, infinitive in brackets.'}],
   // bijzin before inversie: "Bijzinnen en woordvolgorde" is about subordinate clauses
   [/bijzin|voegwoord|subordinate|conjunction/i, {id: 'subclause', type: 'make_sentence', how: 'Prompt format: "Sentence A. + Sentence B. (conjunction)". Two short related sentences and a conjunction (omdat, dat, als, terwijl, …); the learner combines them into one sentence with the verb at the END of the subordinate clause. Accept main clause first or subordinate clause first.'}],
-  [/inversie|zinsbouw|woordvolgorde|word_order|inversion|plaats 2|plek 2|hoofdzin|vraagzin/i, {id: 'word_order', type: 'make_sentence', how: 'Prompt format: "Start with: <word>. <complete normal sentence starting with the subject>". The given start word MUST change the order (time/place word or question word), so subject and verb swap; the learner rewrites the whole sentence with the verb in second position. Accept every correct word order.'}],
-  [/lidwoord|de\/het|article|gender/i, {id: 'articles', type: 'fill_in', how: 'Natural sentences with one gap for de or het (or een / no article) before a noun the learner knows. The noun is visible; the answer is only the article.'}],
+  [/inversie|zinsbouw|woordvolgorde|word_order|inversion|plaats 2|plek 2|hoofdzin|vraagzin/i, {id: 'word_order', type: 'make_sentence', how: 'Prompt format: "<label meaning start with, in the interface language>: <word>. <complete normal sentence starting with the subject>". The given start word MUST change the order (time/place word or question word), so subject and verb swap; keep the tense and all words of the given sentence, only the order changes; the learner rewrites the whole sentence with the verb in second position. Accept every correct word order.'}],
+  [/lidwoord|de\/het|article|gender/i, {id: 'articles', type: 'fill_in', how: 'Natural sentences with one gap for de or het ONLY (never een) before a noun the learner knows, in a context that makes the noun definite (already mentioned, deze/die situation, a unique thing), so een is impossible. The noun is visible; the answer is only de or het.'}],
   [/adjectief|bijvoeglijk|buigings|adjective/i, {id: 'adjective', type: 'fill_in', how: 'Sentences with a noun phrase where the adjective is given in brackets in its base form and the learner writes the correct form (with or without -e). Include een + het-word cases.'}],
   [/meervoud|plural/i, {id: 'plural', type: 'fill_in', how: 'A sentence that clearly needs a plural (twee, veel, alle …) with a gap; the singular noun in brackets.'}],
   [/ontkenning|niet en geen|negation/i, {id: 'negation', type: 'make_sentence', how: 'Positive sentences the learner makes negative with niet or geen in the right place. Accept every correct position.'}],
@@ -25,6 +25,8 @@ const T: [RegExp, Template][] = [
   [/om … te|om\.\.\. te|te \+ infinitief|infinitive/i, {id: 'om_te', type: 'make_sentence', how: 'Give a goal in a few words; the learner writes one sentence with om … te + infinitive.'}],
 ];
 const GENERIC: Template = {id: 'generic', type: 'fill_in', how: 'Natural everyday sentences that all practise the SAME point; one clear gap per sentence; the context makes the single correct answer unambiguous.'};
+/** Words never offered to the AI as "learner words" (slang/vulgar entries in a word bank make odd homework). */
+export const AVOID_WORDS = /\b(gezeik|zeiken|kut\w*|klote\w*|shit|fuck\w*|godver\w*|kanker\w*|tering\w*|lul\w*|porra|caralho|merda|puta\w*)\b/i;
 export function templateFor(topic: string | null | undefined): Template {
   for (const [re, t] of T) if (re.test(String(topic || ''))) return t;
   return GENERIC;

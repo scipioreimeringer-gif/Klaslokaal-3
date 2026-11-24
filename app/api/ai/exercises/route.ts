@@ -3,7 +3,7 @@ import {askFast, authUser, enforceLimit, HttpError, jsonError, langName, uiLangu
 import {studentAccess, subjectCode} from '../../../../lib/server/context';
 import {lessonMaterial} from '../../../../lib/analysis/material';
 import {planBlocks, assignTopics, applyTemplates, cleanItems, textLength, validBlock, type Block, type Focus} from '../../../../lib/homework/plan';
-import {templateFor, levelStyle, QUALITY_RULES} from '../../../../lib/homework/templates';
+import {templateFor, levelStyle, QUALITY_RULES, AVOID_WORDS} from '../../../../lib/homework/templates';
 
 export const maxDuration = 60;
 
@@ -100,9 +100,9 @@ export async function POST(req: Request) {
     const hwFeedback = feedback.map(f => strip(f.teacher_feedback).slice(0, 200)).filter(Boolean);
     // vocabulary: due / difficult first, then a random mix of older words (historical canvas lists too); never the whole bank
     const now = Date.now(), rnd = (i: number) => ((Math.imul(i + seed, 2654435761) >>> 0) / 4294967296);
-    const wordsRanked = [...vocab].filter(v => v.term && v.translation).map((v, i) => ({v, k: (v.difficult ? -3 : 0) + (v.wrong_count > 0 ? -2 : 0) + (v.due_at && Date.parse(v.due_at) <= now ? -2 : 0) + (v.status === 'mastered' ? 3 : 0) + rnd(i) * 4}))
+    const wordsRanked = [...vocab].filter(v => v.term && v.translation && !AVOID_WORDS.test(v.term)).map((v, i) => ({v, k: (v.difficult ? -3 : 0) + (v.wrong_count > 0 ? -2 : 0) + (v.due_at && Date.parse(v.due_at) <= now ? -2 : 0) + (v.status === 'mastered' ? 3 : 0) + rnd(i) * 4}))
       .sort((a, b) => a.k - b.k).map(x => x.v);
-    const words = (focus === 'last_lesson' && mat.vocab.length ? mat.vocab.map(t => ({term: t, translation: ''})) : wordsRanked).slice(0, 24);
+    const words = (focus === 'last_lesson' && mat.vocab.length ? mat.vocab.map(t => ({term: t, translation: ''})) : wordsRanked).filter(w => !AVOID_WORDS.test(w.term)).slice(0, 24);
     const errors = mat.errors.slice(0, 10);
     const verbs = wordsRanked.filter(v => v.grammar?.pos === 'verb' && v.grammar.participle).slice(0, 30).map(v => `${v.term}: ${[v.grammar!.past_sg, v.grammar!.past_pl].filter(Boolean).join('/')}, ${v.grammar!.participle}${v.grammar!.aux ? ' (' + v.grammar!.aux + ')' : ''}`);
     const recentWrong = Array.from(new Set(practice.flatMap(p => ((p.details as {wrong?: string[]} | null)?.wrong) || []))).slice(0, 8);
