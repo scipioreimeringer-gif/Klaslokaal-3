@@ -8,8 +8,9 @@ const T: [RegExp, Template][] = [
   [/imperfectum|verleden tijd|past_tense/i, {id: 'past', type: 'conjugate', how: 'A short story or description in the past (vroeger, toen ik klein was). Gap for the past tense form, infinitive in brackets. Context makes singular/plural and the past tense obvious.'}],
   [/tegenwoordige tijd|presens|present_tense|zijn, hebben/i, {id: 'present', type: 'conjugate', how: 'A daily routine of one person or a family. Gap for the present tense form with a clear subject in the sentence, infinitive in brackets. Include inversion items (Morgen ___ ik …) where the -t rule matters.'}],
   [/scheidbare|separable/i, {id: 'separable', type: 'conjugate', how: 'Sentences in main clause, with a modal verb and in the perfect, so the learner must split or keep the separable verb. Gap(s) for the verb parts, infinitive in brackets.'}],
-  [/inversie|zinsbouw|woordvolgorde|word_order|inversion/i, {id: 'word_order', type: 'make_sentence', how: 'Give a correct sentence plus the word or phrase that must come FIRST; the learner rewrites the whole sentence with the verb in second position. Accept every correct word order.'}],
-  [/bijzin|voegwoord|subordinate|conjunction/i, {id: 'subclause', type: 'make_sentence', how: 'Two short related sentences and a conjunction (omdat, dat, als, terwijl, …); the learner combines them into one sentence with the verb at the end of the subordinate clause. Accept main clause first or subordinate clause first.'}],
+  // bijzin before inversie: "Bijzinnen en woordvolgorde" is about subordinate clauses
+  [/bijzin|voegwoord|subordinate|conjunction/i, {id: 'subclause', type: 'make_sentence', how: 'Prompt format: "Sentence A. + Sentence B. (conjunction)". Two short related sentences and a conjunction (omdat, dat, als, terwijl, …); the learner combines them into one sentence with the verb at the END of the subordinate clause. Accept main clause first or subordinate clause first.'}],
+  [/inversie|zinsbouw|woordvolgorde|word_order|inversion|plaats 2|plek 2|hoofdzin|vraagzin/i, {id: 'word_order', type: 'make_sentence', how: 'Prompt format: "Start with: <word>. <complete normal sentence starting with the subject>". The given start word MUST change the order (time/place word or question word), so subject and verb swap; the learner rewrites the whole sentence with the verb in second position. Accept every correct word order.'}],
   [/lidwoord|de\/het|article|gender/i, {id: 'articles', type: 'fill_in', how: 'Natural sentences with one gap for de or het (or een / no article) before a noun the learner knows. The noun is visible; the answer is only the article.'}],
   [/adjectief|bijvoeglijk|buigings|adjective/i, {id: 'adjective', type: 'fill_in', how: 'Sentences with a noun phrase where the adjective is given in brackets in its base form and the learner writes the correct form (with or without -e). Include een + het-word cases.'}],
   [/meervoud|plural/i, {id: 'plural', type: 'fill_in', how: 'A sentence that clearly needs a plural (twee, veel, alle …) with a gap; the singular noun in brackets.'}],
@@ -37,7 +38,19 @@ export const QUALITY_RULES = [
   'multiple_choice: exactly one correct option, all options plausible and different.',
   'Match the CEFR level: not too easy, not beyond the level.',
   'Open items: list several correct formulations in accept.',
+  'Learner words are optional: use one ONLY where it fits the sentence naturally; never force words into a sentence; skip slang, vulgar or very informal words.',
+  'The worked example shows the task itself (input → answer) and differs from the items; it is never trivial (input identical to the answer).',
+  'Double-check every answer against the sentence (e.g. Dutch inversion: "Morgen werk jij" — no -t after jij/je when the verb comes first).',
 ];
+/** How demanding the language is per level — basic grammar at a high level is practised in richer sentences. */
+export function levelStyle(level: string): string {
+  const l = String(level || '').toUpperCase();
+  return l === 'A0' || l === 'A1' ? 'A1: short simple sentences (5-9 words), high-frequency everyday words, concrete situations.'
+    : l === 'A2' ? 'A2: simple sentences with common time/place words and short combinations (en, maar, want), everyday topics.'
+    : l === 'B1' ? 'B1: sentences of 10-16 words with subordinate clauses, opinions, plans and experiences, work and society topics.'
+    : l === 'B2' ? 'B2: longer complex sentences, several clauses, abstract topics (work, news, society), precise vocabulary; even basic grammar is practised in demanding sentences, never in A1-style sentences.'
+    : 'C1+: complex, nuanced sentences, formal and informal register, abstract topics.';
+}
 
 /** Programmatic quality check of one item (cheap, before any AI review). Returns a reason or '' when fine. */
 export function itemProblem(it: {type: string; prompt: string; options: string[]; answer: string; accept?: string[]}, opts: {open?: boolean} = {}): string {

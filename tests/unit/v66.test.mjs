@@ -32,6 +32,9 @@ test('templates: the topic decides a proven exercise form; unknown topics get th
   assert.equal(templateFor('Bijzinnen met omdat').type, 'make_sentence');
   assert.equal(templateFor('De/het-woorden').id, 'articles');
   assert.equal(templateFor('Pretérito perfeito').id, 'generic');
+  // found in the real A1–B2 test: these NT2 titles must get the right template
+  assert.equal(templateFor('Hoofdzin: werkwoord op plaats 2').id, 'word_order');
+  assert.equal(templateFor('Bijzinnen en woordvolgorde').id, 'subclause');
   const b = applyTemplates(assignTopics(planBlocks(10, 'A2', 'choose'), {recent: [], weak: [], review: [], topics: ['Perfectum', 'Bijzinnen']}));
   assert.deepEqual(b.map(x => x.type), ['conjugate', 'make_sentence']);
   assert.ok(b[1].open && b[1].count === 4);
