@@ -21,7 +21,7 @@ export const LANG_GUIDE: Record<string, string> = {
   fr: 'French: gender and agreement, passé composé (avoir/être) vs. imparfait, pronouns, negation, prepositions. Dropping "ne" in informal speech is NOT an error.',
   de: 'German: verb position (V2, verb-final in subordinate clauses), cases and articles, adjective endings, separable verbs, Perfekt with haben/sein. Natural informal spoken German is NOT an error.',
 };
-const STATUS_ALIAS: Record<string, Topic['status']> = {not_started: 'not_started', covered: 'covered', in_progress: 'in_progress', mastered: 'mastered'};
+const STATUS_ALIAS: Record<string, Topic['status']> = {not_started: 'not_started', covered: 'covered', in_progress: 'in_progress', review: 'in_progress', mastered: 'mastered'};
 
 async function download(db: SupabaseClient, path: string, mime: string) {
   const s = await db.storage.from('recordings').createSignedUrl(path, 600);
@@ -34,11 +34,14 @@ const ext = (mime: string) => (/mp4/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'og
 /** The student's personal checklist: standard + own topics for the language, with per-student status/overrides; hidden topics left out. */
 export async function loadTopics(db: SupabaseClient, studentId: string, subject: string): Promise<Topic[]> {
   const [g, p] = await Promise.all([
-    db.from('curriculum_goals').select('id,level,title').eq('subject', subject).order('level').order('sort'),
+    db.from('curriculum_goals').select('id,level,title,code').eq('subject', subject).order('level').order('sort'),
     db.from('student_goal_progress').select('*').eq('student_id', studentId),
   ]);
   const prog = new Map(((p.data || []) as {goal_id: string; status: string; hidden?: boolean; title_override?: string | null; level_override?: string | null}[]).map(x => [x.goal_id, x]));
-  return ((g.data || []) as {id: string; level: string; title: string}[])
+  // v64: Dutch = the NT2 curriculum (stable nt2-* ids) + own topics; older Dutch standard goals are no longer offered
+  const goals = (g.data || []) as {id: string; level: string; title: string; code?: string | null}[];
+  const nt2 = subject === 'nl' && goals.some(t => t.code?.startsWith('nt2-'));
+  return goals.filter(t => !nt2 || !t.code || t.code.startsWith('nt2-'))
     .filter(t => !prog.get(t.id)?.hidden)
     .map(t => { const x = prog.get(t.id); return {id: t.id, title: x?.title_override || t.title, level: x?.level_override || t.level, status: STATUS_ALIAS[x?.status || 'not_started'] || 'not_started'}; });
 }

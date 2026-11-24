@@ -12,6 +12,8 @@ const TFN = new Set(['t', 'tt', 'tx', 'T']);
 
 /** Texts passed to t() through a variable (tab labels, field labels, server messages). */
 export const DYNAMIC = [
+  // v64 NT2 stages (lib/curriculum/nt2.ts) and status labels
+  'A0 → A1', 'A1 → A2', 'A2 → B1', 'B1 → B2', 'B2 → C1', 'Doorlopende leerlijnen', 'Nog niet behandeld', 'In ontwikkeling', 'Extra oefenen', 'Leerlijn',
   // v61 payments (PAY_LABEL, task titles)
   'Openstaand', 'Betaling gemeld', 'Betaald', 'Niet van toepassing', 'Betaling van {0} controleren', 'Openstaande betaling van {0} opvolgen', 'Lespakket van {0} bijna op', 'Nieuw lespakket registreren voor {0}', 'Registreren', 'Betalingen',
   // v60 AI memory (status labels, tab)

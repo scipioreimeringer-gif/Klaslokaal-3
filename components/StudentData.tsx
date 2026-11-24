@@ -150,7 +150,7 @@ type TabDef=[Tab,string,typeof History];
 /** v44: five main tabs per role; everything else under "Meer" (no function removed). */
 export function workspaceTabs(viewer:'teacher'|'student'):{main:TabDef[];more:TabDef[]}{
  return viewer==='teacher'
-  ?{main:[['overzicht','Home',House],['lessen','Lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['doelen','Leerpad',Route]],
+  ?{main:[['overzicht','Home',House],['lessen','Lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['doelen','Leerlijn',Route]],
     more:[['geheugen','AI-geheugen',Brain],['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
   :{main:[['overzicht','Home',House],['lessen','Mijn lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['voortgang','Voortgang',TrendingUp]],
     more:[['oefenen','Oefenen',Gamepad2],['bord','Bord',PenLine],['opnames','Opnames',Mic]]};

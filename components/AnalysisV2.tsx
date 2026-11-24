@@ -115,7 +115,7 @@ export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>
    const refs=[...new Set([...(c?.lesson_refs||[]),a.lesson_date])].slice(-20);
    const r=await db.from('student_goal_progress').upsert({student_id:a.student_id,goal_id:s.topic_id,status:to,basis:'ai_confirmed',lesson_date:a.lesson_date,lesson_refs:refs,note:c?.note||'',hidden:c?.hidden||false,title_override:c?.title_override||null,level_override:c?.level_override||null,updated_at:new Date().toISOString()},{onConflict:'student_id,goal_id'});
    if(r.error){setMsg(r.error.message);return}}
-  const next={...doc,checklist_suggestions:doc.checklist_suggestions.map(x=>x.topic_id===s.topic_id?{...x,to,decision}:x)};setDoc(next);
+  const next={...doc,checklist_suggestions:doc.checklist_suggestions.map(x=>x.topic_id===s.topic_id?{...x,to:to as typeof x.to,decision}:x)};setDoc(next);
   await save(next,decision==='rejected'?tt("Voorstel afgewezen; het leertraject is niet gewijzigd."):tt("Leertraject bijgewerkt: {0} → {1}.",topics[s.topic_id]?.title||'',GOAL_STATUS_LABEL[to]))}
  async function addWords(){const words=doc.vocabulary.filter((_,i)=>keep[i]);const r=await addVocab(supabase()!,a.student_id,words,'ai',a.lesson_date);setMsg(tt("{0} woorden toegevoegd aan de woordenlijst{1}.",r.added,r.skipped?tt(" ({0} stonden er al)",r.skipped):''))}
  const rep=doc.report;const main=doc.categories.filter(c=>c.relevance!=='later'&&(c.count>0||c.self_corrections>0));const later=doc.categories.filter(c=>c.relevance==='later');

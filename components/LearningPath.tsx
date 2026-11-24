@@ -7,13 +7,15 @@ import {useCallback,useEffect,useMemo,useState} from 'react';
 import {Plus,Search,Target,EyeOff,Eye,Pencil,X,CalendarDays,ListChecks} from 'lucide-react';
 import {InfoTip} from './InfoTip';
 import {supabase} from '../lib/supabase';
-import {GOAL_STATUS_LABEL,LEVELS,SKILLS,SKILL_LABEL,SUBJECTS,subjectOf,type Goal,type GoalProgress,type GoalStatus} from '../lib/learning';
+import {NT2_BY_CODE,NT2_STAGES} from '../lib/curriculum/nt2';
+import {GOAL_STATUSES,shownStatus,GOAL_STATUS_LABEL,LEVELS,SKILLS,SKILL_LABEL,SUBJECTS,subjectOf,type Goal,type GoalProgress,type GoalStatus} from '../lib/learning';
 import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
 
 type Student={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
 type LessonGoal={id:string;lesson_date:string;goal_id:string|null;custom_title:string|null};
-const STATUSES=Object.keys(GOAL_STATUS_LABEL) as GoalStatus[];
+const STATUSES=GOAL_STATUSES;   // v64: Nog niet behandeld · In ontwikkeling · Extra oefenen · Beheerst
+type MemRow={kind:string;key:string;label:string;status:string;teacher_status:string|null;lessons_seen:number;clean_lessons:number;first_seen:string|null;last_seen:string|null;last_clean:string|null;hidden:boolean};
 const today=()=>new Date().toISOString().slice(0,10);
 const V34=tt('Voer eerst supabase/v34.sql uit om het leertraject te gebruiken.');
 const v34Error=(m:string)=>/hidden|title_override|level_override|lesson_refs|target_level|lesson_goals|basis_check|PGRST204|PGRST205/.test(m);
@@ -23,7 +25,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  const [subject,setSubject]=useState(subjectOf(student));const [goals,setGoals]=useState<Goal[]>([]);const [prog,setProg]=useState<Record<string,GoalProgress>>({});
  const [err,setErr]=useState('');const [msg,setMsg]=useState('');const [level,setLevel]=useState(student.level||'A1');const [target,setTarget]=useState<string>('');
  const [q,setQ]=useState('');const [fLevel,setFLevel]=useState('all');const [fSkill,setFSkill]=useState('all');const [fStatus,setFStatus]=useState<'all'|GoalStatus>('all');const [showHidden,setShowHidden]=useState(false);
- const [sel,setSel]=useState<Set<string>>(new Set());const [bulk,setBulk]=useState<GoalStatus>('covered');const [edit,setEdit]=useState<string|null>(null);
+ const [sel,setSel]=useState<Set<string>>(new Set());const [bulk,setBulk]=useState<GoalStatus>('in_progress');const [mem,setMem]=useState<MemRow[]>([]);const [edit,setEdit]=useState<string|null>(null);
  const [nt,setNt]=useState({title:'',level:student.level||'A1',skill:'grammatica'});
  const [day,setDay]=useState(today());const [lgoals,setLgoals]=useState<LessonGoal[]>([]);const [lgPick,setLgPick]=useState('');const [lgCustom,setLgCustom]=useState('');
  const [intakeTo,setIntakeTo]=useState(student.level||'A1');
@@ -31,13 +33,16 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  const load=useCallback(async()=>{const db=supabase()!;
   const [g,p,s]=await Promise.all([db.from('curriculum_goals').select('*').eq('subject',subject).order('level').order('sort'),db.from('student_goal_progress').select('*').eq('student_id',student.id),db.from('students').select('level,target_level').eq('id',student.id).maybeSingle()]);
   if(g.error){setErr(/curriculum_goals/.test(g.error.message)||g.error.code==='PGRST205'?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):g.error.message);return}
-  setGoals((g.data||[]) as Goal[]);setProg(Object.fromEntries(((p.data||[]) as GoalProgress[]).map(x=>[x.goal_id,x])));
+  // v64: Dutch = the NT2 curriculum of the PDF (nt2-*) + own topics; older Dutch standard goals stay stored but are not shown
+  const gl=(g.data||[]) as (Goal&{code?:string|null})[];const nt=subject==='nl'&&gl.some(x=>x.code?.startsWith('nt2-'));
+  setGoals(nt?gl.filter(x=>!x.code||x.code.startsWith('nt2-')):gl);
+  if(teacher){const m=await db.from('memory_patterns').select('kind,key,label,status,teacher_status,lessons_seen,clean_lessons,first_seen,last_seen,last_clean,hidden').eq('student_id',student.id);setMem(m.error?[]:((m.data||[]) as MemRow[]).filter(x=>!x.hidden))}setProg(Object.fromEntries(((p.data||[]) as GoalProgress[]).map(x=>[x.goal_id,x])));
   const st=s.data as {level?:string|null;target_level?:string|null}|null;if(st){if(st.level)setLevel(st.level);setTarget(st.target_level||'')}else if(s.error&&v34Error(s.error.message))setErr(V34);
- },[subject,student.id]);
+ },[subject,student.id,teacher]);
  const loadDay=useCallback(async()=>{const r=await supabase()!.from('lesson_goals').select('id,lesson_date,goal_id,custom_title').eq('student_id',student.id).eq('lesson_date',day).order('created_at');if(r.error){if(teacher&&v34Error(r.error.message))setErr(V34);return}setLgoals((r.data||[]) as LessonGoal[])},[student.id,day,teacher]);
  useEffect(()=>{void load()},[load]);useEffect(()=>{void loadDay()},[loadDay]);
 
- const view=(g:Goal)=>{const p=prog[g.id];return {title:p?.title_override||g.title,level:p?.level_override||g.level,status:(p?.status||'not_started') as GoalStatus,hidden:!!p?.hidden,p}};
+ const view=(g:Goal)=>{const p=prog[g.id];return {title:p?.title_override||g.title,level:p?.level_override||g.level,status:shownStatus(p?.status),hidden:!!p?.hidden,p}};
  const all=useMemo(()=>goals.map(g=>({g,...view(g)})),[goals,prog]);
  const shown=all.filter(x=>(showHidden&&teacher||!x.hidden)&&(fLevel==='all'||x.level===fLevel)&&(fSkill==='all'||(fSkill==='own'?!!x.g.owner_teacher:x.g.skill===fSkill))&&(fStatus==='all'||x.status===fStatus)&&(x.title+' '+(x.g.description||'')).toLowerCase().includes(q.toLowerCase()));
  const active=all.filter(x=>!x.hidden);
@@ -69,7 +74,9 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  const toggle=(id:string)=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n});
 
  const byLevel=LEVELS.map(l=>({l,items:shown.filter(x=>x.level===l)})).filter(x=>x.items.length);
- const levelStats=LEVELS.map(l=>{const its=active.filter(x=>x.level===l);return {l,n:its.length,c:count('covered',its),p:count('in_progress',its),m:count('mastered',its)}}).filter(x=>x.n);
+ const levelStats=LEVELS.map(l=>{const its=active.filter(x=>x.level===l);return {l,n:its.length,c:count('review',its),p:count('in_progress',its),m:count('mastered',its)}}).filter(x=>x.n);
+ const nt2=goals.some(g=>(g as {code?:string|null}).code?.startsWith('nt2-'));
+ const memFor=(code:string|null|undefined)=>{const t=code?NT2_BY_CODE.get(code):undefined;if(!t?.keys)return {topic:[] as MemRow[],errors:[] as MemRow[]};return {topic:mem.filter(m=>m.kind==='topic'&&t.keys!.includes(m.key)),errors:mem.filter(m=>m.kind==='error'&&t.keys!.includes(m.key)&&m.lessons_seen>0)}};
  return <div className="goals learning-path">
   {err&&<div className="notice">{err}</div>}
   {msg&&<p className="muted" role="status">{msg}</p>}
@@ -83,12 +90,12 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
 
   {/* progress overview */}
   <section className="lp-overview" aria-label={tt("Voortgang")}>
-   <div className="lp-bar" role="img" aria-label={tt("{0} behandeld, {1} nog oefenen, {2} beheerst van {3}",count('covered'),count('in_progress'),count('mastered'),active.length)}>
-    {(['mastered','covered','in_progress'] as GoalStatus[]).map(s=><span key={s} className={'seg gs-'+s} style={{width:`${active.length?count(s)/active.length*100:0}%`}}/>)}
+   <div className="lp-bar" role="img" aria-label={tt("{0} in ontwikkeling, {1} extra oefenen, {2} beheerst van {3}",count('in_progress'),count('review'),count('mastered'),active.length)}>
+    {(['mastered','in_progress','review'] as GoalStatus[]).map(s=><span key={s} className={'seg gs-'+s} style={{width:`${active.length?count(s)/active.length*100:0}%`}}/>)}
    </div>
    <div className="chipbar">{STATUSES.map(s=><button key={s} aria-pressed={fStatus===s} onClick={()=>setFStatus(fStatus===s?'all':s)}><span className={'dot gs-'+s}/>{GOAL_STATUS_LABEL[s]} ({count(s)})</button>)}</div>
-   <table className="lp-levels"><thead><tr><th>{tt("Niveau")}</th><th>{GOAL_STATUS_LABEL.covered}</th><th>{GOAL_STATUS_LABEL.in_progress}</th><th>{GOAL_STATUS_LABEL.mastered}</th><th>{tt("Totaal")}</th></tr></thead>
-    <tbody>{levelStats.map(x=><tr key={x.l} className={x.l===level?'current':''}><td><b>{x.l}</b></td><td>{x.c}</td><td>{x.p}</td><td>{x.m}</td><td className="muted">{x.n}</td></tr>)}</tbody></table>
+   <table className="lp-levels"><thead><tr><th>{tt("Niveau")}</th><th>{GOAL_STATUS_LABEL.in_progress}</th><th>{GOAL_STATUS_LABEL.review}</th><th>{GOAL_STATUS_LABEL.mastered}</th><th>{tt("Totaal")}</th></tr></thead>
+    <tbody>{levelStats.map(x=><tr key={x.l} className={x.l===level?'current':''}><td><b>{x.l}</b></td><td>{x.p}</td><td>{x.c}</td><td>{x.m}</td><td className="muted">{x.n}</td></tr>)}</tbody></table>
   </section>
 
   {/* today's lesson goals */}
@@ -122,7 +129,27 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
 
   <p className="muted small-print">{tt("Leerlijn volgens ERK/CEFR")} <InfoTip text={tt("Standaardleerlijn op basis van het ERK/CEFR (A0 is een optionele voorbereidende fase). Niveaus zijn richtpunten. Alleen de docent stelt de status vast; AI-voorstellen uit lesanalyses moet de docent eerst accepteren.")}/></p>
   {!byLevel.length&&<p className="muted">{tt("Geen onderwerpen gevonden met deze filters.")}</p>}
-  {byLevel.map(({l,items})=><section key={l} className="goal-level"><h4>{l}{l==='A0'&&<small className="muted"> {tt("(voorbereidend)")}</small>}{l===level&&<span className="tag">{tt("huidig niveau")}</span>}</h4>
+  {nt2&&<p className="lp-levelnote">{tt('Het taalniveau ({0}) is het algemene niveau. De status per onderwerp is de beheersing van die grammatica — ook een B1-leerling kan nog A1-grammatica oefenen.',level)}</p>}
+  {nt2?<>{NT2_STAGES.map(stage=>{const its=shown.filter(x=>NT2_BY_CODE.get((x.g as {code?:string}).code||'')?.stage===stage).sort((a,b)=>(NT2_BY_CODE.get((a.g as {code?:string}).code!)!.n)-(NT2_BY_CODE.get((b.g as {code?:string}).code!)!.n));if(!its.length)return null;
+   const done=its.filter(x=>x.status==='mastered').length;
+   return <details key={stage} className="nt2-stage" open={stage.endsWith(level)||stage.startsWith(level)}><summary><span className="nt2-stage-t">{tt(stage)}</span><span className="nt2-stage-n">{tt('{0} van {1} beheerst',done,its.length)}</span></summary>
+    <ol className="nt2-list">{its.map(x=>{const {g,p,status}=x;const t=NT2_BY_CODE.get((g as {code?:string}).code!)!;const m=memFor(t.code);const lines=(g.description||'').split('\n').filter(Boolean);
+     return <li key={g.id} className={'nt2-topic st-'+status}>
+      <div className="nt2-head">{teacher&&<input type="checkbox" checked={sel.has(g.id)} onChange={()=>toggle(g.id)} aria-label={tt("Selecteren")}/>}<span className="nt2-num">{t.level==='-'?'∞':t.n}</span>
+       <details className="nt2-more grow"><summary><b>{x.title}</b>{t.big&&<span className="tag">{tt('groot onderwerp')}</span>}</summary>
+        <ul className="nt2-sub">{lines.filter(l=>!l.startsWith('Didactiek:')).map(l=><li key={l}>{l.replace(/^• /,'')}</li>)}</ul>
+        {lines.filter(l=>l.startsWith('Didactiek:')).map(l=><p key={l} className="nt2-did">{l}</p>)}</details>
+       {teacher?<select className={'cell gsel gs-'+status} value={status} onChange={e=>void patch([g.id],{status:e.target.value as GoalStatus})} aria-label={tt("Status")}>{STATUSES.map(st=><option key={st} value={st}>{GOAL_STATUS_LABEL[st]}</option>)}</select>:<span className={'gstat gs-'+status}>{GOAL_STATUS_LABEL[status]}</span>}</div>
+      {(p&&status!=='not_started'||m.topic.length>0||m.errors.length>0)&&<div className="nt2-meta">
+       {p&&status!=='not_started'&&<span>{p.basis==='ai_confirmed'?tt("AI-voorstel, bevestigd door docent"):p.basis==='intake'?tt("Intake"):tt("Docent")}{p.lesson_date?' · '+niceDate(p.lesson_date):''}</span>}
+       {p?.lesson_refs?.length?<span>{tt("lessen: {0}",p.lesson_refs.slice(-3).map(d=>niceDate(d)).join(', '))}</span>:null}
+       {m.topic.map(z=><span key={z.key}>{tt('behandeld in {0} les(sen)',z.lessons_seen+z.clean_lessons)}{z.last_seen?' · '+tt('laatst {0}',niceDate(z.last_seen)):''}</span>)}
+       {m.errors.map(z=><span key={z.key} className="nt2-err">{tt('terugkerende fout: {0} ({1} lessen)',z.label,z.lessons_seen)}{z.last_clean?' · '+tt('daarna goed: {0}',niceDate(z.last_clean)):''}</span>)}
+      </div>}
+      {p?.note&&<small className="block lp-note">{p.note}</small>}
+     </li>})}</ol></details>})}
+   {shown.some(x=>!(x.g as {code?:string}).code)&&<section className="goal-level"><h4>{tt('Eigen onderwerpen')}</h4><ul>{shown.filter(x=>!(x.g as {code?:string}).code).map(x=><li key={x.g.id} className={'goal st-'+x.status}>{teacher&&<input type="checkbox" checked={sel.has(x.g.id)} onChange={()=>toggle(x.g.id)} aria-label={tt("Selecteren")}/>}<span className="grow"><b>{x.title}</b> <small className="muted">{x.level}</small></span>{teacher?<select className="cell" value={x.status} onChange={e=>void patch([x.g.id],{status:e.target.value as GoalStatus})}>{STATUSES.map(st=><option key={st} value={st}>{GOAL_STATUS_LABEL[st]}</option>)}</select>:<span className={'gstat gs-'+x.status}>{GOAL_STATUS_LABEL[x.status]}</span>}</li>)}</ul></section>}</>:
+  byLevel.map(({l,items})=><section key={l} className="goal-level"><h4>{l}{l==='A0'&&<small className="muted"> {tt("(voorbereidend)")}</small>}{l===level&&<span className="tag">{tt("huidig niveau")}</span>}</h4>
    {[...SKILLS].map(sk=>{const its=items.filter(x=>x.g.skill===sk);if(!its.length)return null;return <div key={sk} className="goal-skill"><span className="tag">{SKILL_LABEL[sk]}</span><ul>{its.map(x=>{const {g,p,status}=x;return <li key={g.id} className={'goal st-'+status+(x.hidden?' hidden-topic':'')}>
     {teacher&&<input type="checkbox" checked={sel.has(g.id)} onChange={()=>toggle(g.id)} aria-label={tt("Selecteren")}/>}
     <span className="grow"><b>{x.title}</b>{p?.title_override&&<small className="muted"> ({g.title})</small>}{g.owner_teacher&&<span className="tag own">{tt("eigen onderwerp")}</span>}{p?.level_override&&p.level_override!==g.level&&<span className="tag">{tt("verplaatst van {0}",g.level)}</span>}{x.hidden&&<span className="tag">{tt("verborgen")}</span>}

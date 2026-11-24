@@ -1,4 +1,5 @@
 'use client';
+import {planBlocks,type Focus} from '../lib/homework/plan';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Plus,Trash2,Search,Check,X,RotateCcw,Shuffle,Eye,Sparkles,Layers,ListChecks,Keyboard,Puzzle,Trophy,Flag} from 'lucide-react';
 import {niceDate} from '../lib/data';
@@ -272,67 +273,84 @@ async function saveSession(studentId:string,kind:string,score:number,total:numbe
 }
 
 /* ========================= Exercises (AI) ========================= */
-export type ExerciseItem={type:'multiple_choice'|'fill_in'|'translate'|'conjugate'|'correct_error'|'make_sentence'|'write'|'reading';prompt:string;passage:string;options:string[];answer:string;accept:string[];explanation:string};
-export type ExerciseSet={title:string;items:ExerciseItem[]};
-const KIND_LABELS:Record<string,string>=translated({woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invulzinnen',meerkeuze:'Meerkeuze',werkwoorden:'Werkwoorden vervoegen',fouten:'Fouten verbeteren',zinnen:'Zinnen maken',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'});
-
-/* v40: one compact card. "Vanuit mijn les" (default) = one chosen lesson with its approved summary, errors, words,
-   notes and the teacher's confirmed lesson topics. "Zelf kiezen" = exercise types (multi-select), level, duration, topic.
-   AI is only called on the button; the same choices give the same set again this session (no second AI call),
-   "Opnieuw genereren" asks for a new one. A second click while busy is ignored. */
+export type ExerciseItem={type:'multiple_choice'|'fill_in'|'translate'|'conjugate'|'correct_error'|'make_sentence'|'write'|'reading';prompt:string;passage:string;options:string[];answer:string;accept:string[];explanation:string;
+ /* v64 */ block?:number;topic?:string|null;open?:boolean};
+export type ExerciseSection={title:string;instruction:string;example:string;passage:string;topic:string|null;start:number};
+export type ExerciseSet={title:string;items:ExerciseItem[];sections?:ExerciseSection[]};
+const KIND_LABELS:Record<string,string>=translated({woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invulzinnen',meerkeuze:'Meerkeuze',werkwoorden:'Werkwoorden vervoegen',fouten:'Fouten verbeteren',zinnen:'Zinnen maken',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'});void KIND_LABELS;
+/* v64: the teacher chooses only level, duration and (optionally) a focus; the rest comes from the student's own data */
+const FOCUS_LABEL:Record<Focus,string>=translated({auto:'Automatisch gepersonaliseerd',last_lesson:'Laatste les herhalen',weak:'Zwakke punten oefenen',review:'Eerdere grammatica herhalen',vocab:'Woordenschat',topics:'Specifieke grammaticaonderwerpen'});
+const DURATIONS=[5,10,15,20,30,45];
 const exCache=new Map<string,ExerciseSet>();
 export function ExerciseForm({studentId,defaultLevel,onReady,teacher,initialTopic}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean;initialTopic?:string}){
- const [mode,setMode]=useState<'lesson'|'own'>(initialTopic?'own':'lesson');// v43: 'Oefen dit onderwerp' from a report presets the topic (AI only on the button)
- const [kinds,setKinds]=useState<string[]>(initialTopic?['grammatica']:['gemengd']);const [level,setLevel]=useState<string>(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState(initialTopic||'');const [minutes,setMinutes]=useState(10);
+ const [focus,setFocus]=useState<Focus>(initialTopic?'topics':'auto');
+ const [level,setLevel]=useState<string>(defaultLevel&&LEVELS.includes(defaultLevel as typeof LEVELS[number])?defaultLevel:'A2');const [topic,setTopic]=useState(initialTopic||'');const [minutes,setMinutes]=useState(10);
  const [lessons,setLessons]=useState<{date:string;report:boolean}[]|null>(null);const [lessonDate,setLessonDate]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');const [reused,setReused]=useState(false);const inFlight=useRef(false);
+ const [started,setStarted]=useState(0);const [tick,setTick]=useState(0);
  useEffect(()=>{let c=false;const db=supabase()!;void Promise.all([db.from('lesson_entries').select('lesson_date').eq('student_id',studentId).order('lesson_date',{ascending:false}).limit(30),db.rpc('student_lesson_summaries',{sid:studentId})]).then(([l,s])=>{if(c)return;
   const rep=new Set(((s.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date));const dates=Array.from(new Set([...rep,...((l.data||[]) as {lesson_date:string}[]).map(x=>x.lesson_date)])).sort().reverse().slice(0,30);
   setLessons(dates.map(d=>({date:d,report:rep.has(d)})));setLessonDate(d=>d||dates[0]||'')});return()=>{c=true}},[studentId]);
- const params=mode==='lesson'?{source:'lesson',kinds:['gemengd'],lessonDate:lessonDate||undefined,level,minutes}:{source:'own',kinds,level,minutes,topic:topic.trim()};
+ useEffect(()=>{if(!busy)return;const i=setInterval(()=>setTick(x=>x+1),500);return()=>clearInterval(i)},[busy]);
+ const plan=planBlocks(minutes,level,focus);
+ const params={focus,level,minutes,lessonDate:focus==='last_lesson'?lessonDate||undefined:undefined,topic:focus==='topics'?topic.trim():undefined};
  const key=studentId+'|'+JSON.stringify(params);
  async function go(force=false){if(inFlight.current)return;setErr('');setReused(false);
   if(!force&&exCache.has(key)){setReused(true);onReady(exCache.get(key)!);return}
-  inFlight.current=true;setBusy(true);try{const r=await authedPost<ExerciseSet>(supabase()!,'/api/ai/exercises',{studentId,...params});exCache.set(key,r);onReady(r)}catch(e){setErr(e instanceof Error?e.message:String(e))}inFlight.current=false;setBusy(false)}
- const kindOpts=Object.entries(KIND_LABELS).map(([k,l])=>({value:k,label:l}));
- return <div className="hw-card">
-  <div className="hw-head"><b><Sparkles size={16}/> {teacher?tt("Genereer huiswerk"):tt("Maak mijn huiswerk")}</b>
-   <div className="seg" role="group" aria-label={tt("Bron van de oefeningen")}><button type="button" aria-pressed={mode==='lesson'} onClick={()=>setMode('lesson')}>📚 {tt("Vanuit mijn les")}</button><button type="button" aria-pressed={mode==='own'} onClick={()=>setMode('own')}>✏️ {tt("Zelf kiezen")}</button></div></div>
+  inFlight.current=true;setBusy(true);setStarted(Date.now());try{const r=await authedPost<ExerciseSet>(supabase()!,'/api/ai/exercises',{studentId,...params});exCache.set(key,r);onReady(r)}catch(e){setErr(e instanceof Error?e.message:String(e))}inFlight.current=false;setBusy(false)}
+ const secs=busy?Math.round((Date.now()-started)/1000):0;void tick;
+ return <div className="hw-card hw64">
+  <div className="hw-head"><b><Sparkles size={16}/> {teacher?tt("Genereer huiswerk"):tt("Maak mijn huiswerk")}</b></div>
   <div className="hw-row">
-   {mode==='lesson'?(lessons&&!lessons.length?<span className="muted small">{tt("Nog geen lessen opgeslagen.")}</span>:
-    <Select<string> label={tt("Les")} value={lessonDate||null} placeholder={tt("Les kiezen…")} onChange={setLessonDate} icon={<CalendarDays size={15}/>}
-     options={(lessons||[]).map(x=>({value:x.date,label:niceDate(x.date),hint:x.report?tt("met lesverslag"):tt("alleen notities")}))}/>)
-    :<Select<string> label={tt("Oefentypes")} value={null} placeholder={tt("Oefentypes kiezen…")} options={kindOpts} onChange={()=>{}} icon={<ListChecks size={15}/>}
-      multi={{values:kinds,onToggle:k=>setKinds(x=>x.includes(k)?x.filter(y=>y!==k):[...x,k])}}/>}
+   <Select<Focus> label={tt("Focus")} value={focus} onChange={setFocus} options={(Object.keys(FOCUS_LABEL) as Focus[]).map(k=>({value:k,label:FOCUS_LABEL[k]}))} icon={<ListChecks size={15}/>}/>
    <Select<string> size="sm" label={tt("Niveau")} value={level} onChange={setLevel} options={LEVELS.map(l=>({value:l,label:l}))}/>
-   <Select<number> size="sm" label={tt("Duur")} value={minutes} onChange={setMinutes} icon={<Clock3 size={14}/>} options={[5,10,15,20,30].map(m=>({value:m,label:`${m} ${tt("min")}`}))}/>
+   <Select<number> size="sm" label={tt("Duur")} value={minutes} onChange={setMinutes} icon={<Clock3 size={14}/>} options={DURATIONS.map(m=>({value:m,label:`${m} ${tt("min")}`}))}/>
   </div>
-  {mode==='own'&&<input className="field compact" placeholder={tt("Onderwerp (optioneel), bijv. pretérito perfeito")} value={topic} onChange={e=>setTopic(e.target.value)} aria-label={tt("Onderwerp (optioneel)")}/>}
-  <div className="hw-actions"><button className="button" disabled={busy||(mode==='own'&&!kinds.length)||(mode==='lesson'&&lessons!==null&&!lessons.length)} onClick={()=>void go()}><Sparkles size={15}/> {busy?tt("Oefeningen maken…"):tt("Genereer oefeningen")}</button>
+  {focus==='last_lesson'&&(lessons&&!lessons.length?<span className="muted small">{tt("Nog geen lessen opgeslagen.")}</span>:
+   <Select<string> label={tt("Les")} value={lessonDate||null} placeholder={tt("Les kiezen…")} onChange={setLessonDate} icon={<CalendarDays size={15}/>} options={(lessons||[]).map(x=>({value:x.date,label:niceDate(x.date),hint:x.report?tt("met lesverslag"):tt("alleen notities")}))}/>)}
+  {focus==='topics'&&<input className="field compact" placeholder={tt("Onderwerp(en), bijv. perfectum; bijzinnen")} value={topic} onChange={e=>setTopic(e.target.value)} aria-label={tt("Onderwerp")}/>}
+  <p className="hw-plan muted small">{tt("{0} oefenblok(ken)",plan.reduce((n,b)=>n+b.weight,0))}{plan.some(b=>b.type==='reading')?' · '+tt('met leestekst en open vragen'):''}{plan.some(b=>b.type==='write')?' · '+tt('met schrijfopdracht'):''}</p>
+  <div className="hw-actions"><button className="button" disabled={busy||(focus==='topics'&&!topic.trim())||(focus==='last_lesson'&&lessons!==null&&!lessons.length)} onClick={()=>void go()}><Sparkles size={15}/> {busy?tt("Oefeningen maken…"):tt("Genereer oefeningen")}</button>
    {reused&&<button type="button" className="textlink" onClick={()=>void go(true)}>{tt("Opnieuw genereren")}</button>}
-   <InfoTip text={mode==='lesson'?tt("Gebaseerd op de gekozen les: goedgekeurd lesverslag, fouten, woorden, lesnotities en door de docent bevestigde lesonderwerpen. Door AI gemaakt."):tt("Gebaseerd op jouw woordenlijst, recente lesnotities en behandelde leerdoelen. Door AI gemaakt; controleer bij twijfel met je docent.")}/></div>
+   <InfoTip text={tt("Gebaseerd op de eigen lessen, fouten, woordenlijst en leerlijn van de leerling (40% recente grammatica, 30% zwakke punten, 20% herhaling, 10% woordenschat). De tijd bepaalt de hoeveelheid, het niveau het soort oefening. Door AI gemaakt.")}/></div>
+  {busy&&<div className="hw-progress" role="status"><div className="hw-progress-bar"><span style={{width:Math.min(95,secs*100/(8+plan.length*4))+'%'}}/></div><small className="muted">{tt("{0} oefenblokken worden tegelijk gemaakt en gecontroleerd… ({1} s)",plan.length,secs)}</small></div>}
   {reused&&<p className="muted small">{tt("Dezelfde keuzes als eerder: je ziet dezelfde oefeningen (geen nieuwe AI-aanvraag).")}</p>}
   {err&&<p className="notice">{err}</p>}
  </div>
 }
 
-/** Interactive player with feedback; stores the result as a practice session. */
+/** Interactive player with feedback; stores the result as a practice session. v64: instruction + example per block,
+ *  open answers checked by AI (several correct formulations accepted) with what went well / what to improve / a
+ *  correct example / the rule. */
+type Fb={index:number;ok:boolean;good:string;improve:string;example:string;rule:string};
 export function ExercisePlayer({set,studentId,kind='exercise',assignmentId,onFinish}:{set:ExerciseSet;studentId:string;kind?:'exercise'|'homework';assignmentId?:string|null;onFinish:(score:number,total:number,answers:string[])=>void}){
  const [answers,setAnswers]=useState<string[]>(set.items.map(()=>''));const [checked,setChecked]=useState(false);const started=useRef(Date.now());
- const auto=(it:ExerciseItem)=>it.type!=='write'&&it.type!=='make_sentence';
- const results=set.items.map((it,i)=>auto(it)?checkText(answers[i],[it.answer,...(it.accept||[])]):null);
- const score=results.filter(r=>r==='correct'||r==='accent').length,total=set.items.filter(auto).length;
- async function check(){setChecked(true);await saveSession(studentId,kind,score,total,started.current,{title:set.title,items:set.items.map((it,i)=>({prompt:it.prompt,given:answers[i],answer:it.answer,result:results[i]}))},assignmentId);onFinish(score,total,answers)}
+ const [fb,setFb]=useState<Record<number,Fb>>({});const [fbBusy,setFbBusy]=useState(false);
+ const isOpen=(it:ExerciseItem)=>!!it.open||it.type==='write'||it.type==='make_sentence'||it.type==='reading';
+ const results=set.items.map((it,i)=>!isOpen(it)?checkText(answers[i],[it.answer,...(it.accept||[])]):null);
+ const openOk=Object.values(fb).filter(x=>x.ok).length,openN=Object.keys(fb).length;
+ const score=results.filter(r=>r==='correct'||r==='accent').length+openOk,total=set.items.filter(it=>!isOpen(it)).length+openN;
+ async function check(){setChecked(true);
+  const open=set.items.map((it,i)=>({it,i})).filter(({it,i})=>isOpen(it)&&answers[i].trim());let fbs:Record<number,Fb>={};
+  if(open.length){setFbBusy(true);try{const r=await authedPost<{feedback:Fb[]}>(supabase()!,'/api/ai/exercises',{studentId,action:'feedback',items:open.map(({it,i})=>({prompt:(set.sections?.[it.block??-1]?.passage?'['+tt('leestekst')+'] ':'')+it.prompt,answer:it.answer,given:answers[i]}))});
+   for(const x of r.feedback||[]){const o=open[x.index];if(o)fbs[o.i]=x}setFb(fbs)}catch{/* model answers are still shown */}setFbBusy(false)}
+  const ok=Object.values(fbs).filter(x=>x.ok).length;
+  const sc=results.filter(r=>r==='correct'||r==='accent').length+ok,tot=set.items.filter(it=>!isOpen(it)).length+Object.keys(fbs).length;
+  await saveSession(studentId,kind,sc,tot,started.current,{title:set.title,items:set.items.map((it,i)=>({prompt:it.prompt,given:answers[i],answer:it.answer,topic:it.topic||null,result:results[i]??(fbs[i]?(fbs[i].ok?'correct':'wrong'):null)}))},assignmentId);onFinish(sc,tot,answers)}
  return <div className="exercise-player"><h3>{set.title}</h3>
-  {set.items.map((it,i)=><div key={i} className={'ex-item'+(checked&&results[i]?' r-'+results[i]:'')}>
+  {set.items.map((it,i)=>{const sec=it.block!=null&&set.sections?set.sections[it.block]:null;const first=sec&&set.sections!.findIndex(x=>x===sec)===it.block&&(i===0||set.items[i-1].block!==it.block);const f=fb[i];
+   return <div key={i}>{first&&<div className="ex-section"><h4>{sec!.title}</h4><p>{sec!.instruction}</p>{sec!.example&&<p className="ex-example"><b>{tt("Voorbeeld:")}</b> {sec!.example}</p>}{sec!.passage&&<blockquote className="passage">{sec!.passage}</blockquote>}</div>}
+   <div className={'ex-item'+(checked&&results[i]?' r-'+results[i]:'')+(f?' r-'+(f.ok?'correct':'wrong'):'')}>
    <div className="ex-num">{i+1}</div><div className="grow">
     {it.passage&&<blockquote className="passage">{it.passage}</blockquote>}
     <p className="ex-prompt">{it.prompt}</p>
     {it.type==='multiple_choice'&&it.options.length?<div className="quiz-opts small">{it.options.map(o=><button key={o} disabled={checked} className={'quiz-opt'+(answers[i]===o?' chosen':'')+(checked&&o===it.answer?' right':'')} onClick={()=>setAnswers(a=>a.map((x,j)=>j===i?o:x))}>{o}</button>)}</div>
-     :(it.type==='write'||it.type==='make_sentence'||it.type==='correct_error')?<textarea className="field" rows={3} disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>
+     :(isOpen(it)||it.type==='correct_error')?<textarea className="field" rows={it.type==='write'?7:it.type==='reading'?3:2} disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>
      :<input className="field" disabled={checked} value={answers[i]} onChange={e=>setAnswers(a=>a.map((x,j)=>j===i?e.target.value:x))}/>}
-    {checked&&<p className="ex-feedback">{results[i]==='correct'?tt("✓ Goed"):results[i]==='accent'?tt("≈ Bijna (accenten)"):results[i]==='wrong'?<>{tt("✗ Juist:")} <b>{it.answer}</b></>:<>{tt("Voorbeeldantwoord:")} <i>{it.answer}</i></>}{it.explanation&&<small className="block">{it.explanation}</small>}</p>}
-   </div></div>)}
-  {!checked?<button className="button" onClick={()=>void check()}><Check size={16}/> {tt("Nakijken")}</button>:<div className="game-result"><Trophy size={18}/> {tt("{0} van {1} automatisch nagekeken vragen goed", score, total)}{set.items.length>total?tt(" · {0} schrijfopdracht(en) met voorbeeldantwoord", set.items.length-total):''}</div>}
+    {checked&&!isOpen(it)&&<p className="ex-feedback">{results[i]==='correct'?tt("✓ Goed"):results[i]==='accent'?tt("≈ Bijna (accenten)"):<>{tt("✗ Juist:")} <b>{it.answer}</b></>}{it.explanation&&<small className="block">{it.explanation}</small>}</p>}
+    {checked&&isOpen(it)&&(f?<div className="ex-fb">{f.ok?<b className="ok">{tt("✓ Goed")}</b>:<b className="bad">{tt("Nog niet helemaal")}</b>}{f.good&&<p><b>{tt("Wat goed ging:")}</b> {f.good}</p>}{f.improve&&<p><b>{tt("Wat beter kan:")}</b> {f.improve}</p>}{f.example&&<p><b>{tt("Voorbeeld:")}</b> <i>{f.example}</i></p>}{f.rule&&<p className="muted small">{f.rule}</p>}</div>
+     :<p className="ex-feedback">{fbBusy?tt("Feedback wordt gemaakt…"):<>{tt("Voorbeeldantwoord:")} <i>{it.answer}</i></>}{it.explanation&&<small className="block">{it.explanation}</small>}</p>)}
+   </div></div></div>})}
+  {!checked?<button className="button" onClick={()=>void check()}><Check size={16}/> {tt("Nakijken")}</button>:<div className="game-result"><Trophy size={18}/> {tt("{0} van {1} goed",score,total)}</div>}
  </div>
 }
 

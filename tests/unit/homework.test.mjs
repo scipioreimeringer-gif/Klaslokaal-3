@@ -44,16 +44,18 @@ test('AI proposal for "Lesonderwerpen" comes from the analysis itself (no extra 
 
 test('route: "Vanuit mijn les" uses the chosen lesson (or the latest) as the source', () => {
   const r = read('app/api/ai/exercises/route.ts');
-  assert.match(r, /const fromLesson = body\.source === 'lesson';/);
-  assert.match(r, /summaries\.filter\(s => s\.lesson_date === lessonDate\) : summaries\.slice\(0, 1\)/);
+  // v64: "Laatste les herhalen" (focus last_lesson; old clients: source=lesson) uses the chosen lesson or the latest
+  assert.match(r, /body\.source === 'lesson' \? 'last_lesson'/);
+  assert.match(r, /focus === 'last_lesson' \? \(lessonDate \? summaries\.filter\(s => s\.lesson_date === lessonDate\) : summaries\.slice\(0, 1\)\)/);
   assert.match(r, /lessonMaterial\(picked\.map\(s => s\.final\)\)/);
   assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\)/, 'usage limit still applies');
 });
 test('form: compact card, default "Vanuit mijn les", 5–30 min, all exercise types, AI only on the button, no double request, reuse', () => {
   const l = read('components/Learning.tsx');
-  assert.match(l, /useState<'lesson'\|'own'>\(initialTopic\?'own':'lesson'\)/, 'v43: default Vanuit mijn les, unless opened from a report topic');
-  assert.match(l, /\[5,10,15,20,30\]/);
-  for (const k of ['woordenschat', 'grammatica', 'vertalen', 'invullen', 'meerkeuze', 'werkwoorden', 'fouten', 'zinnen', 'schrijven', 'lezen', 'gemengd']) assert.ok(l.includes(k + ':'), k);
+  // v64: focus (default automatic; a report topic presets specific topics), level, duration 5–45 min
+  assert.match(l, /useState<Focus>\(initialTopic\?'topics':'auto'\)/);
+  assert.match(l, /const DURATIONS=\[5,10,15,20,30,45\]/);
+  for (const k of ['auto', 'last_lesson', 'weak', 'review', 'vocab', 'topics']) assert.ok(l.includes(k + ':'), k);
   assert.match(l, /if\(inFlight\.current\)return;/, 'double click ignored');
   assert.match(l, /if\(!force&&exCache\.has\(key\)\)\{setReused\(true\)/, 'same choices → same set, no AI call');
   const f = l.slice(l.indexOf('export function ExerciseForm'), l.indexOf('export function ExercisePlayer'));
