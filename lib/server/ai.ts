@@ -71,7 +71,7 @@ async function logUsage(ctx: UsageCtx, model: string, input: number, output: num
   await ctx.db.from('ai_usage').insert({user_id: ctx.userId, student_id: ctx.studentId || null, kind, model, input_tokens: input, output_tokens: output, audio_seconds: audioSeconds, cost_usd: Number(estimateCost(model, input, output, audioSeconds).toFixed(5)), cached: !!ctx.cached});
 }
 /** Daily limits per user (non-cached calls). Configurable via env AI_DAILY_LIMITS='{"translate":400}'. */
-const DEFAULT_LIMITS: Record<UsageKind, number> = {translate: 400, tidy: 30, analysis: 15, transcription: 40, exercises: 40, prepare: 30, assistant: 60, vocab: 250, games: 60};
+const DEFAULT_LIMITS: Record<UsageKind, number> = {translate: 400, tidy: 30, analysis: 15, transcription: 40, exercises: 200 /* v66: counts AI calls; one homework = 4–6 small calls (blocks + review), so ≈ 40 homework sets */, prepare: 30, assistant: 60, vocab: 250, games: 60};
 export async function enforceLimit(db: SupabaseClient, userId: string, kind: UsageKind) {
   let limits = DEFAULT_LIMITS;
   try { limits = {...DEFAULT_LIMITS, ...JSON.parse(process.env.AI_DAILY_LIMITS || '{}')}; } catch { /* keep defaults */ }
