@@ -10,6 +10,7 @@ import {parseUtterances, wordCount, type Topic, type HistoryItem, type RawChunk}
 import {runPipeline, PIPELINE_VERSION, type Ask, type Store, type AnalysisV2, type Stage} from '../analysis/pipeline';
 import {detectCanvasVocab} from './vocab';
 import {publishable} from '../analysis/catchup';
+import {applyMemory} from './memory';
 import {normTerm} from '../vocab/core';
 
 export const LANG_GUIDE: Record<string, string> = {
@@ -141,6 +142,8 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
     }, ask, store);
     if (studentSeconds !== null && res.doc) { const d = {...res.doc, student_speaking_seconds: studentSeconds}; await db.from('lesson_analyses').update(test ? {draft: d} : {draft: d, final: d}).eq('id', analysisId); }
     paused = res.state === 'paused';
+    // v60: the student's AI memory learns from this report (no extra AI call; idempotent; never fails the analysis)
+    if (res.state === 'done' && res.doc && !test && publishable(res.doc)) await applyMemory(db, student.id, analysisId, a.lesson_date, res.doc).catch(() => undefined);
     if (res.state === 'done' && res.doc && !test) await syncVocabulary(db, student, res.doc, {userId: opts.userId, ui: opts.ui, lessonDate: a.lesson_date, lessonId: a.lesson_id || null, known: knownWords}).catch(() => undefined); // never fails the analysis
   } catch (e) {
     await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', error: (e instanceof Error ? e.message : 'Onbekende fout').slice(0, 500)}).eq('id', analysisId);

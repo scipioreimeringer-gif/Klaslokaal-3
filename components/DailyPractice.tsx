@@ -21,17 +21,21 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
   const [d, setD] = useState<DailyData | null>(null);
   const load = useCallback(async () => {
     const db = supabase()!, day = today();
-    const [v, s, a, st, ps] = await Promise.all([
+    const [v, s, a, st, ps, mf] = await Promise.all([
       db.from('vocab_items').select('id,term,translation,example,pos,status,due_at,difficult,wrong_count,streak,last_practiced_at,lesson_date').eq('student_id', studentId),
       db.rpc('student_lesson_summaries', {sid: studentId}),
       db.from('assignments').select('id,title,exercises,published_at').eq('student_id', studentId).not('published_at', 'is', null),
       db.from('practice_items').select('item_key,streak,wrong_count,due_at,last_practiced_at').eq('student_id', studentId),
       db.from('practice_sessions').select('created_at,score,total,details').eq('student_id', studentId).eq('kind', 'daily').order('created_at', {ascending: false}).limit(120),
+      db.rpc('memory_focus', {sid: studentId}),
     ]);
+    // v60: AI memory — mistakes of points that need practice across lessons come first; mastered points less often
+    const focus = new Map(((mf.error ? [] : mf.data || []) as {key: string; status: string}[]).map(f => [f.key, f.status]));
+    const weight = (k: string, r: number) => { const f = focus.get(k); return f === 'review' || f === 'learning' ? r + 3 : f === 'mastered' ? Math.max(1, r - 1) : r; };
     // only mistakes the teacher APPROVED (older reports: already approved), never "for later" material
     const mistakes: Mistake[] = ((s.data || []) as {id: string; lesson_date: string; final: unknown}[]).flatMap(r =>
       errorsOf(r.final as never).filter(e => e.status !== 'rejected' && !e.later && e.original && e.corrected) // v56: reports are published without approval; only errors the teacher removed are left out
-        .map(e => ({key: `err:${r.id}:${e.id}`.slice(0, 200), original: e.original, corrected: e.corrected, why: e.why, type: e.type, label: e.category, repeats: e.repeats, lesson_date: r.lesson_date})));
+        .map(e => ({key: `err:${r.id}:${e.id}`.slice(0, 200), original: e.original, corrected: e.corrected, why: e.why, type: e.type, label: e.category, repeats: weight(e.category_key, e.repeats || 1), lesson_date: r.lesson_date})));
     const homework: HwItem[] = ((a.data || []) as {id: string; title: string; exercises: {items?: {type: string; prompt: string; options?: string[]; answer?: string; accept?: string[]; explanation?: string}[]} | null}[])
       .flatMap(x => (x.exercises?.items || []).map((it, i) => ({it, i, x})))
       .filter(({it}) => ['multiple_choice', 'fill_in', 'conjugate', 'translate'].includes(it.type) && (it.answer || '').trim() && it.prompt)

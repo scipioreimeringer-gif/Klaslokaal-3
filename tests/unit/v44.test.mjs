@@ -16,7 +16,7 @@ const ws = read('components/StudentData.tsx');
 test('old deep links keep working: analyses → Lessen, doelen → Voortgang for a student, unknown → Home', () => {
   assert.match(ws, /const x=t==='analyses'\?'lessen':t==='taken'\?'huiswerk':t\|\|'overzicht';/);
   assert.match(ws, /if\(viewer==='student'&&x==='doelen'\)return 'voortgang';/);
-  assert.match(ws, /if\(viewer==='student'&&x==='prive'\)return 'overzicht';/, 'private notes never for a student');
+  assert.match(ws, /if\(viewer==='student'&&\(x==='prive'\|\|x==='geheugen'\)\)return 'overzicht';/, 'private notes and the AI memory never for a student');
   assert.match(ws, /setManage\(initialTab==='analyses'\)/, 'the teacher dashboard link "AI-analyses" opens the report overview');
   assert.match(ws, /\{tab==='doelen'&&viewer==='teacher'&&/, 'Leerpad only for the teacher');
   assert.match(ws, /<a className="tabs-live" href=\{'\/klaslokaal\/live\?student='\+encodeURIComponent\(studentId\)\}/, 'live classroom always visible');

@@ -31,7 +31,7 @@ test('cards: Huiswerk, Flashcards, Laatste les, Oefenen — short labels, progre
 test('navigation (v44): five main tabs per role, the rest under "Meer"; old routes still lead somewhere', () => {
   const ws = read('components/StudentData.tsx');
   assert.match(ws, /main:\[\['overzicht','Home',House\],\['lessen','Lessen',History\],\['woorden','Woorden',Languages\],\['huiswerk','Huiswerk',ClipboardList\],\['doelen','Leerpad',Route\]\]/);
-  assert.match(ws, /more:\[\['bord','Bord',PenLine\],\['opnames','Opnames',Mic\],\['prive','Privé',Lock\]\]/);
+  assert.match(ws, /more:\[\['geheugen','AI-geheugen',Brain\],\['bord','Bord',PenLine\],\['opnames','Opnames',Mic\],\['prive','Privé',Lock\]\]/); // v60: + AI-geheugen
   assert.match(ws, /main:\[\['overzicht','Home',House\],\['lessen','Mijn lessen',History\],\['woorden','Woorden',Languages\],\['huiswerk','Huiswerk',ClipboardList\],\['voortgang','Voortgang',TrendingUp\]\]/);
   assert.match(ws, /more:\[\['oefenen','Oefenen',Gamepad2\],\['bord','Bord',PenLine\],\['opnames','Opnames',Mic\]\]/);
   assert.match(ws, /aria-haspopup="menu"/);

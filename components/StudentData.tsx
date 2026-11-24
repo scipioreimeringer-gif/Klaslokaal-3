@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {BookOpenCheck,Clock3,ClipboardList,Languages,Lock,Mic,Trash2,Play,Search,History,NotebookPen,PenLine,House,Route,MoreHorizontal} from 'lucide-react';
+import {BookOpenCheck,Clock3,ClipboardList,Languages,Lock,Mic,Trash2,Play,Search,History,NotebookPen,PenLine,House,Route,MoreHorizontal,Brain} from 'lucide-react';
+import {MemoryPanel} from './Memory';
 import {supabase} from '../lib/supabase';
 import {allWords,deleteRecording,duration,loadStudentBundle,niceDate,recordingUrl,type BoardData,type ClassroomState,type LessonEntry,type Recording} from '../lib/data';
 import Homework from '../app/huiswerk-client';
@@ -143,14 +144,14 @@ export function PrivateNotes({studentId}:{studentId:string}){
  return <div className="private-notes"><div className="row between"><h3><Lock size={16}/> {t("Privénotities")}</h3><small className="muted" role="status">{status}</small></div><textarea className="field" disabled={!ready} value={notes} onChange={e=>setNotes(e.target.value)} placeholder={t("Observaties, aandachtspunten, plan voor de volgende les… De leerling kan dit nooit zien.")}/></div>
 }
 
-type Tab='overzicht'|'lessen'|'woorden'|'huiswerk'|'doelen'|'voortgang'|'oefenen'|'bord'|'opnames'|'prive';
+type Tab='overzicht'|'lessen'|'woorden'|'huiswerk'|'doelen'|'voortgang'|'oefenen'|'bord'|'opnames'|'prive'|'geheugen';
 type WsStudent={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
 type TabDef=[Tab,string,typeof History];
 /** v44: five main tabs per role; everything else under "Meer" (no function removed). */
 export function workspaceTabs(viewer:'teacher'|'student'):{main:TabDef[];more:TabDef[]}{
  return viewer==='teacher'
   ?{main:[['overzicht','Home',House],['lessen','Lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['doelen','Leerpad',Route]],
-    more:[['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
+    more:[['geheugen','AI-geheugen',Brain],['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
   :{main:[['overzicht','Home',House],['lessen','Mijn lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['voortgang','Voortgang',TrendingUp]],
     more:[['oefenen','Oefenen',Gamepad2],['bord','Bord',PenLine],['opnames','Opnames',Mic]]};
 }
@@ -159,7 +160,7 @@ export function normalizeTab(t:string|null|undefined,viewer:'teacher'|'student')
  const x=t==='analyses'?'lessen':t==='taken'?'huiswerk':t||'overzicht';
  if(viewer==='student'&&x==='doelen')return 'voortgang';
  if(viewer==='teacher'&&(x==='voortgang'||x==='oefenen'))return x==='voortgang'?'doelen':'overzicht';
- if(viewer==='student'&&x==='prive')return 'overzicht';
+ if(viewer==='student'&&(x==='prive'||x==='geheugen'))return 'overzicht';
  const {main,more}=workspaceTabs(viewer);return [...main,...more].some(d=>d[0]===x)?x as Tab:'overzicht';
 }
 export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{studentId:string;viewer:'teacher'|'student';intro?:React.ReactNode;student?:WsStudent;initialTab?:string|null}){
@@ -197,6 +198,7 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}
   {tab==='opnames'&&<section className="card"><h3>{t("Lesopnames")}</h3><RecordingList items={b.recordings} viewer={viewer} onChange={()=>void load()} onOpenAnalyses={()=>{setTab('lessen');setManage(true)}}/></section>}
+  {tab==='geheugen'&&viewer==='teacher'&&<MemoryPanel studentId={studentId}/>}
   {tab==='prive'&&viewer==='teacher'&&<section className="card private"><PrivateNotes studentId={studentId}/></section>}
   </>}
  </div>

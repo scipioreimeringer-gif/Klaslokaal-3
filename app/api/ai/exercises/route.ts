@@ -39,6 +39,9 @@ export async function POST(req: Request) {
       db.rpc('student_lesson_summaries', {sid: student.id}).then(r => (r.data || []) as {lesson_date: string; final: unknown}[]),
       db.from('practice_sessions').select('details').eq('student_id', student.id).order('created_at', {ascending: false}).limit(10).then(r => r.data || []),
     ]);
+    // v60: the AI memory — what needs work (focus) and what is already mastered (avoid only easy repeats)
+    const focus = await db.rpc('memory_focus', {sid: student.id}).then(r => (r.error ? [] : r.data || []) as {label: string; status: string}[], () => []);
+    const needs = focus.filter(f => ['review', 'learning', 'new'].includes(f.status)).map(f => f.label), mastered = focus.filter(f => f.status === 'mastered' || f.status === 'fair').map(f => f.label);
     // v40 "Vanuit mijn les": the chosen lesson (or the latest) is THE source; otherwise all approved summaries.
     // Both analysis versions are read (v2 errors used to be ignored), teacher-confirmed lesson topics first.
     const fromLesson = body.source === 'lesson';
@@ -54,6 +57,8 @@ export async function POST(req: Request) {
       `Student vocabulary (prefer new/practicing and often-wrong words): ${vocab.map(v => `${v.term} = ${v.translation} [${v.status}${v.wrong_count ? ', ' + v.wrong_count + '× fout' : ''}]`).join('; ') || '(none yet)'}`,
       `Student's own past errors (teacher-approved): ${corrections.map(c => c.corrected ? `"${c.original}" → "${c.corrected}"${c.category ? ' [' + c.category + ']' : ''}` : `"${c.original}"`).join('; ') || '(none)'}`,
       `Grammar covered: ${grammar.join('; ') || '(none)'}`,
+      needs.length ? `Student memory — points that need practice across lessons (prioritise these): ${needs.join('; ')}` : '',
+      mastered.length ? `Student memory — already (fairly) mastered: ${mastered.join('; ')}. Do not give only easy items on these; use them in harder, mixed items.` : '',
       fromLesson ? `This homework is about ONE lesson${lessonDate ? ' (' + lessonDate + ')' : ' (the latest)'}: use only material covered in that lesson.` : '',
       mat.vocab.length ? `Words from that lesson: ${mat.vocab.join(', ')}` : '',
       mat.repeat.length ? `Recurring points to repeat: ${mat.repeat.join('; ')}` : '',
