@@ -2,7 +2,7 @@
 // Lesson agenda (v30): planned lessons per teacher–student relation, shown in each viewer's own time zone.
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
-import {CalendarDays,CalendarPlus,ChevronLeft,ChevronRight,Clock,Video,X,Repeat,Sparkles,Mic,FileText,ClipboardList,Pencil,Ban,Presentation,GraduationCap,UserRound,Plus,Trash2} from 'lucide-react';
+import {Check,CalendarDays,CalendarPlus,ChevronLeft,ChevronRight,Clock,Video,X,Repeat,Sparkles,Mic,FileText,ClipboardList,Pencil,Ban,Presentation,GraduationCap,UserRound,Plus,Trash2} from 'lucide-react';
 import {mergeAgenda,applyFilter,readFilter,overlaps,spreadByDay,FILTERS,PERSONAL_COLUMNS,type AgendaItem,type AgendaKind,type AgendaFilter,type PersonalEvent} from '../lib/agenda';
 import {googleTemplateUrl,outlookUrl,icsFile,type ExtraItem} from '../lib/gcal/items';
 import {supabase} from '../lib/supabase';
@@ -168,10 +168,10 @@ export function AgendaView({openNew,openId}:{openNew?:boolean;openId?:string|nul
    {days.map(d=>{const list=groups.get(d)||[];const out=view==='month'&&d.slice(0,7)!==anchor.slice(0,7);return <div key={d} className={'agenda-day'+(d===today?' today':'')+(out?' out':'')}>
     <div className="agenda-dhead"><span>{view==='month'?Number(d.slice(8)):fmtDay(d,{weekday:'short',day:'numeric',month:'short'})}</span>{canTeach&&ready&&<button className="iconbtn tiny" title={t('Les inplannen')} aria-label={t('Les inplannen')} onClick={()=>setForm({day:d})}>+</button>}</div>
     {list.map(i=>{const blk=i.kind==='personal'&&i.event.kind==='block';const I=blk?Ban:KIND_ICON[i.kind];const lbl=blk?t('Geblokkeerd'):kindLabel(i.kind);const rel=i.kind==='personal'?undefined:relations.get(i.lesson.student_id);const st=i.kind==='personal'?(Date.parse(i.ends_at)<=now?'completed':'scheduled'):lessonState(i.lesson,now);const lang=i.kind==='personal'?'':langOf(i.lesson,rel);const text=itemText(i,rel,teacherName);
-     return <button key={i.key} className={'agenda-item k-'+i.kind+(blk?' k-block':'')+' '+st} onClick={()=>setOpen(i)} title={lbl+' · '+text} aria-label={lbl+' · '+text+' · '+clock(i.starts_at,tz)}>
+     return <button key={i.key} className={'agenda-item k-'+i.kind+(blk?' k-block':'')+(i.kind==='teach'?' pay-'+(i.lesson.payment_status==='paid'?'paid':i.lesson.payment_status==='open'||i.lesson.payment_status==='reported'?'open':'unknown'):'')+(i.kind!=='personal'&&i.lesson.status==='completed'?' is-done':'')+' '+st} onClick={()=>setOpen(i)} title={lbl+' · '+text} aria-label={lbl+' · '+text+' · '+clock(i.starts_at,tz)}>
      <span className="ai-time">{blk&&(dayKey(i.starts_at,tz)<d||clock(i.starts_at,tz)==='00:00')&&(dayKey(Date.parse(i.ends_at)-1,tz)>d||clock(i.ends_at,tz)==='00:00')?t('Hele dag'):<>{clock(i.starts_at,tz)}{view!=='month'&&'–'+clock(i.ends_at,tz)}</>}</span>
      <span className="ai-who"><I size={13} aria-hidden className="ai-kind"/>{view!=='month'&&<span className="ai-role">{lbl} ·</span>} {lang&&<Flag code={lang} size={14}/>} {text}</span>
-     {i.kind!=='personal'&&i.lesson.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}{i.kind!=='personal'&&<PayIcon status={i.lesson.payment_status}/>}</button>})}
+     {i.kind!=='personal'&&i.lesson.series_id&&view!=='month'&&<Repeat size={12} aria-label={t('Wekelijks')}/>}{i.kind!=='personal'&&i.lesson.payment_status==='reported'&&<PayIcon status="reported"/>}{i.kind!=='personal'&&i.lesson.status==='completed'&&<span className="done-check" title={t('Les afgerond')} aria-label={t('Les afgerond')}><Check size={16} strokeWidth={3.4}/></span>}</button>})}
     {!list.length&&view!=='month'&&<p className="agenda-none">{t('Geen afspraken')}</p>}
    </div>})}
   </div>}

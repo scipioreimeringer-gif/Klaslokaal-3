@@ -37,7 +37,7 @@ test('payment tasks: from data, one per lesson/package, gone once confirmed', ()
 
 test('wiring: compact icon, details block, finance card, page, nothing to Google', () => {
   const a = read('components/Agenda.tsx');
-  assert.match(a, /<PayIcon status=\{i\.lesson\.payment_status\}\/>/); assert.match(a, /<LessonPayment lesson=\{l\} mode=\{mode\}/);
+  assert.match(a, /' pay-'\+\(i\.lesson\.payment_status==='paid'\?'paid'/); assert.match(a, /className="done-check" title=\{t\('Les afgerond'\)\}/); // v63: colours by payment + completion check assert.match(a, /<LessonPayment lesson=\{l\} mode=\{mode\}/);
   assert.match(read('app/page.tsx'), /<FinanceCard\/>/);
   assert.ok(!/payment|price_cents/.test(read('lib/gcal/map.ts') + read('lib/gcal/items.ts')), 'calendar events never contain payment data');
 });

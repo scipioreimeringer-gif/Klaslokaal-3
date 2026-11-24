@@ -12,7 +12,7 @@ import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
 import {MyLanguages} from '../components/Languages';
 import {NextLessonPanel} from '../components/Agenda';
-import {FinanceCard} from '../components/Payments';
+import {FinanceCard,StudentPayments} from '../components/Payments';
 import {ReadyForYou} from '../components/ReadyForYou';
 import {DailyCard} from '../components/DailyPractice';
 import {readyFor} from '../lib/ready';
@@ -104,7 +104,7 @@ function StudentHome(){
  async function leave(id:string,name:string){if(!confirm(t("Weet je zeker dat je deze docent wilt ontkoppelen?")+'\n\n'+name+'\n'+t("Er wordt niets verwijderd. Je ziet de lessen van deze docent niet meer en kunt niet meer in dit klaslokaal. Je docent kan je later opnieuw uitnodigen.")))return;
   const {error}=await supabase()!.rpc('student_leave_teacher',{target:id});setUnlinkMsg(error?error.message:t("Koppeling beëindigd."));if(!error)await refresh()}
  const pr=d.practice.filter(p=>p.total>0);const avg=pr.length?Math.round(pr.reduce((n,p)=>n+p.score,0)/Math.max(1,pr.reduce((n,p)=>n+p.total,0))*100):null;
- return <><PendingLinks/><NextLessonPanel mode="student"/>
+ return <><PendingLinks/><NextLessonPanel mode="student"/><StudentPayments/>
   {/* v46 phase 3: daily practice per lesson relation (own material only) */}
   {studentLinks.length>0&&<div className="dp-grid">{studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);return <DailyCard key={s.id} studentId={s.id} level={rec?.level||null} label={studentLinks.length>1?[rec?languageName(langOf(rec)):s.subject,s.teacher_name].filter(Boolean).join(" · "):undefined}/>})}</div>}
   <ReadyForYou items={d.loaded?readyFor(d):null} relations={studentLinks.map(s=>{const rec=d.students.find(x=>x.id===s.id);return {id:s.id,label:[s.subject||t("Les"),s.teacher_name].filter(Boolean).join(' · '),lang:rec?langOf(rec):undefined,level:rec?.level||null,teacher:s.teacher_name||undefined}})}/>
