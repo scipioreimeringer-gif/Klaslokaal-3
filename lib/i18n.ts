@@ -38,3 +38,10 @@ export function t(nl: string, ...args: unknown[]): string {
   if (current !== 'nl' && M) { const row = M[nl]; if (row && row[ROW[current]]) s = row[ROW[current]]; }
   return args.length ? s.replace(/\{(\d+)\}/g, (_, i) => String(args[+i] ?? '')) : s;
 }
+/** v67: translate into a given language (the explanation language of practice feedback), independent of the
+ *  interface language. Call loadMessages() first for a language other than Dutch. */
+export function tIn(lang: string, nl: string, ...args: unknown[]): string {
+  let s = nl;
+  if (lang !== 'nl' && isLang(lang) && M) { const row = M[nl]; if (row && row[ROW[lang as Exclude<Lang, 'nl'>]]) s = row[ROW[lang as Exclude<Lang, 'nl'>]]; }
+  return args.length ? s.replace(/\{(\d+)\}/g, (_, i) => String(args[+i] ?? '')) : s;
+}

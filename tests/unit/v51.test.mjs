@@ -49,7 +49,7 @@ test('Portuguese and Dutch: correct forms, unambiguous (time marker), every choo
   assert.equal(pt.find(g => g.key === 'gr:pt:cj:ter:pres:3').answers[0], 'têm');
   assert.equal(nl.find(g => g.key === 'gr:nl:ch:gaan:perf:0').prompt, 'Ik ___ gisteren naar de markt gegaan.');
   assert.deepEqual(nl.find(g => g.key === 'gr:nl:ch:gaan:perf:0').answers, ['ben']);
-  assert.deepEqual(nl.find(g => g.key === 'gr:nl:ch:werken:perf:2').options, ['heeft', 'is']);
+  assert.deepEqual(nl.find(g => g.key === 'gr:nl:ch:werken:perf:2').options, ['heeft', 'is', 'heb', 'ben']); // v67: four options
   assert.equal(nl.find(g => g.key === 'gr:nl:fi:wonen:imp:4').prompt, 'Mijn ouders _____ vroeger in Utrecht.');
   for (const g of [...pt, ...nl]) {
     if (g.options) { assert.equal(new Set(g.options).size, g.options.length, 'no duplicate option ' + g.key); assert.equal(g.options.filter(o => g.answers.includes(o)).length, 1, 'exactly one right option ' + g.key); }
@@ -101,7 +101,7 @@ test('daily practice uses deduplicated, approved report errors; one AI call per 
   const c = read('components/DailyPractice.tsx');
   assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status !== 'rejected'/);
   assert.match(c, /p_kind: qq\.source === 'mistake' \? 'error' : qq\.source === 'grammar' \? 'grammar' : 'homework'/, 'grammar items use the existing spaced repetition');
-  assert.match(c, /\{!!q\.notes\?\.length && <ul className="dp-notes">/, 'feedback explains why');
+  assert.match(c, /\{!!q\.notes\?\.length && <NoteList className="dp-notes"/, 'feedback explains why (v67: in the explanation language)');
   assert.equal((c.match(/authedPost</g) || []).length, 1, 'still one feedback call');
   const r = read('app/api/practice/check/route.ts'); assert.match(r, /The learner answers this question/); assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\);/);
   assert.match(read('supabase/v48.sql'), /item_key ~ '\^\(err\|hw\|gr\):/, 'gr: keys already allowed: no migration needed');

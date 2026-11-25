@@ -2,7 +2,8 @@
 // central word list, mistakes the teacher approved, exercises from earlier homework — never new words or topics.
 // No AI here: the set is assembled deterministically per student and day (so it is the same after a refresh, and
 // different from yesterday). AI is only used afterwards for feedback on a free sentence (writing/speaking).
-import {checkText, mcOptions} from './answers.ts';
+import {checkText} from './answers.ts';
+import {firstMeaning, pickDistractors, placeAnswer, singleConcept, validMc, wordClass} from './quiz.ts';
 import {grammarBank, CONVERSATION, TOPIC_GROUP, type Note} from './grammar.ts';
 import {categoryKey} from './analysis/core.ts';
 
@@ -154,21 +155,30 @@ export function buildDaily(input: {studentId: string; day: string; level?: strin
   qs.push(...shuffle(prod, r).slice(0, mix.p));
   // V: vocabulary — in context first (own example sentence), from A2 rarely a bare translation
   const usedW = new Set(qs.filter(q => q.source === 'word').map(q => q.ref));
-  const pool = words.map(w => w.translation), termPool = words.map(w => w.term);
+  // v67: multiple choice = exactly four options of the same word class and the same language (terms or translations);
+  // multi-concept records and too few good distractors → another kind of question instead
+  const optPool = words.filter(w => singleConcept(w.term)).map(w => ({w, cls: wordClass({term: w.term, meaning: w.translation, pos: w.pos})}));
+  const mc4 = (right: string, cls: ReturnType<typeof wordClass>, side: 'term' | 'translation', self: string, seed: number) => {
+    const d = pickDistractors({text: right, cls}, optPool.filter(o => o.w.id !== self).map(o => ({text: o.w[side], cls: o.cls})), seed);
+    const o = d.length === 3 ? placeAnswer(right, d, seed + 1) : [];
+    return validMc({options: o, answer: right}) ? o : null;
+  };
   rankW.filter(w => !usedW.has(w.id)).slice(0, mix.v).forEach((w, i) => {
     const base = {source: 'word' as const, ref: w.id, label: w.pos || '', explain: w.example ? `${w.term} — ${w.example}` : `${w.term} = ${w.translation}`};
     const t = w.term.replace(/^(de|het|een|o|a|os|as|um|uma)\s+/i, ''), re = new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
     const hasEx = !!w.example && re.test(w.example);
-    const roll = (seedOf(w.id + input.day) % 6);
+    const roll = (seedOf(w.id + input.day) % 6), one = singleConcept(w.term), cls = wordClass({term: w.term, meaning: w.translation, pos: w.pos});
     if (hasEx && (L >= 2 || roll <= 2)) { qs.push({...base, id: 'v' + i + 'f', kind: 'fill', prompt: w.example!.replace(re, '_____'), sub: 'Vul het ontbrekende woord in', hint: w.translation, answers: [t]}); return; }
-    if (termPool.length >= 4 && (L >= 2 || roll % 3 === 0)) { qs.push({...base, id: 'v' + i + 'r', kind: 'mc', prompt: w.translation, sub: 'Welk woord past?', options: mcOptions(w.term, termPool, seedOf(w.term + input.day)), answers: [w.term]}); return; }
-    if (pool.length >= 4 && roll % 2 === 0) { qs.push({...base, id: 'v' + i + 'm', kind: 'mc', prompt: w.term, sub: 'Wat betekent dit?', options: mcOptions(w.translation, pool, seedOf(w.id + input.day)), answers: [w.translation]}); return; }
+    const or = one && (L >= 2 || roll % 3 === 0) ? mc4(w.term, cls, 'term', w.id, seedOf(w.term + input.day)) : null;
+    if (or) { qs.push({...base, id: 'v' + i + 'r', kind: 'mc', prompt: firstMeaning(w.translation), sub: 'Welk woord past?', options: or, answers: [w.term]}); return; }
+    const om = one && roll % 2 === 0 ? mc4(firstMeaning(w.translation), cls, 'translation', w.id, seedOf(w.id + input.day)) : null;
+    if (om) { qs.push({...base, id: 'v' + i + 'm', kind: 'mc', prompt: w.term, sub: 'Wat betekent dit?', options: om, answers: [firstMeaning(w.translation)]}); return; }
     const toEn = roll % 2 === 1;
     qs.push({...base, id: 'v' + i + 'c', kind: 'flash', prompt: toEn ? w.term : w.translation, flip: toEn ? w.translation : w.term, answers: [toEn ? w.translation : w.term]});
   });
   rankH.slice(0, nH).forEach((h, i) => {
     const base = {source: 'homework' as const, ref: h.key, label: h.label, explain: h.explanation || h.answer};
-    if (h.type === 'multiple_choice' && h.options.length >= 2) qs.push({...base, id: 'h' + i, kind: 'mc', prompt: h.prompt, options: h.options, answers: [h.answer, ...h.accept]});
+    if (h.type === 'multiple_choice' && validMc({options: h.options, answer: h.answer})) qs.push({...base, id: 'h' + i, kind: 'mc', prompt: h.prompt, options: h.options, answers: [h.answer, ...h.accept]});
     else qs.push({...base, id: 'h' + i, kind: 'fill', prompt: h.prompt, answers: [h.answer, ...h.accept]});
   });
   // no duplicates: the same item (ref) or the same prompt never twice in one set

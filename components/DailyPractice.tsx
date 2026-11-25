@@ -9,6 +9,7 @@ import {Flame,Play,CheckCircle2,XCircle,ArrowRight,Mic,MicOff,RotateCcw,Sparkles
 import {supabase} from '../lib/supabase';
 import {t,locale} from '../lib/i18n';
 import {authedPost} from '../lib/learning';
+import {useExplainLang, ExplainLangSelect, NoteList} from './ExplainLang';
 import {errorsOf} from '../lib/analysis/core';
 import {buildDaily,checkAnswer,streakOf,summaryOf,type DailySet,type HwItem,type ItemState,type Mistake,type Question,type Word} from '../lib/daily';
 
@@ -73,6 +74,7 @@ function speechApi(): (new () => SR) | null { const w = window as unknown as {Sp
 /** The practice itself: one question at a time, progress bar, feedback after every answer, summary at the end. */
 export function DailyPlayer({studentId, level, lang, userId}: {studentId: string; level?: string | null; lang: string; userId: string}) {
   const {d, reload} = useDaily(studentId, level, lang);
+  const [ex, setEx] = useExplainLang(lang); // v67: explanation language of the feedback
   const key = 'teachy-daily-' + studentId + '-' + today();
   const [i, setI] = useState(0); const [res, setRes] = useState<{q: Question; ok: boolean}[]>([]);
   const [given, setGiven] = useState(''); const [fb, setFb] = useState<{state: 'correct' | 'accent' | 'wrong'; text?: string; corrected?: string} | null>(null);
@@ -140,7 +142,7 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
   const SpeechOk = typeof window !== 'undefined' && !!speechApi();
   const pct = Math.round(i / qs.length * 100);
   return <div className="dp-player">
-    <div className="dp-top"><div className="dp-bar big" role="progressbar" aria-valuemin={0} aria-valuemax={qs.length} aria-valuenow={i} aria-label={t('Vraag {0} van {1}', i + 1, qs.length)}><span style={{width: pct + '%'}}/></div><small className="muted">{i + 1}/{qs.length}</small></div>
+    <div className="dp-top"><div className="dp-bar big" role="progressbar" aria-valuemin={0} aria-valuemax={qs.length} aria-valuenow={i} aria-label={t('Vraag {0} van {1}', i + 1, qs.length)}><span style={{width: pct + '%'}}/></div><small className="muted">{i + 1}/{qs.length}</small><ExplainLangSelect value={ex} onChange={setEx}/></div>
     <div className={'dp-q k-' + q.kind} key={q.id}>
       {q.sub && <p className="dp-sub">{t(q.sub)}</p>}
       {q.prompt && <p className={'dp-prompt' + (q.kind === 'correct' || q.kind === 'speak' ? ' wrong' : q.kind === 'answer' ? ' ask' : '')}>{q.prompt}</p>}
@@ -162,7 +164,7 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
         {fb.text && <p>{fb.text}</p>}
         {fb.state !== 'correct' && q.kind !== 'flash' && q.kind !== 'answer' && <p className="dp-right">{t('Goed is:')} <b>{fb.corrected || q.answers[0]}</b></p>}
         {q.kind === 'answer' && fb.corrected && <p className="dp-right">{t('Beter:')} <b>{fb.corrected}</b></p>}
-        {!!q.notes?.length && <ul className="dp-notes">{(fb.state === 'correct' ? q.notes.slice(0, 1) : q.notes).map((n, k) => <li key={k}>{t(n.k, ...(n.a || []))}</li>)}</ul>}
+        {!!q.notes?.length && <NoteList className="dp-notes" notes={fb.state === 'correct' ? q.notes.slice(0, 1) : q.notes} ex={ex}/>}
         {q.explain && fb.state !== 'correct' && <p className="muted small">{q.explain}</p>}
         <button type="button" className="button" autoFocus onClick={next}>{i + 1 < qs.length ? <>{t('Doorgaan')} <ArrowRight size={15}/></> : t('Afronden')}</button>
       </div>}

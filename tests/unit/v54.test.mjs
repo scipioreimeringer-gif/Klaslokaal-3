@@ -57,7 +57,7 @@ test('the level really changes the content (not only the label)', () => {
     assert.ok(correctionSet([], lang, 'C1', 8, 1).some(x => /:ad:/.test(x.key)), lang + ' C1 subtle corrections');
     assert.ok(idiomQuestions(lang, 'C1', 1).length >= 5, lang + ' C1 idioms and register'); assert.equal(idiomQuestions(lang, 'A2', 1).length, 0);
   }
-  assert.deepEqual([DECK.A1, DECK.C1, MATCH.A1, MATCH.C1, OPTIONS.A1, OPTIONS.C1], [8, 12, 4, 8, 3, 5]);
+  assert.deepEqual([DECK.A1, DECK.C1, MATCH.A1, MATCH.C1, OPTIONS.A1, OPTIONS.C1], [8, 12, 4, 8, 4, 4]); // v67: always four options
   // own words above the level are left out
   assert.ok(!wordDeck(own, banks.pt, 'A1', 8, 1).cards.some(c => c.term === 'saudade'));
   assert.ok(wordDeck(own, banks.pt, 'B2', 8, 1).cards.some(c => c.term === 'saudade'));
@@ -71,7 +71,7 @@ test('own material first; bank material marked; variety between rounds', () => {
   assert.equal(d.cards[0].source === 'own' || d.cards[1].source === 'own', true); assert.ok(d.fromBank > 0 && d.cards.filter(c => c.source === 'bank').length === d.fromBank);
   assert.ok(sentenceSet(own, 'pt', 'A2', 10, 1).some(x => x.source === 'own' && x.prompt.includes('_____') && !/praia/.test(x.prompt)));
   const a = conjugationSet('nl', 'A2', 10, 11).map(x => x.key).join(), b = conjugationSet('nl', 'A2', 10, 12345).map(x => x.key).join(); assert.notEqual(a, b);
-  const q = quizOptions(d.cards[0], [...d.cards, ...wordDeck([], banks.pt, 'A2', 20, 9).cards], 'B2', 3); assert.equal(q.length, 5); assert.ok(q.includes(d.cards[0].meaning));
+  const q = quizOptions(d.cards[0], [...d.cards, ...wordDeck([], banks.pt, 'A2', 20, 9).cards], 'B2', 3); assert.equal(q.length, 4); assert.ok(q.includes(d.cards[0].meaning.split(/\s*[\/;]\s*|,\s+/)[0]));
 });
 test('progress per game and per language — Portuguese and Dutch never mixed', () => {
   const rows = [{kind: 'conjugate', score: 8, total: 10, created_at: '2026-11-20T10:00:00Z', details: {lang: 'pt', level: 'A2', wrong: ['fiz', 'fiz']}},

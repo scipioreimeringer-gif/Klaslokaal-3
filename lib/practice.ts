@@ -5,6 +5,7 @@
 // empty prompt, "undefined", "null" or a missing answer.
 import {grammarBank, describe, type GItem, type Note} from './grammar.ts';
 import type {BankItem} from './wordbank/types.ts';
+import {firstMeaning, pickDistractors, placeAnswer, singleConcept, validMc, wordClass} from './quiz.ts';
 
 export type Lvl = 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
 export const LVLS: Lvl[] = ['A1', 'A2', 'B1', 'B2', 'C1'];
@@ -16,13 +17,15 @@ export function levelNum(l: string | null | undefined): number {
 export const asLvl = (l: string | null | undefined): Lvl => LVLS[levelNum(l) - 1];
 export const isLvl = (x: unknown): x is Lvl => (LVLS as unknown[]).includes(x);
 
-export type OwnWord = {id: string; term: string; translation: string; example?: string | null; pos?: string | null; level?: string | null};
-export type Card = {key: string; vocabId?: string; term: string; meaning: string; example?: string; pos?: string; source: 'own' | 'bank'};
+export type Gram = {pos?: string; article?: string; plural?: string; past_sg?: string; past_pl?: string; participle?: string; aux?: string; separable?: string; conj_present?: string[]; conj_past?: string[]};
+export type OwnWord = {id: string; term: string; translation: string; example?: string | null; pos?: string | null; level?: string | null; grammar?: Gram | null};
+export type Card = {key: string; vocabId?: string; term: string; meaning: string; example?: string; pos?: string; source: 'own' | 'bank'; gram?: Gram | null};
 export type TItem = {key: string; vocabId?: string; itemKey?: string; prompt: string; hint: string; answers: string[]; notes: Note[]; explain?: string; source: 'own' | 'bank'; label: string};
 
 export const DECK: Record<Lvl, number> = {A1: 8, A2: 10, B1: 12, B2: 12, C1: 12};
 export const MATCH: Record<Lvl, number> = {A1: 4, A2: 5, B1: 6, B2: 7, C1: 8};
-export const OPTIONS: Record<Lvl, number> = {A1: 3, A2: 4, B1: 4, B2: 5, C1: 5};
+/** v67: every multiple-choice question has exactly four options (one correct), at every level. */
+export const OPTIONS: Record<Lvl, number> = {A1: 4, A2: 4, B1: 4, B2: 4, C1: 4};
 
 export function rng(seed: number) { let s = seed >>> 0; return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296); }
 export function shuffle<T>(a: T[], r: () => number) { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; }
@@ -34,8 +37,9 @@ export const validItem = (t: TItem) => !bad(t.prompt) && t.prompt.replace(/[_\s.
 /** Own words that suit the level (a word marked B2 is not practised at A1), then bank words of that level. */
 export function wordDeck(own: OwnWord[], bank: BankItem[], level: Lvl, n: number, seed: number): {cards: Card[]; fromBank: number} {
   const L = levelNum(level), r = rng(seed);
-  const mine = own.filter(w => !w.level || levelNum(w.level) <= L)
-    .map(w => ({key: 'v:' + w.id, vocabId: w.id, term: w.term.trim(), meaning: (w.translation || '').trim(), example: w.example || undefined, pos: w.pos || undefined, source: 'own' as const}))
+  // v67: records with several unrelated concepts ("Receita Federal / está aberta / …") are not practised as one word
+  const mine = own.filter(w => (!w.level || levelNum(w.level) <= L) && singleConcept(w.term, /expr|uitdr/i.test(w.pos || '') ? 'expression' : null))
+    .map(w => ({key: 'v:' + w.id, vocabId: w.id, term: w.term.trim(), meaning: (w.translation || '').trim(), example: w.example || undefined, pos: w.pos || undefined, source: 'own' as const, gram: w.grammar || null}))
     .filter(validCard);
   // the most urgent own words first (the list arrives in practice order), a little variety among them
   const head = shuffle(mine.slice(0, n * 2), r).slice(0, n);
@@ -43,8 +47,9 @@ export function wordDeck(own: OwnWord[], bank: BankItem[], level: Lvl, n: number
   const need = n - head.length;
   let extra: Card[] = [];
   if (need > 0) {
-    const pool = bankForLevel(bank, level).filter(b => !have.has(key(b.term)))
-      .map(b => ({key: 'b:' + b.id, term: b.term, meaning: (b.en || b.meaning || '').trim(), example: undefined, pos: b.cat, source: 'bank' as const})).filter(validCard);
+    // v67: only bank words with an English translation (a Dutch description as "meaning" would mix languages)
+    const pool = bankForLevel(bank, level).filter(b => !have.has(key(b.term)) && (b.en || '').trim())
+      .map(b => ({key: 'b:' + b.id, term: b.term, meaning: b.en.trim(), example: undefined, pos: b.cat, source: 'bank' as const})).filter(validCard);
     extra = shuffle(pool, r).slice(0, need);
   }
   return {cards: [...head, ...extra], fromBank: extra.length};
@@ -55,14 +60,66 @@ export function bankForLevel(bank: BankItem[], level: Lvl): BankItem[] {
   const exact = bank.filter(b => b.level === level);
   return exact.length >= 12 ? exact : bank.filter(b => levelNum(b.level) <= levelNum(level));
 }
-/** Options for the quiz: more options at higher levels, and (from B1) distractors of the same kind of word. */
+/** v67: quiz options — exactly four, all translations (one language), the same word class, a similar form; the
+ *  answer at a random position. Fewer than three good distractors → [] (the question is replaced, never shown). */
 export function quizOptions(card: Card, pool: Card[], level: Lvl, seed: number): string[] {
-  const r = rng(seed), k = OPTIONS[level], L = levelNum(level);
-  const others = pool.filter(p => p.key !== card.key && key(p.meaning) !== key(card.meaning));
-  const same = L >= 3 && card.pos ? others.filter(p => p.pos === card.pos) : [];
-  const picked: string[] = [];
-  for (const p of [...shuffle(same, r), ...shuffle(others, r)]) { if (picked.length >= k - 1) break; if (!picked.some(x => key(x) === key(p.meaning))) picked.push(p.meaning); }
-  return shuffle([card.meaning, ...picked], r);
+  const right = firstMeaning(card.meaning), cls = wordClass(card);
+  const d = pickDistractors({text: right, cls}, pool.filter(p => p.key !== card.key).map(p => ({text: p.meaning, cls: wordClass(p)})), seed, OPTIONS[level] - 1);
+  if (d.length < OPTIONS[level] - 1) return [];
+  const o = placeAnswer(right, d, seed * 7 + 3);
+  return validMc({options: o, answer: right}) ? o : [];
+}
+/** The answer shown for a quiz card (first meaning of a synonym list). */
+export const quizAnswer = (c: Card) => firstMeaning(c.meaning);
+
+/** v67: grammar multiple choice of the level (verb forms, hebben/zijn, articles, prepositions, ser/estar, relative
+ *  pronouns, idioms …) — only items with exactly four options; the student's weak topics first. */
+export function grammarQuiz(lang: string, level: Lvl, n: number, seed: number, weak: string[] = []): GItem[] {
+  const r = rng(seed), w = new Set(weak), L = levelNum(level);
+  const pool = atLevel(lang, level).filter(g => g.kind === 'choose' && g.prompt && validMc({options: g.options, answer: g.answers[0]}) && (L > 1 || g.level <= 1));
+  const ranked = byLevel(pool, level, r).sort((a, b) => Number(w.has(b.topic)) - Number(w.has(a.topic)));
+  const out: GItem[] = [], perTopic = new Map<string, number>(), verbs = new Set<string>();
+  for (const g of ranked) {
+    if (out.length >= n) break;
+    if ((perTopic.get(g.topic) || 0) >= Math.max(2, Math.ceil(n / 3))) continue;   // varied: not all the same topic
+    if (g.verb && verbs.has(g.verb)) continue;
+    perTopic.set(g.topic, (perTopic.get(g.topic) || 0) + 1); if (g.verb) verbs.add(g.verb);
+    out.push({...g, options: placeAnswer(g.answers[0], g.options!.filter(o => o !== g.answers[0]), seed + out.length * 13)});
+  }
+  return out;
+}
+
+/** v67: pairs for "Woorden koppelen" — no duplicate words or meanings, no meaning that fits two words, single
+ *  concepts only; preferably one coherent group (one word class) when there are enough of them. */
+export function matchDeck(cards: Card[], n: number, seed: number): Card[] {
+  const terms = new Set<string>(), means = new Set<string>(), ok: Card[] = [];
+  for (const c of cards) {
+    const t = key(c.term), m = key(firstMeaning(c.meaning));
+    if (!t || !m || terms.has(t) || means.has(m) || !singleConcept(c.term)) continue;
+    terms.add(t); means.add(m); ok.push({...c, meaning: firstMeaning(c.meaning)});
+  }
+  const by = new Map<string, Card[]>(); for (const c of ok) { const k = wordClass(c) || 'other'; by.set(k, [...(by.get(k) || []), c]); }
+  const group = [...by.values()].sort((a, b) => b.length - a.length)[0] || [];
+  return shuffle(group.length >= n ? group : ok, rng(seed)).slice(0, n);
+}
+
+/** v67: flashcard variants from the stored grammar of a word: word → translation (always possible), and from A2
+ *  infinitive → past tense / participle + hebben or zijn, noun → article / plural. */
+export type FlashFace = {front: string; back: string; ask: string};
+export function flashFace(c: Card, level: Lvl, seed: number, rev: boolean): FlashFace {
+  const g = c.gram, L = levelNum(level), base: FlashFace = rev ? {front: c.meaning, back: c.term, ask: 'Vertaling → woord'} : {front: c.term, back: c.meaning, ask: 'Woord → vertaling'};
+  if (!g || seed % 3 !== 0) return base;
+  const inf = c.term.trim(), opts: FlashFace[] = [];
+  if (g.pos === 'verb' && L >= 2) {
+    if (g.past_sg && g.past_pl) opts.push({front: inf, back: `${g.past_sg} / ${g.past_pl}`, ask: 'Infinitief → verleden tijd'});
+    if (g.participle && (g.aux === 'H' || g.aux === 'Z')) opts.push({front: inf, back: `${g.aux === 'Z' ? 'is' : 'heeft'} ${g.participle}`, ask: 'Infinitief → voltooid deelwoord met hulpwerkwoord'});
+  }
+  if (g.pos === 'noun') {
+    const bare = inf.replace(/^(de|het)\s+/i, '');
+    if (g.article && /^(de|het)$/i.test(g.article)) opts.push({front: bare, back: `${g.article} ${bare}`, ask: 'Zelfstandig naamwoord → lidwoord'});
+    if (g.plural && L >= 1) opts.push({front: bare, back: g.plural, ask: 'Zelfstandig naamwoord → meervoud'});
+  }
+  return opts.length ? opts[Math.floor(seed / 3) % opts.length] : base;
 }
 
 const fromG = (g: GItem, prompt: string, hint: string): TItem => ({key: g.key, itemKey: g.key, prompt, hint, answers: g.answers, notes: g.notes, source: 'bank', label: g.label});

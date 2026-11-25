@@ -6,7 +6,9 @@
 
 /** marks a fixed interface text (translated later with t(); also lets the key checker find it) */
 const T = (k: string) => k;
-export type Note = {k: string; a?: string[]};
+/** k = fixed interface text (translated) — or, with raw, a text written in language `raw`; alt = the same note in
+ *  other explanation languages (v67: feedback follows the chosen explanation language, never a mixed language). */
+export type Note = {k: string; a?: string[]; raw?: string; alt?: Partial<Record<string, string>>};
 export type GItem = {
   key: string; lang: 'pt' | 'nl'; level: number; topic: string; label: string;
   kind: 'choose' | 'fill' | 'conjugate' | 'pick' | 'correct';   // pick = choose the correct sentence; correct = rewrite a wrong sentence (v54)
@@ -54,14 +56,16 @@ function ptVerbItems(): GItem[] {
   const out: GItem[] = [];
   for (const v of PT_VERBS) for (const t of ['pres', 'pf', 'imp'] as PTense[]) PT_P.forEach((_, p) => {
     const form = v.f[t][p], marker = (v.m?.[t] || PT_MARK[t]).replace(/,$/, '');
-    const others = (['pres', 'pf', 'imp'] as PTense[]).filter(x => x !== t);
+    // v67: "Em 2019, você ___ em Lisboa" allows morou AND morava → the imperfeito is not offered there
+    const others = (['pres', 'pf', 'imp'] as PTense[]).filter(x => x !== t && !(t === 'pf' && x === 'imp' && v.m?.pf));
     const lvl = t === 'pres' ? A1 : A2, topic = t === 'pres' ? 'present_tense' : 'past_tense', label = t === 'pres' ? 'Presente' : t === 'pf' ? 'Pretérito perfeito' : 'Pretérito imperfeito';
     const why: Note = {k: PT_WHY[t], a: [marker, PT_TENSE[t]]};
     const optionNotes: Note[] = others.filter(o => v.f[o][p] !== form).map(o => ({k: T('{0} is {1} — dat past hier niet.'), a: [v.f[o][p], PT_TENSE[o]]}));
     const base = {lang: 'pt' as const, level: lvl, topic, label, verb: v.inf};
     // A. choose the right form (only from A2: the contrast between the tenses is the point)
     if (t !== 'pres' || p === 0) out.push({...base, level: A2, key: `gr:pt:ch:${v.inf}:${t}:${p}`, kind: 'choose', sub: T('Kies de juiste vorm'), prompt: ptSentence(v, t, p, '___'),
-      options: uniq([form, ...others.map(o => v.f[o][p]), v.inf]), answers: [form], notes: [why, ...optionNotes, {k: T('{0} is de infinitief (het hele werkwoord) — hier hoort een vervoegde vorm.'), a: [v.inf]}]});
+      // v67: four options; when two tenses share the form (nós falamos), the same tense in another person fills up
+      options: uniq([form, ...others.map(o => v.f[o][p]), v.inf, v.f[t][p === 3 ? 1 : 3], v.f[t][p === 0 ? 2 : 0]]).slice(0, 4), answers: [form], notes: [why, ...optionNotes, {k: T('{0} is de infinitief (het hele werkwoord) — hier hoort een vervoegde vorm.'), a: [v.inf]}]});
     // B. fill in yourself
     out.push({...base, key: `gr:pt:fi:${v.inf}:${t}:${p}`, kind: 'fill', sub: T('Vul de juiste vorm in'), prompt: ptSentence(v, t, p, '_____'), hint: `(${v.inf})`, answers: [form], notes: [why]});
     // D. conjugate (person + tense given)
@@ -154,15 +158,20 @@ function nlItems(): GItem[] {
       prompt: `${S} _____ ${mk('pres')} ${v.c}.`, hint: `(${v.inf})`, answers: [pres], notes: [{k: T('{0} is de vorm voor {1} in de {2}.'), a: [pres, subj, NL_TENSE.pres]}]});
     out.push({...base, level: A1, topic: 'conjugation', label: 'Werkwoordsvervoeging', key: `gr:nl:cj:${v.inf}:pres:${p}`, kind: 'conjugate', sub: T('Vervoeg het werkwoord'),
       prompt: `${v.inf} · ${subj} · ${NL_TENSE.pres}`, answers: [pres, `${subj} ${pres}`], notes: [{k: T('{0} is de vorm voor {1} in de {2}.'), a: [pres, subj, NL_TENSE.pres]}]});
+    // v67: present tense, choose (A1) — four forms of the same verb; the participle never fits after a subject
+    const cp = uniq([pres, ...v.pres, v.inf, v.part]).slice(0, 4);
+    if (cp.length === 4 && p !== 1 && p !== 4) out.push({...base, level: A1, topic: 'present_tense', label: 'Tegenwoordige tijd', key: `gr:nl:cp:${v.inf}:pres:${p}`, kind: 'choose', sub: T('Kies de juiste vorm'),
+      prompt: `${S} ___ ${mk('pres')} ${v.c}.`, options: cp, answers: [pres], notes: [{k: T('{0} is de vorm voor {1} in de {2}.'), a: [pres, subj, NL_TENSE.pres]}]});
     // past tense (A2): choose + fill
     out.push({...base, level: A2, topic: 'past_tense', label: 'Verleden tijd', key: `gr:nl:ch:${v.inf}:imp:${p}`, kind: 'choose', sub: T('Kies de juiste vorm'),
-      prompt: `${S} ___ ${mk('imp')} ${v.c}.`, options: uniq([imp, v.imp[p >= 3 ? 0 : 1], pres, v.part]), answers: [imp],
+      prompt: `${S} ___ ${mk('imp')} ${v.c}.`, options: uniq([imp, v.imp[p >= 3 ? 0 : 1], pres, v.part, v.inf, v.pres[p >= 3 ? 2 : 3]]).slice(0, 4), answers: [imp],
       notes: [{k: mk('imp') === 'vroeger' ? PT_WHY.imp : PT_WHY.pf, a: [mk('imp'), NL_TENSE.imp]}, {k: T('{0} is enkelvoud, {1} is meervoud.'), a: [v.imp[0], v.imp[1]]}]});
     out.push({...base, level: A2, topic: 'past_tense', label: 'Verleden tijd', key: `gr:nl:fi:${v.inf}:imp:${p}`, kind: 'fill', sub: T('Vul de juiste vorm in'),
       prompt: `${S} _____ ${mk('imp')} ${v.c}.`, hint: `(${v.inf})`, answers: [imp], notes: [{k: T('{0} is de vorm voor {1} in de {2}.'), a: [imp, subj, NL_TENSE.imp]}]});
     // perfect: hebben or zijn (A2)
     out.push({...base, level: A2, topic: 'auxiliary', label: 'Hebben of zijn', key: `gr:nl:ch:${v.inf}:perf:${p}`, kind: 'choose', sub: T('Kies de juiste vorm'),
-      prompt: `${S} ___ ${mk('perf')} ${v.c} ${v.part}.`, options: [aux, other], answers: [aux],
+      // v67: four options — the right auxiliary, the other one, and both for another person
+      prompt: `${S} ___ ${mk('perf')} ${v.c} ${v.part}.`, options: uniq([aux, other, AUX[v.aux][p === 2 ? 0 : 2], AUX[v.aux === 'hebben' ? 'zijn' : 'hebben'][p === 2 ? 0 : 2]]), answers: [aux],
       notes: [{k: T('Bij {0} gebruik je in de voltooide tijd het hulpwerkwoord {1}.'), a: [v.inf, v.aux]}, ...(v.aux === 'zijn' ? [{k: T('Zijn gebruik je bij werkwoorden van beweging naar een plek of van verandering (gaan, komen, blijven, beginnen).')}] : [])]});
     out.push({...base, level: A2, topic: 'participle', label: 'Voltooid deelwoord', key: `gr:nl:fi:${v.inf}:perf:${p}`, kind: 'fill', sub: T('Vul de juiste vorm in'),
       prompt: `${S} ${aux} ${mk('perf')} ${v.c} _____.`, hint: `(${v.inf})`, answers: [v.part], notes: [{k: T('Voltooid deelwoord van {0}: {1}.'), a: [v.inf, v.part]}]});
@@ -258,14 +267,92 @@ const NL_ADV: Adv[] = [
   [C1, 'correct', 'Hun hebben dat gisteren gezegd.', ['Zij hebben dat gisteren gezegd.', 'Ze hebben dat gisteren gezegd.'], '', '"Hun" is nooit onderwerp; het onderwerp is "zij" of "ze".'],
   [C1, 'correct', 'Het meisje die daar loopt is mijn zus.', ['Het meisje dat daar loopt is mijn zus.'], '', '"Meisje" is een het-woord: het betrekkelijk voornaamwoord is "dat".'],
 ];
+// v67: the explanations above in the other explanation languages (same order), so feedback is never shown in a
+// language the student did not choose (e.g. Portuguese grammar explained in Portuguese to a Dutch speaker).
+const NL_ADV_EN = [
+  'After "toen" you use the past tense. Zitten is irregular: zat.', 'In a subordinate clause with "of", the finite verb goes to the end.',
+  'In a subordinate clause with "omdat", the finite verb goes to the end.', 'When the sentence starts with "gisteren", the finite verb comes second (inversion).',
+  'Something that happened before another moment in the past: past perfect (was + past participle).', 'An unreal condition: "als … had", then "zou" + infinitive.',
+  'Passive in the past tense: werd + past participle.', 'Past perfect: had + past participle.',
+  'In an indirect question ("waar …") the finite verb goes to the end.', 'With a het-word the relative pronoun is "dat", not "wat".',
+  'After a subordinate clause at the start, the finite verb of the main clause comes first.', 'The past participle goes to the end of the sentence; the pronoun comes early.',
+  'You wait and see before you act or speak.', 'You say directly what it is about, without an introduction.',
+  'It turns out that someone was not telling the truth or could not do what they claimed.', 'You try to keep everyone happy.',
+  'You keep an eye on things so that everything goes well.', 'Formal register: "Geachte …", "u", "hierbij". "Hoi" and "hoor" are informal.',
+  'For people, use "van wie", not "waarvan".', 'After a comparative, use "dan".',
+  '"Hun" is never the subject; the subject is "zij" or "ze".', '"Meisje" is a het-word: the relative pronoun is "dat".',
+];
+const PT_ADV_ALT: [string, string][] = [
+  ['An action in progress in the past, interrupted by another: pretérito imperfeito.', 'Een handeling die in het verleden bezig was en werd onderbroken: pretérito imperfeito.'],
+  ['A completed action: pretérito perfeito.', 'Een afgeronde handeling: pretérito perfeito.'],
+  ['A closed period in the past: perfeito (the imperfeito is also used to describe).', 'Een afgesloten periode in het verleden: perfeito (het imperfeito kan ook, als beschrijving).'],
+  ['A habit in the past ("todo verão"): pretérito imperfeito.', 'Een gewoonte in het verleden ("todo verão"): pretérito imperfeito.'],
+  ['Completed actions at a definite moment ("ontem"): pretérito perfeito.', 'Afgeronde handelingen op een bepaald moment ("ontem"): pretérito perfeito.'],
+  ['The subject "eu" is usually left out when the verb form already shows the person; avoid repeating it.', 'Je laat "eu" meestal weg als de werkwoordsvorm de persoon al laat zien; herhaal het niet.'],
+  ['After "espero que": presente do subjuntivo.', 'Na "espero que": presente do subjuntivo.'],
+  ['Impersonal expression + "que": presente do subjuntivo.', 'Onpersoonlijke uitdrukking + "que": presente do subjuntivo.'],
+  ['Doubt with "talvez" before the verb: subjuntivo.', 'Twijfel met "talvez" vóór het werkwoord: subjuntivo.'],
+  ['A hypothesis with "se" + futuro do pretérito: imperfeito do subjuntivo.', 'Een veronderstelling met "se" + futuro do pretérito: imperfeito do subjuntivo.'],
+  ['Future with "quando": futuro do subjuntivo.', 'Toekomst met "quando": futuro do subjuntivo.'],
+  ['A wish in the past ("queria que"): imperfeito do subjuntivo.', 'Een wens in het verleden ("queria que"): imperfeito do subjuntivo.'],
+  ['"Embora" takes the subjunctive; in the past: imperfeito do subjuntivo.', '"Embora" vraagt de subjuntivo; in het verleden: imperfeito do subjuntivo.'],
+  ['After "espero que" you use the subjunctive.', 'Na "espero que" gebruik je de subjuntivo.'],
+  ['An unreal hypothesis: "se" + imperfeito do subjuntivo.', 'Een onwerkelijke veronderstelling: "se" + imperfeito do subjuntivo.'],
+  ['In standard Portuguese: "falar de" → "de que".', 'In de standaardtaal: "falar de" → "de que".'],
+  ['"Pisar na bola" = to make a mistake, to let someone down.', '"Pisar na bola" = een fout maken, iemand teleurstellen.'],
+  ['"Dar um jeito" = to find a (often improvised) solution.', '"Dar um jeito" = een (vaak geïmproviseerde) oplossing vinden.'],
+  ['"Chover no molhado" = to say what everyone already knows.', '"Chover no molhado" = zeggen wat iedereen al weet.'],
+  ['"Fazer vista grossa" = to ignore something on purpose.', '"Fazer vista grossa" = iets bewust negeren.'],
+  ['An informal expression for something very expensive.', 'Een informele uitdrukking voor iets wat heel duur is.'],
+  ['Formal register: "Prezado(a)", "gostaria de". "E aí", "bora" and "beleza" are very informal.', 'Formeel register: "Prezado(a)", "gostaria de". "E aí", "bora" en "beleza" zijn erg informeel.'],
+  ['"Fazer" for elapsed time is impersonal: it stays singular.', '"Fazer" voor verstreken tijd is onpersoonlijk: het blijft enkelvoud.'],
+  ['"Haver" meaning "to exist" is impersonal: always singular.', '"Haver" in de betekenis "bestaan" is onpersoonlijk: altijd enkelvoud.'],
+  ['The futuro do subjuntivo of "ver" is "vir" (se eu vir), not "ver".', 'De futuro do subjuntivo van "ver" is "vir" (se eu vir), niet "ver".'],
+  ['"Preferir" already expresses a comparison: preferir algo a algo (no "mais", no "do que").', '"Preferir" is al een vergelijking: preferir algo a algo (zonder "mais" en "do que").'],
+];
+// v67: a fourth plausible option for the idiom questions (every multiple-choice question has exactly four)
+const IDIOM_4TH: Record<string, string> = {
+  'O que significa "pisar na bola"?': 'chegar atrasado', 'O que significa "dar um jeito"?': 'ficar com raiva', 'O que significa "chover no molhado"?': 'falar muito rápido',
+  'O que significa "fazer vista grossa"?': 'dormir demais', 'O que significa "custar os olhos da cara"?': 'ser muito difícil',
+  'Wat betekent "de kat uit de boom kijken"?': 'iemand plagen', 'Wat betekent "met de deur in huis vallen"?': 'hard roepen', 'Wat betekent "door de mand vallen"?': 'iets kwijtraken',
+  'Wat betekent "de kool en de geit sparen"?': 'gezond eten', 'Wat betekent "een oogje in het zeil houden"?': 'een knipoog geven',
+};
 function advItems(lang: 'pt' | 'nl'): GItem[] {
-  return (lang === 'pt' ? PT_ADV : NL_ADV).map(([level, kind, prompt, answers, hint, why, verb, tense, person, options], i) => ({
+  const alt = (i: number): Partial<Record<string, string>> => lang === 'nl' ? {en: NL_ADV_EN[i]} : {en: PT_ADV_ALT[i]?.[0], nl: PT_ADV_ALT[i]?.[1]};
+  return (lang === 'pt' ? PT_ADV : NL_ADV).map(([level, kind, prompt, answers, hint, why, verb, tense, person, opts], i) => { const options = opts && IDIOM_4TH[prompt] ? [...opts, IDIOM_4TH[prompt]] : opts; return {
     key: `gr:${lang}:ad:${i}`, lang, level, kind, topic: kind === 'choose' ? 'idioms' : kind === 'pick' ? 'register' : verb ? 'conjugation' : 'word_order',
     label: kind === 'choose' ? (lang === 'pt' ? 'Expressões idiomáticas' : 'Uitdrukkingen') : kind === 'pick' ? (lang === 'pt' ? 'Registro' : 'Register') : verb ? (tense || '') : (lang === 'pt' ? 'Correção' : 'Zinsbouw'),
     sub: kind === 'fill' ? T('Vul de juiste vorm in') : kind === 'correct' ? T('Verbeter de zin') : kind === 'pick' ? T('Welke zin is goed?') : T('Kies de juiste betekenis'),
-    prompt, hint: hint || undefined, options, answers, notes: [{k: why}], verb, ...(tense ? {tense, person} : {}),
-  } as GItem));
+    prompt, hint: hint || undefined, options, answers, notes: [{k: why, raw: lang, alt: alt(i)}], verb, ...(tense ? {tense, person} : {}),
+  } as GItem; });
 }
+/* v67: Portuguese B2 subjunctive, multiple choice (explanations in Dutch and English, never only Portuguese) */
+const PT_MC: [number, string, string, string, string, [string, string, string], string, string][] = [
+  [B2, 'subjunctive', 'Subjuntivo', 'Espero que você ___ bem amanhã.', 'esteja', ['está', 'estava', 'estar'], 'Na "espero que" volgt de presente do subjuntivo: esteja.', 'After "espero que" comes the presente do subjuntivo: esteja.'],
+  [B2, 'subjunctive', 'Subjuntivo', 'Se eu ___ mais tempo, viajaria mais.', 'tivesse', ['tenho', 'tinha', 'tiver'], 'Onwerkelijke voorwaarde met "se" + futuro do pretérito (viajaria): imperfeito do subjuntivo.', 'Unreal condition with "se" + futuro do pretérito (viajaria): imperfeito do subjuntivo.'],
+  [B2, 'subjunctive', 'Subjuntivo', 'Quando você ___ ao Brasil, me avise.', 'vier', ['vem', 'vir', 'veio'], 'Toekomst na "quando": futuro do subjuntivo van vir = vier.', 'Future after "quando": futuro do subjuntivo of vir = vier.'],
+  [B2, 'subjunctive', 'Subjuntivo', 'É importante que nós ___ cedo.', 'cheguemos', ['chegamos', 'chegávamos', 'chegar'], 'Onpersoonlijke uitdrukking + "que": presente do subjuntivo.', 'Impersonal expression + "que": presente do subjuntivo.'],
+];
+/* v67: Dutch grammar multiple choice with four options (NT2 leerlijn: omdat/want, prepositions, plural, comparative,
+   relative pronouns). [level, topic, label, prompt, answer, three wrong options, explanation nl, explanation en] */
+const NL_MC: [number, string, string, string, string, [string, string, string], string, string][] = [
+  [A1, 'prepositions', 'Voorzetsels', 'Ik woon ___ Amsterdam.', 'in', ['op', 'aan', 'naar'], 'Bij een stad of land gebruik je "in".', 'With a city or country you use "in".'],
+  [A1, 'plural', 'Meervoud', 'Ik heb twee ___. (kind)', 'kinderen', ['kinds', 'kinden', 'kind'], 'Kind is onregelmatig: het meervoud is kinderen.', 'Kind is irregular: the plural is kinderen.'],
+  [A2, 'plural', 'Meervoud', 'In Nederland zijn veel oude ___. (stad)', 'steden', ['stads', 'staden', 'stadden'], 'Stad is onregelmatig: het meervoud is steden.', 'Stad is irregular: the plural is steden.'],
+  [A2, 'conjunctions', 'Omdat versus want', 'Ik blijf vandaag thuis, ___ ik ben ziek.', 'want', ['omdat', 'als', 'toen'], 'Na "want" volgt een hoofdzin (ik ben); na omdat, als en toen staat de persoonsvorm achteraan.', 'After "want" comes a main clause (ik ben); after omdat, als and toen the finite verb goes to the end.'],
+  [A2, 'conjunctions', 'Omdat versus want', 'Ik blijf vandaag thuis ___ ik ziek ben.', 'omdat', ['want', 'dus', 'maar'], 'De persoonsvorm staat achteraan (ziek ben): dat is een bijzin, dus "omdat".', 'The finite verb is at the end (ziek ben): that is a subordinate clause, so "omdat".'],
+  [A2, 'prepositions', 'Vaste voorzetsels', 'Ik wacht al tien minuten ___ de bus.', 'op', ['aan', 'met', 'over'], 'Vaste combinatie: wachten op.', 'Fixed combination: wachten op (to wait for).'],
+  [A2, 'prepositions', 'Vaste voorzetsels', 'Ik denk vaak ___ mijn familie in Brazilië.', 'aan', ['op', 'met', 'uit'], 'Vaste combinatie: denken aan.', 'Fixed combination: denken aan (to think of).'],
+  [A2, 'comparison', 'Comparatief en superlatief', 'Een auto is ___ dan een fiets. (duur)', 'duurder', ['duurer', 'meer duur', 'duurste'], 'Vergrotende trap + dan: duur → duurder (na -r komt -der).', 'Comparative + dan: duur → duurder (after -r you add -der).'],
+  [B1, 'relative_pronoun', 'Betrekkelijke voornaamwoorden', 'De vrouw ___ naast mij woont, is huisarts.', 'die', ['dat', 'wie', 'waar'], '"Vrouw" is een de-woord: het betrekkelijk voornaamwoord is "die".', '"Vrouw" is a de-word: the relative pronoun is "die".'],
+  [B1, 'relative_pronoun', 'Betrekkelijke voornaamwoorden', 'Het huis ___ we vorig jaar hebben gekocht, is oud.', 'dat', ['die', 'wat', 'waar'], '"Huis" is een het-woord: het betrekkelijk voornaamwoord is "dat".', '"Huis" is a het-word: the relative pronoun is "dat".'],
+  [B1, 'prepositions', 'Werkwoorden met vaste voorzetsels', 'Ze is erg geïnteresseerd ___ moderne kunst.', 'in', ['aan', 'voor', 'op'], 'Vaste combinatie: geïnteresseerd zijn in.', 'Fixed combination: geïnteresseerd zijn in (interested in).'],
+  [B2, 'conditional', 'Voorwaardelijke en irrealisconstructies', 'Als ik meer tijd had, ___ ik vaker sporten.', 'zou', ['zal', 'zullen', 'word'], 'Een onwerkelijke voorwaarde (als … had) → zou + infinitief.', 'An unreal condition (als … had) → zou + infinitive.'],
+  [B2, 'passive', 'Verdieping passief', 'Het nieuwe station ___ volgend jaar geopend.', 'wordt', ['heeft', 'werd', 'worden'], 'Passief in de toekomst/het heden: wordt + voltooid deelwoord (enkelvoud: het station).', 'Passive with future meaning: wordt + past participle (singular: het station).'],
+  [B2, 'pluperfect', 'Plusquamperfectum', 'Toen ik in de bioscoop aankwam, ___ de film al begonnen.', 'was', ['had', 'werd', 'wordt'], 'Eerder dan een ander moment in het verleden: voltooid verleden tijd; beginnen gaat met zijn → was begonnen.', 'Before another moment in the past: past perfect; beginnen takes zijn → was begonnen.'],
+  [B2, 'connectors', 'Verwijswoorden en samenhang', 'Het regende de hele dag. ___ bleven we binnen.', 'Daarom', ['Omdat', 'Hoewel', 'Want'], '"Daarom" geeft een gevolg en wordt gevolgd door inversie (bleven we); omdat, hoewel en want kunnen hier niet.', '"Daarom" (therefore) gives a result and is followed by inversion (bleven we); omdat, hoewel and want do not fit here.'],
+  [B1, 'er', 'Functies van er', 'Ik heb een nieuwe fiets. Ik ben ___ heel blij mee.', 'er', ['het', 'dat', 'hem'], 'Blij zijn met iets → "er … mee" verwijst naar een ding.', 'Blij zijn met iets → "er … mee" refers back to a thing.'],
+];
 
 /** v54: what a conjugation exercise asks — infinitive, tense and person — always complete (or null when unknown). */
 export function describe(g: GItem): {verb: string; tense: string; person: string} | null {
@@ -288,17 +375,24 @@ export function grammarBank(lang: string): GItem[] {
   const items: GItem[] = [];
   if (l === 'pt') {
     items.push(...ptVerbItems());
-    PT_SER_ESTAR.forEach(([s, verb, right, wrong, note], i) => items.push({key: `gr:pt:se:${i}`, lang: 'pt', level: A2, topic: 'ser_estar', label: 'Ser e estar', kind: 'choose', sub: T('Kies ser of estar'), prompt: s,
-      options: [right, wrong], answers: [right], notes: [note, {k: T('Hier hoort {0} ({1}).'), a: [right, verb]}]}));
+    // v67: four options — ser and estar in the right person, plus both in another person
+    const SER = ['sou', 'é', 'somos', 'são'], EST = ['estou', 'está', 'estamos', 'estão'];
+    PT_SER_ESTAR.forEach(([s, verb, right, wrong, note], i) => { const idx = Math.max(SER.indexOf(right), EST.indexOf(right)), j = idx < 0 ? 1 : idx === 1 ? 3 : 1;
+      items.push({key: `gr:pt:se:${i}`, lang: 'pt', level: A2, topic: 'ser_estar', label: 'Ser e estar', kind: 'choose', sub: T('Kies ser of estar'), prompt: s,
+      options: uniq([right, wrong, SER[j], EST[j]]), answers: [right], notes: [note, {k: T('Hier hoort {0} ({1}).'), a: [right, verb]}]}); });
     PT_PREP.forEach(([s, right, wrong, rule], i) => items.push({key: `gr:pt:pr:${i}`, lang: 'pt', level: A2, topic: 'prepositions', label: 'Preposições e contrações', kind: i % 2 ? 'fill' : 'choose', sub: i % 2 ? T('Vul het juiste voorzetsel in') : T('Kies het juiste voorzetsel'),
       prompt: s, options: i % 2 ? undefined : uniq([right, ...wrong]), answers: [right], notes: [{k: T('Samentrekking: {0}.'), a: [rule]}]}));
     PT_ART.forEach(([s, right, wrong, note], i) => items.push({key: `gr:pt:ar:${i}`, lang: 'pt', level: A1, topic: /Meervoud|bijvoeglijk/i.test(note.k) ? 'plural' : 'articles', label: 'Artigos, gênero e plural', kind: 'choose', sub: T('Kies de juiste vorm'),
       prompt: s, options: uniq([right, ...wrong]), answers: [right], notes: [note]}));
     items.push(...advItems('pt'));
+    PT_MC.forEach(([level, topic, label, prompt, right, wrong, nl, en], i) => items.push({key: `gr:pt:mc:${i}`, lang: 'pt', level, topic, label, kind: 'choose', sub: T('Kies de juiste vorm'),
+      prompt, options: [right, ...wrong], answers: [right], notes: [{k: nl, raw: 'nl', alt: {en}}]}));
     PT_ORDER.forEach(([right, wrong, note], i) => items.push({key: `gr:pt:wo:${i}`, lang: 'pt', level: A2, topic: 'word_order', label: 'Ordem das palavras', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '',
       options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
   } else {
     items.push(...nlItems(), ...advItems('nl'));
+    NL_MC.forEach(([level, topic, label, prompt, right, wrong, nl, en], i) => items.push({key: `gr:nl:mc:${i}`, lang: 'nl', level, topic, label, kind: 'choose', sub: T('Kies de juiste vorm'),
+      prompt, options: [right, ...wrong], answers: [right], notes: [{k: nl, raw: 'nl', alt: {en}}]}));
     NL_INV.forEach(([right, wrong, note], i) => items.push({key: `gr:nl:in:${i}`, lang: 'nl', level: A2, topic: 'inversion', label: 'Inversie', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '', options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
     NL_SUB.forEach(([right, wrong, note], i) => items.push({key: `gr:nl:bz:${i}`, lang: 'nl', level: B1, topic: 'subordinate_clause', label: 'Bijzinnen', kind: 'pick', sub: T('Welke zin is goed?'), prompt: '', options: i % 2 ? [right, wrong] : [wrong, right], answers: [right], notes: [note]}));
   }

@@ -1335,3 +1335,8 @@ div.drill-result.correct{background:#e9f7ef}div.drill-result.accent{background:#
 .lvl-list li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e3eeec;border-radius:14px;background:#fff}
 .lvl-list li .grow{display:grid;gap:1px}
 @media(max-width:640px){.pr-pick{min-width:0;flex:1 1 100%}.pr-set{margin-left:0}.lvl-list li{flex-wrap:wrap}}
+
+/* v67: explanation language + flashcard question label */
+.pr-explain{display:inline-flex;align-items:center;gap:6px}.pr-explain select{width:auto;padding:2px 8px;min-height:0}
+.pr-ask{margin:4px 0 0;text-align:center}.dp-top .pr-explain{margin-left:auto}
+

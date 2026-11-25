@@ -6,7 +6,9 @@ import {niceDate} from '../lib/data';
 import {supabase} from '../lib/supabase';
 import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} from '../lib/learning';
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
-import {wordDeck,quizOptions,sentenceSet,conjugationSet,correctionSet,idiomQuestions,progressOf,levelNum,rng,shuffle,DECK,MATCH,type Lvl,type OwnWord,type Card,type TItem,type SessionRow,ownConjugations} from '../lib/practice';
+import {wordDeck,quizOptions,quizAnswer,grammarQuiz,matchDeck,flashFace,sentenceSet,conjugationSet,correctionSet,progressOf,levelNum,rng,shuffle,DECK,MATCH,type Lvl,type OwnWord,type Card,type TItem,type SessionRow,ownConjugations} from '../lib/practice';
+import {answerVariants} from '../lib/quiz';
+import {useExplainLang,ExplainLangSelect,NoteList} from './ExplainLang';
 import {grammarBank,type GItem,type Note} from '../lib/grammar';
 import {loadBank,type BankItem} from '../lib/wordbank';
 import {errorsOf} from '../lib/analysis/core';
@@ -124,7 +126,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
    relation), per game, with language and level in the details. Nothing can start with an empty or broken question. */
 type GameKind='flashcards'|'quiz'|'typing'|'match'|'sentence'|'conjugate'|'errors';
 const GAME_KINDS:GameKind[]=['flashcards','quiz','typing','match','sentence','conjugate','errors'];
-type Ctx={studentId:string|null;lang:string;level:Lvl};
+type Ctx={studentId:string|null;lang:string;level:Lvl;/* v67: explanation language of the feedback */ex:string};
 async function saveGameSession(ctx:Ctx,kind:string,score:number,total:number,started:number,details:Record<string,unknown>,assignmentId?:string|null){
  if(!ctx.studentId)return; // self-study without a teacher: nothing to store results with (no student record)
  const db=supabase()!;const {data:{user}}=await db.auth.getUser();if(!user)return;
@@ -140,7 +142,8 @@ function recordItem(ctx:Ctx,x:{vocabId?:string;itemKey?:string;label?:string},ok
 const BankTag=({on}:{on:boolean})=>on?<span className="tag pr-bank" title={tt('Niet uit je eigen woordenlijst')}>{tt('uit de oefenbank')}</span>:null;
 
 export function VocabGames({studentId,lang,level,start}:{studentId:string|null;lang:string;level:Lvl;start?:string|null}){
- const ctx:Ctx={studentId,lang,level};
+ const [ex,setEx]=useExplainLang(lang);
+ const ctx:Ctx={studentId,lang,level,ex};
  const [own,setOwn]=useState<OwnWord[]|null>(null);const [bank,setBank]=useState<BankItem[]>([]);const [errs,setErrs]=useState<{key:string;original:string;corrected:string;why?:string}[]>([]);
  const [sessions,setSessions]=useState<SessionRow[]>([]);const [game,setGame]=useState<GameKind|null>(null);const [seed,setSeed]=useState(()=>Date.now()%2147483647);const [result,setResult]=useState('');const [due,setDue]=useState(0);
  const load=useCallback(async()=>{const db=supabase()!;
@@ -156,8 +159,10 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
  useEffect(()=>{setOwn(null);void load()},[load]);
  // all sets for the chosen language and level; a new seed per round = different questions each time
  const sets=useMemo(()=>{if(!own)return null;const n=DECK[level];
-  const words=wordDeck(own,bank,level,n,seed),pairs=wordDeck(own,bank,level,MATCH[level],seed+1);
-  return {words,pairs,quizPool:[...words.cards,...wordDeck([],bank,level,24,seed+2).cards],idioms:idiomQuestions(lang,level,seed),
+  const words=wordDeck(own,bank,level,n,seed),pairsRaw=wordDeck(own,bank,level,MATCH[level]*2,seed+1);
+  // v67: match = unique, unambiguous pairs of one coherent group; quiz = vocabulary + grammar of the level (~40%)
+  const pairs={...pairsRaw,cards:matchDeck(pairsRaw.cards,MATCH[level],seed+1)};
+  return {words,pairs,quizPool:[...own.map(w=>({key:'v:'+w.id,term:w.term,meaning:w.translation,pos:w.pos||undefined,source:'own' as const})),...wordDeck([],bank,level,60,seed+2).cards],gquiz:grammarQuiz(lang,level,Math.round(n*0.4),seed),
    sentence:sentenceSet(own,lang,level,10,seed),conjugate:(()=>{const mine=ownConjugations(own as Parameters<typeof ownConjugations>[0],lang,level,4,seed);return [...mine,...conjugationSet(lang,level,10-mine.length,seed)]})(),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed]);
  const autoStarted=useRef(false);
  useEffect(()=>{if(start==='flashcards'&&sets&&sets.words.cards.length>=2&&!autoStarted.current){autoStarted.current=true;setGame('flashcards')}},[start,sets]);
@@ -166,7 +171,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
  const done=(label:string)=>{setResult(label);setGame(null);setSeed(x=>(x*48271+11)%2147483647);void load()};
  const W=sets.words.cards;
  if(game==='flashcards')return <Flashcards deck={W} ctx={ctx} onDone={done}/>;
- if(game==='quiz')return <Quiz deck={W} pool={sets.quizPool} extra={sets.idioms.slice(0,levelNum(level)>=4?3:0)} ctx={ctx} onDone={done}/>;
+ if(game==='quiz')return <Quiz deck={W.slice(0,Math.max(4,W.length-sets.gquiz.length))} pool={sets.quizPool} extra={sets.gquiz} ctx={ctx} onDone={done}/>;
  if(game==='typing')return <Typing deck={W} ctx={ctx} onDone={done}/>;
  if(game==='match')return <Match deck={sets.pairs.cards} ctx={ctx} onDone={done}/>;
  if(game==='sentence')return <TypeGame title={tt("Zinnen aanvullen")} intro={tt("Vul het ontbrekende woord in. De hint helpt je op weg.")} kind="sentence" items={sets.sentence} ctx={ctx} onDone={done}/>;
@@ -182,6 +187,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
   {studentId&&own!.length>0&&<p className="muted">{tt("{0} woorden staan klaar om te herhalen.", due)} <InfoTip text={tt("Moeilijke woorden komen vaker terug (gespreide herhaling); na 5 keer achter elkaar goed is een woord “beheerst”.")}/></p>}
   {fromBank>0&&<p className="muted small pr-note"><Sparkles size={14}/> {own!.length?tt('Je woordenlijst heeft op dit niveau te weinig woorden; {0} woorden komen uit de oefenbank.',fromBank):tt('Nog geen eigen woorden: je oefent met woorden uit de oefenbank.')}</p>}
   {!studentId&&<p className="muted small pr-note">{tt('Zelfstudie: je oefent met de oefenbank. Resultaten worden bewaard zodra je een docent hebt voor deze taal.')}</p>}
+  <div className="row end"><ExplainLangSelect value={ex} onChange={setEx}/></div>
   <div className="game-grid">
    {tile('flashcards',<Layers size={24}/>,tt("Flashcards"),tt("Omdraaien en zelf beoordelen"),W.length>=2,tt("Nog niet genoeg woorden op dit niveau"))}
    {tile('quiz',<ListChecks size={24}/>,tt("Meerkeuzequiz"),levelNum(level)>=4?tt("Betekenis, uitdrukkingen en register"):tt("Kies de juiste vertaling"),W.length>=4,tt("Minstens 4 woorden nodig"))}
@@ -208,9 +214,12 @@ function Flashcards({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>vo
  async function answer(ok:boolean){const v=deck[i];recordItem(ctx,v,ok);if(ok)score.current++;else wrong.current.push(v.term);setFlip(false);
   if(i+1>=deck.length){await saveGameSession(ctx,'flashcards',score.current,deck.length,started.current,{wrong:wrong.current});onDone(tt('Flashcards: {0} van {1} gekend',score.current,deck.length))}else setI(i+1)}
  const v=deck[i];
+ // v67: some cards ask a grammatical form of the word (past tense, participle + hebben/zijn, article, plural)
+ const f=flashFace(v,ctx.level,i*7+v.term.length+deck.length,rev);
  return <GameShell title={tt("Flashcards")} i={i} n={deck.length} onQuit={()=>onDone('')} intro={tt("Bedenk het antwoord, draai de kaart om en wees eerlijk.")}>
   <div className="seg flash-dir" role="group" aria-label={tt('Richting')}><button type="button" aria-pressed={!rev} onClick={()=>setRev(false)}>{tt('Woord → betekenis')}</button><button type="button" aria-pressed={rev} onClick={()=>setRev(true)}>{tt('Betekenis → woord')}</button></div>
-  <button className={'flipcard'+(flip?' flipped':'')} onClick={()=>setFlip(!flip)} aria-live="polite"><span className="face front"><strong>{rev?v.meaning:v.term}</strong><small><Eye size={14}/> {tt("tik om om te draaien")}</small></span><span className="face back"><strong>{rev?v.term:v.meaning}</strong>{v.example&&<small>{v.example}</small>}</span></button>
+  <p className="muted small center pr-ask">{tt(f.ask)}</p>
+  <button className={'flipcard'+(flip?' flipped':'')} onClick={()=>setFlip(!flip)} aria-live="polite"><span className="face front"><strong>{f.front}</strong><small><Eye size={14}/> {tt("tik om om te draaien")}</small></span><span className="face back"><strong>{f.back}</strong>{v.example&&<small>{v.example}</small>}</span></button>
   <div className="row center"><BankTag on={v.source==='bank'}/></div>
   <div className="row center"><button className="button secondary" onClick={()=>void answer(false)}><RotateCcw size={15}/> {tt("Nog oefenen")}</button><button className="button" onClick={()=>void answer(true)}><Check size={15}/> {tt("Ken ik")}</button></div>
  </GameShell>
@@ -218,8 +227,9 @@ function Flashcards({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>vo
 
 type QuizQ={key:string;card?:Card;q:string;ask:string;options:string[];right:string;notes?:Note[];source:'own'|'bank';itemKey?:string;label?:string};
 function Quiz({deck,pool,extra,ctx,onDone}:{deck:Card[];pool:Card[];extra:GItem[];ctx:Ctx;onDone:(s:string)=>void}){
- const qs=useMemo<QuizQ[]>(()=>[...deck.map((c,k)=>({key:c.key,card:c,q:c.term,ask:tt("Wat betekent"),options:quizOptions(c,pool,ctx.level,k*31+c.term.length),right:c.meaning,source:c.source})),
-  ...extra.map(g=>({key:g.key,q:g.prompt,ask:'',options:shuffle(g.options||[],rng(g.key.length*7)),right:g.answers[0],notes:g.notes,source:'bank' as const,itemKey:g.key,label:g.label}))].filter(x=>x.options.length>=2&&x.options.includes(x.right)),[deck,pool,extra,ctx.level]);
+ // v67: four options per question (validated); vocabulary and grammar mixed; an invalid question is left out
+ const qs=useMemo<QuizQ[]>(()=>shuffle([...deck.map((c,k)=>({key:c.key,card:c,q:c.term,ask:tt('Wat betekent dit?'),options:quizOptions(c,pool,ctx.level,k*31+c.term.length+deck.length),right:quizAnswer(c),source:c.source})),
+  ...extra.map(g=>({key:g.key,q:g.prompt,ask:tt(g.sub)+(g.hint?' '+g.hint:''),options:g.options||[],right:g.answers[0],notes:g.notes,source:'bank' as const,itemKey:g.key,label:g.label}))].filter(x=>x.options.length===4&&x.options.filter(o=>o===x.right).length===1),rng(deck.length*13+extra.length)),[deck,pool,extra,ctx.level]);
  const [i,setI]=useState(0);const [picked,setPicked]=useState<string|null>(null);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);
  const v=qs[i];
  function pick(o:string){if(picked)return;setPicked(o);const ok=o===v.right;recordItem(ctx,v.card||{itemKey:v.itemKey,label:v.label},ok);if(ok)score.current++;else wrong.current.push(v.q)}
@@ -228,15 +238,15 @@ function Quiz({deck,pool,extra,ctx,onDone}:{deck:Card[];pool:Card[];extra:GItem[
  return <GameShell title={tt("Meerkeuzequiz")} i={i} n={qs.length} onQuit={()=>onDone('')} intro={tt("Kies het juiste antwoord.")}>
   <div className="quiz-q">{v.ask&&<small className="muted">{v.ask}</small>}<strong>{v.q}</strong><BankTag on={v.source==='bank'}/></div>
   <div className="quiz-opts">{v.options.map(o=><button key={o} className={'quiz-opt'+(picked?o===v.right?' right':o===picked?' wrong':'':'')} disabled={!!picked} onClick={()=>pick(o)}>{o}</button>)}</div>
-  {picked&&<Feedback ok={picked===v.right} right={v.right} notes={v.notes}/>}
+  {picked&&<Feedback ok={picked===v.right} right={v.right} notes={v.notes} ex={ctx.ex}/>}
   {picked&&<div className="row center"><button className="button" autoFocus onClick={()=>void next()}>{tt("Volgende")}</button></div>}
  </GameShell>
 }
 
-function Feedback({ok,accent,right,notes}:{ok:boolean;accent?:boolean;right:string;notes?:Note[]}){
+function Feedback({ok,accent,right,notes,ex}:{ok:boolean;accent?:boolean;right:string;notes?:Note[];ex:string}){
  return <div className={'drill-result '+(ok?accent?'accent':'correct':'wrong')} role="status">
-  <p>{ok?<><Check size={16}/> {accent?<>{tt("Bijna: let op de accenten →")} <b>{right}</b></>:tt("Goed!")}</>:<><X size={16}/> {tt("Juist is:")} <b>{right}</b></>}</p>
-  {!!notes?.length&&<ul className="pr-notes">{(ok?notes.slice(0,1):notes).map((n,k)=><li key={k}>{tt(n.k,...(n.a||[]))}</li>)}</ul>}
+  <p>{ok?<><Check size={16}/> {accent?<>{tt("Bijna: let op de accenten →")} <b>{right}</b></>:<>{tt("Goed!")} <b>{right}</b></>}</>:<><X size={16}/> {tt("Juist is:")} <b>{right}</b></>}</p>
+  {!!notes?.length&&<NoteList className="pr-notes" notes={ok?notes.slice(0,1):notes} ex={ex}/>}
  </div>
 }
 
@@ -244,11 +254,11 @@ function Typing({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void})
  const [i,setI]=useState(0);const [val,setVal]=useState('');const [res,setRes]=useState<null|'correct'|'accent'|'wrong'>(null);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);const inp=useRef<HTMLInputElement>(null);
  const v=deck[i];const L=levelNum(ctx.level);
  async function submit(e:React.FormEvent){e.preventDefault();if(res){setRes(null);setVal('');if(i+1>=deck.length){await saveGameSession(ctx,'typing',score.current,deck.length,started.current,{wrong:wrong.current});onDone(tt('Vertaalspel: {0} van {1} goed',score.current,deck.length))}else{setI(i+1);setTimeout(()=>inp.current?.focus(),0)}return}
-  if(!val.trim())return;const r=checkText(val,[v.term,v.term.replace(/^(de|het|een|o|a|os|as|um|uma)\s+/i,'')]);setRes(r);const ok=r!=='wrong';recordItem(ctx,v,ok);if(ok)score.current++;else wrong.current.push(v.term)}
+  if(!val.trim())return;const r=checkText(val,answerVariants(v.term));setRes(r);const ok=r!=='wrong';recordItem(ctx,v,ok);if(ok)score.current++;else wrong.current.push(v.term)}
  return <GameShell title={tt("Vertaalspel")} i={i} n={deck.length} onQuit={()=>onDone('')} intro={tt("Schrijf het woord in de taal die je leert.")}>
   <form className="drill-card" onSubmit={e=>void submit(e)}><div className="drill-q"><small className="muted">{tt("Schrijf in de doeltaal")}</small><strong>{v.meaning}</strong>{L<=1&&!res&&<small className="muted">{tt('Begint met "{0}" · {1} letters',v.term.replace(/^(de|het|een|o|a|os|as|um|uma)\s+/i,'').charAt(0),v.term.replace(/^(de|het|een|o|a|os|as|um|uma)\s+/i,'').length)}</small>}{v.example&&res&&<small className="muted">{v.example}</small>}<BankTag on={v.source==='bank'}/></div>
    <div className="row"><input ref={inp} autoFocus className="field grow" aria-label={tt('Jouw antwoord')} autoComplete="off" autoCapitalize="off" spellCheck={false} value={val} readOnly={!!res} onChange={e=>setVal(e.target.value)}/><button className="button" type="submit" disabled={!res&&!val.trim()}>{res?tt("Volgende"):tt("Controleer")}</button></div>
-   {res&&<Feedback ok={res!=='wrong'} accent={res==='accent'} right={v.term}/>}</form>
+   {res&&<Feedback ok={res!=='wrong'} accent={res==='accent'} right={v.term} ex={ctx.ex}/>}</form>
  </GameShell>
 }
 
@@ -265,7 +275,7 @@ function TypeGame({title,intro,kind,items,ctx,onDone,long,conj}:{title:string;in
    {conj&&verb&&tense&&person?<div className="pr-conj"><span><small>{tt('Werkwoord')}</small><b>{verb}</b></span><span><small>{tt('Tijd')}</small><b>{tense}</b></span><span><small>{tt('Persoon')}</small><b>{person}</b></span></div>:it.hint?<small className="muted">{it.hint}</small>:null}
    <strong className={long?'long':''}>{conj&&it.prompt===verb?tt('Vervoeg: {0}',verb):it.prompt}</strong><BankTag on={it.source==='bank'}/></div>
    <div className="row">{long?<textarea ref={inp} autoFocus className="field grow" rows={2} spellCheck={false} aria-label={tt('Jouw antwoord')} value={val} readOnly={!!res} onChange={e=>setVal(e.target.value)} placeholder={tt("Schrijf de verbeterde zin…")}/>:<input ref={inp} autoFocus className="field grow" aria-label={tt('Jouw antwoord')} autoComplete="off" autoCapitalize="off" spellCheck={false} value={val} readOnly={!!res} onChange={e=>setVal(e.target.value)}/>}<button className="button" type="submit" disabled={!res&&!val.trim()}>{res?tt("Volgende"):tt("Controleer")}</button></div>
-   {res&&<Feedback ok={res!=='wrong'} accent={res==='accent'} right={it.answers[0]} notes={it.notes}/>}</form>
+   {res&&<Feedback ok={res!=='wrong'} accent={res==='accent'} right={it.answers[0]} notes={it.notes} ex={ctx.ex}/>}</form>
  </GameShell>
 }
 
