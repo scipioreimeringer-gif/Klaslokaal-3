@@ -1758,6 +1758,7 @@ export const M: Record<string, [string, string, string, string, string]> = {
  "Extra instructie (optioneel), bijv. thema boodschappen": ["Extra instruction (optional), e.g. theme groceries","Instrução extra (opcional), p. ex. tema compras","Instrucción extra (opcional), p. ej. tema compras","Consigne supplémentaire (facultatif), p. ex. thème courses","Zusätzliche Anweisung (optional), z. B. Thema Einkaufen"],
  "Extra instructie": ["Extra instruction","Instrução extra","Instrucción extra","Consigne supplémentaire","Zusätzliche Anweisung"],
  "Uitleg in": ["Explanations in","Explicações em","Explicaciones en","Explications en","Erklärungen auf"],
+ "Uitlegtaal": ["Explanation language","Idioma da explicação","Idioma de la explicación","Langue des explications","Erklärungssprache"],
  "Vertaling → woord": ["Translation → word","Tradução → palavra","Traducción → palabra","Traduction → mot","Übersetzung → Wort"],
  "Woord → vertaling": ["Word → translation","Palavra → tradução","Palabra → traducción","Mot → traduction","Wort → Übersetzung"],
  "Infinitief → verleden tijd": ["Infinitive → past tense","Infinitivo → passado","Infinitivo → pasado","Infinitif → passé","Infinitiv → Präteritum"],

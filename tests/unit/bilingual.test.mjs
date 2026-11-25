@@ -53,13 +53,13 @@ test('route: access check, approved only, cache per language + version, AI only 
   assert.match(r, /rpc\('student_lesson_summaries'/, 'approved, non-TEST summaries of this relation only');
   assert.match(r, /from\('analysis_translations'\)\.select\('texts'\)\.eq\('analysis_id', analysisId\)\.eq\('lang', lang\)\.eq\('content_hash', hash\)/);
   assert.ok(r.indexOf("from('analysis_translations').select") < r.indexOf('askFast('), 'cache checked before any AI call');
-  assert.match(r, /if \(doc\.explanation_language === lang\) return/, 'no call for the language it was written in');
+  assert.match(r, /if \(sourceLang\(doc\) === lang\) return/, /* v70: stored as a name */ 'no call for the language it was written in');
   assert.match(r, /JSON\.stringify\(ex\.texts\)/, 'only the extracted explanation texts are sent');
 });
 test('client: no translation until a language is chosen; only the opened card is translated; no page reload', () => {
   const a = read('components/Analysis.tsx');
   assert.match(a, /const need=v2&&!!lang&&lang!==src/);
   assert.match(a, /if\(!need\|\|!shown\|\|trCache\.has\(key\)\)return/);
-  assert.match(a, /localStorage\.setItem\(store,l\)/, 'choice remembered per student');
+  assert.match(a, /useExplainLang\(lessonLang\|\|'',studentId\)/, 'v70: choice remembered per student and learning language');
   assert.match(read('components/LessonCards.tsx'), /<LessonReport doc=\{doc\} studentId=\{viewer==='student'\?studentId:undefined\}/, 'v44: a report opens inside its own lesson page');
 });

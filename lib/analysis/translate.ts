@@ -4,7 +4,10 @@
 // so a teacher's correction of the explanation automatically asks for a new translation.
 import type {AnalysisV2} from './pipeline';
 
-type Path = ['summary'] | ['covered', number] | ['went_well', number] | ['focus', number] | ['cat_label', number] | ['cat_expl', number];
+// v70: also the "why" of every error, the notes on things that went well and the "later" note. The quoted
+// original/corrected sentences, timestamps (start/times) and source ids (utterance_id) are never touched.
+type Path = ['summary'] | ['covered', number] | ['went_well', number] | ['focus', number] | ['cat_label', number] | ['cat_expl', number]
+  | ['later'] | ['err_why', number] | ['pos_note', number];
 export type Extract = {paths: Path[]; texts: string[]};
 
 /** The translatable texts of a v2 analysis, in a fixed order. Empty strings are skipped. */
@@ -19,22 +22,38 @@ export function extractTexts(doc: AnalysisV2): Extract {
     (r.focus || []).forEach((s, i) => add(['focus', i], s));
   }
   (doc.categories || []).forEach((c, i) => { add(['cat_label', i], c.label); add(['cat_expl', i], c.explanation); });
-  return {paths, texts: texts.slice(0, 120)};
+  add(['later'], doc.later_note);
+  (doc.errors || []).forEach((e, i) => { if (e.status !== 'rejected') add(['err_why', i], e.why); });
+  (doc.positives || []).forEach((p, i) => add(['pos_note', i], p.note));
+  const n = Math.min(texts.length, 200);
+  return {paths: paths.slice(0, n), texts: texts.slice(0, n)};
 }
 
 /** A copy of the analysis with translated explanations. Examples (original/corrected) stay exactly as they were. */
 export function applyTexts(doc: AnalysisV2, ex: Extract, translated: string[]): AnalysisV2 {
   if (translated.length !== ex.texts.length) return doc;
   const out: AnalysisV2 = {...doc, report: doc.report ? {...doc.report, covered: [...(doc.report.covered || [])], went_well: [...(doc.report.went_well || [])], focus: [...(doc.report.focus || [])]} : null,
-    categories: (doc.categories || []).map(c => ({...c}))};
+    categories: (doc.categories || []).map(c => ({...c})),
+    ...(doc.errors ? {errors: doc.errors.map(e => ({...e}))} : {}), positives: (doc.positives || []).map(p => ({...p}))};
   ex.paths.forEach((p, i) => {
     const v = translated[i]; if (typeof v !== 'string' || !v.trim()) return;
     if (p[0] === 'summary' && out.report) out.report.summary = v;
     else if ((p[0] === 'covered' || p[0] === 'went_well' || p[0] === 'focus') && out.report) out.report[p[0]][p[1]] = v;
     else if (p[0] === 'cat_label') out.categories[p[1]].label = v;
     else if (p[0] === 'cat_expl') out.categories[p[1]].explanation = v;
+    else if (p[0] === 'later') out.later_note = v;
+    else if (p[0] === 'err_why' && out.errors) out.errors[p[1]].why = v;
+    else if (p[0] === 'pos_note') out.positives[p[1]].note = v;
   });
   return out;
+}
+
+/** v70: the language a report was written in, as a code ('Dutch' → 'nl'); reports store the language name. */
+export function sourceLang(doc: Pick<AnalysisV2, 'explanation_language'> | null | undefined): string {
+  const s = String(doc?.explanation_language || '').trim().toLowerCase();
+  if (/^[a-z]{2}$/.test(s)) return s;
+  const M: [RegExp, string][] = [[/dutch|neder/, 'nl'], [/english|engels/, 'en'], [/portug/, 'pt'], [/spanish|espa|spaans/, 'es'], [/french|fran|frans/, 'fr'], [/german|deutsch|duits/, 'de']];
+  return (M.find(([r]) => r.test(s)) || [null, ''])[1];
 }
 
 /** Stable content key (the server hashes this with sha256). */

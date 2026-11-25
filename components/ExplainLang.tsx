@@ -8,21 +8,25 @@ import {defaultExplainLang, EXPLAIN_LANGS, noteText, type ExplainLang} from '../
 import type {Note} from '../lib/grammar';
 
 const keyOf = (learning: string) => 'teachy-explain-' + (String(learning || '').slice(0, 2) || 'x');
-export function useExplainLang(learning: string): [ExplainLang, (l: ExplainLang) => void] {
+const ok = (v: string | null): v is ExplainLang => !!v && (EXPLAIN_LANGS as readonly string[]).includes(v);
+/** v70: with a studentId the choice is remembered per student AND learning language; it starts from the
+ *  learner's general choice for that language (practice), else the default. */
+export function useExplainLang(learning: string, studentId?: string): [ExplainLang, (l: ExplainLang) => void] {
+  const own = studentId ? keyOf(learning) + '-' + studentId : '';
   const [ex, setEx] = useState<ExplainLang>(() => {
-    try { const v = localStorage.getItem(keyOf(learning)); if (v && (EXPLAIN_LANGS as readonly string[]).includes(v)) return v as ExplainLang; } catch { /* no storage */ }
+    try { const a = own ? localStorage.getItem(own) : null; if (ok(a)) return a; const v = localStorage.getItem(keyOf(learning)); if (ok(v)) return v; } catch { /* no storage */ }
     return defaultExplainLang(learning, getLang());
   });
   const [, force] = useState(0);
   // the translation table is needed for any explanation language other than Dutch
   useEffect(() => { if (ex !== 'nl' && !messagesLoaded()) void loadMessages().then(() => force(x => x + 1)).catch(() => {}); }, [ex]);
-  const set = (l: ExplainLang) => { setEx(l); try { localStorage.setItem(keyOf(learning), l); } catch { /* ignore */ } };
+  const set = (l: ExplainLang) => { setEx(l); try { localStorage.setItem(own || keyOf(learning), l); } catch { /* ignore */ } };
   return [ex, set];
 }
 
-export function ExplainLangSelect({value, onChange}: {value: ExplainLang; onChange: (l: ExplainLang) => void}) {
-  return <label className="pr-explain small muted">{t('Uitleg in')}{' '}
-    <select className="field small" value={value} onChange={e => onChange(e.target.value as ExplainLang)} aria-label={t('Uitleg in')}>
+export function ExplainLangSelect({value, onChange, label = 'Uitleg in'}: {value: ExplainLang; onChange: (l: ExplainLang) => void; label?: string}) {
+  return <label className="pr-explain small muted">{t(label)}{' '}
+    <select className="field small" value={value} onChange={e => onChange(e.target.value as ExplainLang)} aria-label={t(label)}>
       {EXPLAIN_LANGS.map(l => <option key={l} value={l}>{NATIVE[l as Lang]}</option>)}
     </select></label>;
 }

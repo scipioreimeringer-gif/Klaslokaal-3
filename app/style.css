@@ -1353,3 +1353,6 @@ div.drill-result.correct{background:#e9f7ef}div.drill-result.accent{background:#
 .lt68-sub .hw-chip{font-size:12px}.lt68-recs{display:grid;gap:4px}.lt68-recs small svg{vertical-align:-2px}
 .live-private .lt68-box{margin:0 0 10px}
 .nt2-ex,.nt2-errs{margin:4px 0;font-size:13px}.nt2-errs{color:#9a3412}.nt2-acts{margin-top:6px;gap:6px}
+
+/* v70: explanation language on top of every AI lesson report */
+.sum-explain{display:flex;justify-content:flex-end;margin:6px 0 2px}.sum-explain .pr-explain{display:inline-flex;align-items:center;gap:6px}.sum-explain select{width:auto;min-height:32px;padding:4px 28px 4px 10px}
