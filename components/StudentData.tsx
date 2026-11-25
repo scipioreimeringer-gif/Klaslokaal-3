@@ -194,6 +194,8 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
   {tab==='woorden'&&<section className="card"><h3>{t("Woorden")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&viewer==='teacher'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
   {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><TrendingUp size={17}/> {t("Voortgang")}</h3><StudentProgress studentId={studentId} progress={b.progress} lessons={mergeLessons(b.lessons,b.sessions)} lessonLang={lang}/></section>}
+  {/* v71: the same learning line as the teacher's (read-only status), with "Graag behandelen" and "Oefenen" */}
+  {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><Target size={17}/> {t("Mijn leerlijn")}</h3><LearningPath student={ws} viewer="student"/></section>}
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} lang={lang} level={asLvl(ws.level)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}

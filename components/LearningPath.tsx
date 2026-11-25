@@ -4,7 +4,7 @@
 // bulk marking / intake, lesson goals ("Vandaag werken we aan…") and a progress overview.
 // Statuses are set by the teacher only; AI suggestions are accepted in the analysis (never automatic).
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {Plus,Search,Target,EyeOff,Eye,Pencil,X,CalendarDays,ListChecks} from 'lucide-react';
+import {Plus,Search,Target,EyeOff,Eye,Pencil,X,CalendarDays,ListChecks,Check,Hand,Dumbbell} from 'lucide-react';
 import {InfoTip} from './InfoTip';
 import {supabase} from '../lib/supabase';
 import Link from 'next/link';
@@ -18,6 +18,9 @@ import {t as tt} from '../lib/i18n';
 
 type Student={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
 type LessonGoal={id:string;lesson_date:string;goal_id:string|null;custom_title:string|null};
+/** v71: "Graag behandelen" — a student's request; the teacher accepts (linked to a lesson) or declines. Never a status change. */
+type Req={id:string;goal_id:string;status:'open'|'accepted'|'declined';lesson_goal_id:string|null};
+const V71=tt('Voer eerst supabase/v71.sql uit om onderwerpen aan te vragen.');
 const STATUSES=GOAL_STATUSES;   // v64: Nog niet behandeld · In ontwikkeling · Extra oefenen · Beheerst
 type MemRow={kind:string;key:string;label:string;status:string;teacher_status:string|null;lessons_seen:number;clean_lessons:number;first_seen:string|null;last_seen:string|null;last_clean:string|null;hidden:boolean};
 const today=()=>new Date().toISOString().slice(0,10);
@@ -32,7 +35,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  const [sel,setSel]=useState<Set<string>>(new Set());const [bulk,setBulk]=useState<GoalStatus>('in_progress');const [mem,setMem]=useState<MemRow[]>([]);const [edit,setEdit]=useState<string|null>(null);
  const [nt,setNt]=useState({title:'',level:student.level||'A1',skill:'grammatica'});
  const [day,setDay]=useState(today());const [lgoals,setLgoals]=useState<LessonGoal[]>([]);const [lgPick,setLgPick]=useState('');const [lgCustom,setLgCustom]=useState('');
- const [intakeTo,setIntakeTo]=useState(student.level||'A1');
+ const [intakeTo,setIntakeTo]=useState(student.level||'A1');const [reqs,setReqs]=useState<Req[]>([]);const [reqOk,setReqOk]=useState(false);
 
  const load=useCallback(async()=>{const db=supabase()!;
   const [g,p,s]=await Promise.all([db.from('curriculum_goals').select('*').eq('subject',subject).order('level').order('sort'),db.from('student_goal_progress').select('*').eq('student_id',student.id),db.from('students').select('level,target_level').eq('id',student.id).maybeSingle()]);
@@ -41,6 +44,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
   // standard goals of that language stay stored (their progress was carried over by v68.sql) but are not shown
   setGoals(visibleGoals((g.data||[]) as Goal[],subject));
   if(teacher){const m=await db.from('memory_patterns').select('kind,key,label,status,teacher_status,lessons_seen,clean_lessons,first_seen,last_seen,last_clean,hidden').eq('student_id',student.id);setMem(m.error?[]:((m.data||[]) as MemRow[]).filter(x=>!x.hidden))}setProg(Object.fromEntries(((p.data||[]) as GoalProgress[]).map(x=>[x.goal_id,x])));
+  const rq=await db.from('topic_requests').select('id,goal_id,status,lesson_goal_id').eq('student_id',student.id);setReqOk(!rq.error);setReqs(rq.error?[]:(rq.data||[]) as Req[]);
   const st=s.data as {level?:string|null;target_level?:string|null}|null;if(st){if(st.level)setLevel(st.level);setTarget(st.target_level||'')}else if(s.error&&v34Error(s.error.message))setErr(V34);
  },[subject,student.id,teacher]);
  const loadDay=useCallback(async()=>{const r=await supabase()!.from('lesson_goals').select('id,lesson_date,goal_id,custom_title').eq('student_id',student.id).eq('lesson_date',day).order('created_at');if(r.error){if(teacher&&v34Error(r.error.message))setErr(V34);return}setLgoals((r.data||[]) as LessonGoal[])},[student.id,day,teacher]);
@@ -79,9 +83,27 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  async function toNextLesson(goalId:string,title:string){const db=supabase()!;
   const n=await db.from('lessons').select('id,starts_at').eq('student_id',student.id).neq('status','cancelled').gt('starts_at',new Date().toISOString()).order('starts_at').limit(1);
   const l=((n.data||[]) as {id:string;starts_at:string}[])[0];const date=l?new Date(l.starts_at).toLocaleDateString('en-CA'):today();
-  const r=await db.from('lesson_goals').insert({student_id:student.id,lesson_date:date,lesson_id:l?.id||null,goal_id:goalId});
-  if(r.error){setErr(v34Error(r.error.message)?V34:r.error.message);return}
-  setMsg(l?tt('“{0}” staat bij de volgende les ({1}).',title,niceDate(date)):tt('Geen geplande les gevonden; “{0}” staat bij vandaag.',title));if(date===day)await loadDay()}
+  const r=await db.from('lesson_goals').insert({student_id:student.id,lesson_date:date,lesson_id:l?.id||null,goal_id:goalId}).select('id').single();
+  if(r.error){setErr(v34Error(r.error.message)?V34:r.error.message);return null}
+  setMsg(l?tt('“{0}” staat bij de volgende les ({1}).',title,niceDate(date)):tt('Geen geplande les gevonden; “{0}” staat bij vandaag.',title));if(date===day)await loadDay();return (r.data as {id:string}).id}
+ /** v71: the student asks for a topic or withdraws an open request (one row per topic: no doubles, no notifications) */
+ async function request(goalId:string){const db=supabase()!;setErr('');const cur=reqs.find(r=>r.goal_id===goalId);
+  if(cur){if(cur.status!=='open')return;const r=await db.from('topic_requests').delete().eq('id',cur.id);if(r.error){setErr(r.error.message);return}setReqs(x=>x.filter(y=>y.id!==cur.id));setMsg(tt('Aanvraag ingetrokken.'));return}
+  const r=await db.from('topic_requests').insert({student_id:student.id,goal_id:goalId}).select('id,goal_id,status,lesson_goal_id').single();
+  if(r.error){setErr(/topic_requests/.test(r.error.message)?V71:r.error.message);return}setReqs(x=>[...x,r.data as Req]);setMsg(tt('Aangevraagd. Je docent beslist of en wanneer dit onderwerp aan bod komt.'))}
+ /** v71: the teacher accepts (the topic becomes a planned lesson topic of the next lesson) or declines */
+ async function decide(rq:Req,accept:boolean){const db=supabase()!;const now=new Date().toISOString();
+  if(accept){const id=await toNextLesson(rq.goal_id,titleOf(rq.goal_id));if(!id)return;await db.from('topic_requests').update({status:'accepted',lesson_goal_id:id,updated_at:now}).eq('id',rq.id)}
+  else await db.from('topic_requests').update({status:'declined',updated_at:now}).eq('id',rq.id);
+  setReqs(x=>x.map(y=>y.id===rq.id?{...y,status:accept?'accepted':'declined'}:y))}
+ const reqOf=(id:string)=>reqs.find(r=>r.goal_id===id);
+ const REQ_LABEL={open:tt('aangevraagd'),accepted:tt('aanvraag geaccepteerd'),declined:tt('aanvraag niet ingepland')};
+ const reqTag=(id:string)=>{const r=reqOf(id);return r?<span className={'tag req-'+r.status}>{REQ_LABEL[r.status]}</span>:null};
+ /** student: ask for a topic · practise it (the existing self-practice with this topic as focus) */
+ const studentActs=(g:Goal,title:string,grammar:boolean)=>{if(teacher)return null;const r=reqOf(g.id);
+  return <div className="row wrap nt2-acts lp-sacts">
+   {reqOk&&<button type="button" className={'button small '+(r?'':'secondary')} aria-pressed={!!r} disabled={!!r&&r.status!=='open'} onClick={()=>void request(g.id)} title={r?.status==='open'?tt('Klik om de aanvraag in te trekken'):undefined}>{r?<><Check size={13}/> {tt('Aangevraagd')}</>:<><Hand size={13}/> {tt('Graag behandelen')}</>}</button>}
+   {grammar&&<Link className="button small secondary" href={`/oefenen?student=${student.id}&onderwerp=${encodeURIComponent(title)}#zelf`}><Dumbbell size={13}/> {tt('Oefenen')}</Link>}</div>}
  const titleOf=(id:string|null)=>{const x=all.find(a=>a.g.id===id);return x?x.title:''};
  const toggle=(id:string)=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n});
 
@@ -111,6 +133,12 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
     <tbody>{levelStats.map(x=><tr key={x.l} className={x.l===level?'current':''}><td><b>{x.l}</b></td><td>{x.p}</td><td>{x.c}</td><td>{x.m}</td><td className="muted">{x.n}</td></tr>)}</tbody></table>
   </section>
 
+  {/* v71: the student's requests (never planned or covered automatically) */}
+  {teacher&&reqs.some(r=>r.status==='open')&&<section className="lp-reqs"><h4><Hand size={15}/> {tt('Aangevraagd door je leerling')}</h4>
+   <ul>{reqs.filter(r=>r.status==='open').map(r=><li key={r.id}><b className="grow">{titleOf(r.goal_id)||tt('(verborgen onderwerp)')}</b>
+    <button className="button small" onClick={()=>void decide(r,true)}><CalendarDays size={13}/> {tt('Accepteren: naar de volgende les')}</button>
+    <button className="button small secondary" onClick={()=>void decide(r,false)}>{tt('Niet nu')}</button></li>)}</ul>
+   <p className="muted small">{tt('Een aanvraag is een wens: pas wanneer je het onderwerp in de les behandelt, markeer je het als behandeld.')}</p></section>}
   {/* today's lesson goals */}
   <section className="lp-today">
    <div className="row between wrap"><h4><CalendarDays size={15}/> {tt("Vandaag werken we aan…")}</h4><input className="field" type="date" value={day} onChange={e=>setDay(e.target.value||today())} aria-label={tt("Lesdatum")}/></div>
@@ -150,12 +178,13 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
      const extra=/^(Didactiek|Voorbeeld|Veelgemaakte fout):/;
      return <li key={g.id} className={'nt2-topic st-'+status}>
       <div className="nt2-head">{teacher&&<input type="checkbox" checked={sel.has(g.id)} onChange={()=>toggle(g.id)} aria-label={tt("Selecteren")}/>}<span className="nt2-num">{t.continuous?'∞':t.n}</span>
-       <details className="nt2-more grow"><summary><b>{x.title}</b>{t.pt&&ui!=='pt'&&!p?.title_override&&<small className="muted"> · {t.pt}</small>}{(NT2_BIG.has(t.code))&&<span className="tag">{tt('groot onderwerp')}</span>}</summary>
+       <details className="nt2-more grow"><summary><b>{x.title}</b>{t.pt&&ui!=='pt'&&!p?.title_override&&<small className="muted"> · {t.pt}</small>}{(NT2_BIG.has(t.code))&&<span className="tag">{tt('groot onderwerp')}</span>}{reqTag(g.id)}</summary>
         <ul className="nt2-sub">{lines.filter(l=>!extra.test(l)).map(l=><li key={l}>{l.replace(/^• /,'')}</li>)}</ul>
         {lines.filter(l=>/^Voorbeeld:/.test(l)).length>0&&<p className="nt2-ex"><b>{tt('Voorbeelden')}:</b> {lines.filter(l=>/^Voorbeeld:/.test(l)).map(l=>l.replace(/^Voorbeeld:\s*/,'')).join(' · ')}</p>}
         {lines.filter(l=>/^Veelgemaakte fout:/.test(l)).length>0&&<p className="nt2-errs"><b>{tt('Veelgemaakte fouten')}:</b> {lines.filter(l=>/^Veelgemaakte fout:/.test(l)).map(l=>l.replace(/^Veelgemaakte fout:\s*/,'')).join(' · ')}</p>}
         {lines.filter(l=>l.startsWith('Didactiek:')).map(l=><p key={l} className="nt2-did">{l}</p>)}
         {t.continuous&&<p className="muted small">{tt('Doorlopende leerlijn: geen eindstatus, blijft periodiek terugkomen.')}</p>}
+        {studentActs(g,x.title,true)}
         {teacher&&<div className="row wrap nt2-acts"><button type="button" className="button small secondary" onClick={()=>void toNextLesson(g.id,x.title)}><CalendarDays size={13}/> {tt('Naar de volgende les')}</button>
          <Link className="button small secondary" href={`/leerlingen?student=${student.id}&tab=huiswerk&onderwerp=${encodeURIComponent(x.title)}`}>{tt('Huiswerk over dit onderwerp')}</Link></div>}</details>
        {teacher?<select className={'cell gsel gs-'+status} value={status} onChange={e=>void patch([g.id],{status:e.target.value as GoalStatus})} aria-label={tt("Status")}>{STATUSES.map(st=><option key={st} value={st}>{GOAL_STATUS_LABEL[st]}</option>)}</select>:<span className={'gstat gs-'+status}>{GOAL_STATUS_LABEL[status]}</span>}</div>
@@ -165,7 +194,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
        {m.topic.map(z=><span key={z.key}>{tt('behandeld in {0} les(sen)',z.lessons_seen+z.clean_lessons)}{z.last_seen?' · '+tt('laatst {0}',niceDate(z.last_seen)):''}</span>)}
        {m.errors.map(z=><span key={z.key} className="nt2-err">{tt('terugkerende fout: {0} ({1} lessen)',z.label,z.lessons_seen)}{z.last_clean?' · '+tt('daarna goed: {0}',niceDate(z.last_clean)):''}</span>)}
       </div>}
-      {p?.note&&<small className="block lp-note">{p.note}</small>}
+      {teacher&&p?.note&&<small className="block lp-note">{p.note}</small>}
      </li>})}</ol></details>})}
    {shown.some(x=>!(x.g as {code?:string}).code)&&<section className="goal-level"><h4>{tt('Eigen onderwerpen')}</h4><ul>{shown.filter(x=>!(x.g as {code?:string}).code).map(x=><li key={x.g.id} className={'goal st-'+x.status}>{teacher&&<input type="checkbox" checked={sel.has(x.g.id)} onChange={()=>toggle(x.g.id)} aria-label={tt("Selecteren")}/>}<span className="grow"><b>{x.title}</b> <small className="muted">{x.level}</small></span>{teacher?<select className="cell" value={x.status} onChange={e=>void patch([x.g.id],{status:e.target.value as GoalStatus})}>{STATUSES.map(st=><option key={st} value={st}>{GOAL_STATUS_LABEL[st]}</option>)}</select>:<span className={'gstat gs-'+x.status}>{GOAL_STATUS_LABEL[x.status]}</span>}</li>)}</ul></section>}</>:
   byLevel.map(({l,items})=><section key={l} className="goal-level"><h4>{l}{l==='A0'&&<small className="muted"> {tt("(voorbereidend)")}</small>}{l===level&&<span className="tag">{tt("huidig niveau")}</span>}</h4>
@@ -174,7 +203,7 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
     <span className="grow"><b>{x.title}</b>{p?.title_override&&<small className="muted"> ({g.title})</small>}{g.owner_teacher&&<span className="tag own">{tt("eigen onderwerp")}</span>}{p?.level_override&&p.level_override!==g.level&&<span className="tag">{tt("verplaatst van {0}",g.level)}</span>}{x.hidden&&<span className="tag">{tt("verborgen")}</span>}
      {g.description&&<small className="muted block">{g.description}</small>}
      {p&&status!=='not_started'&&<small className="basis block">{p.basis==='ai_confirmed'?tt("AI-voorstel, bevestigd door docent"):p.basis==='intake'?tt("Intake"):tt("Docent")}{p.lesson_date?' · '+niceDate(p.lesson_date):''}{p.lesson_refs?.length?' · '+tt("lessen: {0}",p.lesson_refs.slice(-3).map(d=>niceDate(d)).join(', ')):''}</small>}
-     {p?.note&&<small className="block lp-note">{p.note}</small>}</span>
+     {teacher&&p?.note&&<small className="block lp-note">{p.note}</small>}{reqTag(g.id)}{studentActs(g,x.title,g.skill==='grammatica')}</span>
     {teacher?<select className="cell" value={status} onChange={e=>void patch([g.id],{status:e.target.value as GoalStatus})} aria-label={tt("Status")}>{STATUSES.map(s=><option key={s} value={s}>{GOAL_STATUS_LABEL[s]}</option>)}</select>:<span className={'gstat gs-'+status}>{GOAL_STATUS_LABEL[status]}</span>}
     {teacher&&<button className="iconbtn" title={tt("Aanpassen")} onClick={()=>setEdit(edit===g.id?null:g.id)}><Pencil size={14}/></button>}
     {teacher&&edit===g.id&&<TopicEditor title={x.title} original={g.title} origLevel={g.level} level={x.level} note={p?.note||''} hidden={x.hidden} updated={p?.updated_at||null}

@@ -19,7 +19,7 @@ import {t} from '../../lib/i18n';
 /** v54: practice in the ACTIVE learning language (same choice as "Mijn talen" in the sidebar) at the student's own
  *  level for that language — or, for now, another level (only on this page; the profile level stays the same). */
 function Page(){
- const router=useRouter();const wanted=useQueryParam('student');const spel=useQueryParam('spel');const {items,loaded,teacherName}=useMyStudentProfiles();
+ const router=useRouter();const wanted=useQueryParam('student');const spel=useQueryParam('spel');const onderwerp=useQueryParam('onderwerp');const {items,loaded,teacherName}=useMyStudentProfiles();
  const mine=useMyLanguageCards();const cards=mine.cards;const prefs=useLearnerPrefs();
  const wantedRel=items.find(s=>s.id===wanted);
  // a link to one lesson relation (?student=) makes that language the active one; otherwise the active language
@@ -49,7 +49,8 @@ function Page(){
    </section>
    <section className="card"><h3><Gamepad2 size={17}/> {t("Spelletjes met je woordenlijst")} <span className="tag">{languageName(code)} · {level}</span></h3>
     <VocabGames key={code+'|'+level+'|'+(rel?.id||'self')} studentId={rel?.id||null} lang={code} level={level} start={spel}/></section>
-   {rel&&<section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><p className="muted">{t("Zelfgemaakte oefeningen; dit is geen officieel huiswerk van je docent.")}</p><SelfPractice key={rel.id} studentId={rel.id} level={level}/></section>}
+   {/* v71: "Oefenen" from Mijn leerlijn opens this existing generator with that grammar topic as focus */}
+   {rel&&<section className="card" id="zelf"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><p className="muted">{t("Zelfgemaakte oefeningen; dit is geen officieel huiswerk van je docent.")}</p><SelfPractice key={rel.id+'|'+(onderwerp||'')} studentId={rel.id} level={level} topic={onderwerp||undefined}/></section>}
    {rel&&<section className="card"><h3><ClipboardList size={17}/> {t("Officieel huiswerk")}</h3><p className="muted">{t("Huiswerk van je docent staat in je leerlingprofiel.")}</p><Link className="button secondary" href={`/mijn-profiel?student=${rel.id}&tab=huiswerk`}>{t("Naar mijn huiswerk")}</Link></section>}
    {card.relations.length>1&&rel&&<p className="muted small">{t('Je oefent bij: {0}',teacherName(rel.id)||t('Docent'))}</p>}
   </>}

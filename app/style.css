@@ -1356,3 +1356,8 @@ div.drill-result.correct{background:#e9f7ef}div.drill-result.accent{background:#
 
 /* v70: explanation language on top of every AI lesson report */
 .sum-explain{display:flex;justify-content:flex-end;margin:6px 0 2px}.sum-explain .pr-explain{display:inline-flex;align-items:center;gap:6px}.sum-explain select{width:auto;min-height:32px;padding:4px 28px 4px 10px}
+
+/* v71: student learning line — requests and practice */
+.lp-sacts{margin-top:8px;gap:6px}.lp-sacts .button{min-height:32px}
+.tag.req-open{background:#fff4d6;color:#8a5a00}.tag.req-accepted{background:#e3f6ee;color:#137a55}.tag.req-declined{background:#f1f3f4;color:#5f6b6d}
+.lp-reqs{border:1px solid #f1dfae;background:#fffaf0;border-radius:14px;padding:12px 14px;margin:10px 0}.lp-reqs h4{margin:0 0 8px;display:flex;align-items:center;gap:6px}.lp-reqs ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}.lp-reqs li{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
