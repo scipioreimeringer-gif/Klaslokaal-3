@@ -36,7 +36,8 @@ test('games fix: student without state asks for it; delivery via window events a
 test('screen sharing: students too, same screen-call type, shown in the existing Scherm panel; one sharer at a time', () => {
   assert.match(html, /if\(c\.metadata && c\.metadata\.type === "screen"\)\{\s*c\.answer\(\); inScr\[c\.peer\] = c;/, 'teacher receives a student screen (no second video system)');
   assert.match(html, /if\(isT\) Object\.keys\(conns\)\.forEach\(function\(id\)\{ if\(conns\[id\]\.open\) shareTo\(id\); \}\);\s*else shareTo\(TEACHER_ID\);/);
-  assert.match(html, /if\(!confirm\(scrBy === "student" \? "Je leerling deelt nu het scherm\. Wil je het overnemen\?"/);
+  // v69: no extra dialog; the other side is asked to stop only once a source was chosen in the browser picker
+  assert.match(html, /\.then\(function\(stream\)\{\s*if\(takeOver\) send\(\{t:"scr", stop:true, by:isT \? "teacher" : "student"\}\);/);
   assert.match(html, /if\(m\.stop\)\{ if\(screenStream && !\(isT && m\.by === "teacher"\)\)\{ stopShare\(\);/);
   assert.match(html, /else if\(!m\.on && !screenStream && \(!m\.by \|\| m\.by === scrBy\)\) hideScreen\(\);/, 'only the screen of the one who stopped');
   assert.match(html, /if\(screenStream\)\{ var sk = screenStream; setTimeout\(function\(\)\{ if\(screenStream === sk\)\{ shareTo\(TEACHER_ID\);/, 'keeps sharing after a reconnect');

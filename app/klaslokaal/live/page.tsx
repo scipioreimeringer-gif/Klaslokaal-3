@@ -6,7 +6,34 @@ import {Suspense,useEffect,useRef,useState} from 'react';
 /** App CSS for the games inside the classroom tab: copied into a shadow root, so it never touches the classroom page's own styles. */
 function appCss(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}
  const b=getComputedStyle(document.body);
- return css.replace(/:root\b/g,':host')+`\n[data-mount]{font-family:${b.fontFamily};color:${b.color};font-size:15px;line-height:1.45;height:100%}\n[data-mount] .games-panel{position:static;width:auto;max-height:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;max-width:720px;padding:16px}`}
+ return css.replace(/:root\b/g,':host')+`\n[data-mount]{font-family:${b.fontFamily};color:${b.color};font-size:15px;line-height:1.45;height:100%}\n[data-mount] .games-panel{position:static;width:auto;max-height:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;max-width:720px;padding:16px}`+GAME_STAGE}
+/** v69: in the classroom a game uses (almost) the whole work area: bigger card, words, timer, score and buttons.
+ *  Sizes follow the panel width (container units), so it also fits next to other material or on a phone. */
+const GAME_STAGE=`
+[data-mount]{container-type:inline-size}
+[data-mount] .games-panel{max-width:min(1160px,100%);min-height:100%;box-sizing:border-box;padding:clamp(14px,2.6cqi,34px);display:flex;flex-direction:column;gap:clamp(10px,1.6cqi,20px)}
+[data-mount] .gx-top{padding:clamp(10px,1.6cqi,18px) clamp(12px,2cqi,22px);gap:clamp(12px,2cqi,24px)}
+[data-mount] .gx-ring{width:clamp(64px,9cqi,104px);height:clamp(64px,9cqi,104px)}
+[data-mount] .gx-ring svg{width:100%;height:100%}
+[data-mount] .gx-ring b{font-size:clamp(20px,3cqi,34px)}
+[data-mount] .gx-tag{font-size:clamp(12.5px,1.4cqi,15px)}
+[data-mount] .gx-score span{font-size:clamp(12.5px,1.4cqi,15px);padding:4px 12px}
+[data-mount] .gx-score b{font-size:clamp(15px,2.2cqi,24px)}
+[data-mount] .gx-cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:clamp(8px,1.2cqi,14px)}
+[data-mount] .gx-card{padding:clamp(12px,1.8cqi,20px) clamp(14px,2cqi,22px)}
+[data-mount] .gx-word{font-size:clamp(22px,3.4cqi,40px)}
+[data-mount] .gx-forbidden{font-size:clamp(12.5px,1.4cqi,15px)}
+[data-mount] .gx-guess{padding:clamp(22px,5cqi,64px) 16px}
+[data-mount] .gx-guess strong{font-size:clamp(26px,4.4cqi,48px)}
+[data-mount] .gx-flip{min-height:clamp(220px,34cqi,440px);width:100%}
+[data-mount] .gx-flip .face strong{font-size:clamp(28px,5.4cqi,64px)}
+[data-mount] .gx-flip .face small{font-size:clamp(13px,1.6cqi,17px)}
+[data-mount] .gx-counter{font-size:clamp(13px,1.5cqi,16px)}
+[data-mount] .gx-play-actions{gap:clamp(8px,1.2cqi,14px)}
+[data-mount] .gx-start,[data-mount] .gx-good,[data-mount] .gx-bad{min-height:clamp(42px,5.4cqi,54px);font-size:clamp(14.5px,1.7cqi,17px);padding:0 clamp(16px,2.4cqi,26px)}
+[data-mount] .gx-good.small{min-height:clamp(34px,4cqi,42px);font-size:clamp(13px,1.4cqi,15px)}
+[data-mount] .gx-round{width:clamp(40px,5cqi,52px);height:clamp(40px,5cqi,52px)}
+[data-mount] .gx-foot{margin-top:auto}`;
 /** v41: @font-face rules are ignored inside a shadow root, so the app font (Plus Jakarta Sans, self-hosted by next/font) is also registered in the classroom document once. */
 function fontFaces(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).filter(r=>r instanceof CSSFontFaceRule).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}return css}
 const frameCall=(fn:string,...a:unknown[])=>{try{const w=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentWindow as unknown as Record<string,(...x:unknown[])=>void>|null;w?.[fn]?.(...a)}catch{/* classroom not ready */}};

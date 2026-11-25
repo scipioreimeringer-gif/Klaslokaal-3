@@ -12,7 +12,8 @@ const fnSrc = name => { const i = html.indexOf('function ' + name + '('); let d 
 
 test('Canvas: open for both on entering; deliberate open/close shared, newest decision wins, no echo', () => {
   // v48: generalised to shared panels (Canvas, Bord, Spelletjes) in both directions — see v48-sync.test.mjs
-  assert.match(html, /OPEN\.cv = psFresh\(PS\.cv\) \? !!PS\.cv\.open : true;/);
+  // v69: a lesson starts with the big cameras (Canvas closed unless a fresh shared decision says open)
+  assert.match(html, /OPEN\.cv = psFresh\(PS\.cv\) \? !!PS\.cv\.open : false;/);
   assert.match(html, /if\(!at \|\| \(PS\[k\] && PS\[k\]\.at >= at\)\) return;/, 'older or equal decisions are ignored');
   assert.match(html, /setOpen\(k, !!x\.open, "remote"\);/, 'remote changes are applied without being sent back');
   assert.match(html, /else setOpen\(k, false, "user"\); \}\);/, 'the X is a deliberate close');

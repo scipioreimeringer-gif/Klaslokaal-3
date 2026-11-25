@@ -32,7 +32,8 @@ test('Canvas and Bord separately or together (canvas is its own panel: same edit
   assert.match(mod, /ws\.style\.gridTemplateColumns = \(leftFr \* 100\) \+ "% 8px 1fr"/);
 });
 test('screen: hiding the panel is not stopping the stream; explicit start/stop in the ⋯ menu', () => {
-  assert.match(mod, /if\(screenStream && confirm\("Scherm delen stoppen\?/, 'v42: stopping is an explicit choice');
+  // v69: stopping is an explicit choice via the separate Delen button (no confirm dialog when hiding the panel)
+  assert.ok(!/confirm\("Scherm delen stoppen\?/.test(mod));
   assert.match(mod, /setOpen\("scr", false\); if\(screenStream\) toast\(/, 'otherwise only the panel is hidden');
   assert.match(mod, /if\(screenStream\) stopShare\(\); else if\(peer\)\{ setOpen\("scr", true, "user"\); startShare\(\); \}/);
 });

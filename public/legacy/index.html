@@ -2195,12 +2195,11 @@ function shareTo(id){
 function startShare(){
   if(!peer){ toast(isT ? 'Klik eerst op "Start de les"' : 'Ga eerst naar de les'); return; }
   if(!isT && !(tConn && tConn.open)){ toast("Je bent nog niet verbonden met je docent"); return; }
-  /* v47: one shared screen at a time — taking over is a clear choice, the other side stops its own sharing */
-  if(SL.screen && !screenStream && (scrBy === "student" || scrBy === "teacher")){
-    if(!confirm(scrBy === "student" ? "Je leerling deelt nu het scherm. Wil je het overnemen?" : "Je docent deelt nu het scherm. Wil je het overnemen?")) return;
-    send({t:"scr", stop:true, by:isT ? "teacher" : "student"});
-  }
+  /* v47: one shared screen at a time. v69: no extra TeachyRooms dialog — the native browser picker opens at once; only
+     once a source is chosen the other side is asked to stop its own sharing (cancelling the picker changes nothing). */
+  var takeOver = SL.screen && !screenStream && (scrBy === "student" || scrBy === "teacher");
   navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15, max:24}}, audio:true}).then(function(stream){
+    if(takeOver) send({t:"scr", stop:true, by:isT ? "teacher" : "student"});
     screenStream = stream; scrKey = "scr:" + uid();
     stream.getVideoTracks()[0].addEventListener("ended", stopShare);
     showScreen(stream, scrKey, "self");
@@ -3601,6 +3600,8 @@ window.addEventListener("resize", function(){ WB.fit(); SL.fit(); placeVideo(sto
   window.__camWork = function(){ if(mode === "full") setMode(P.last || "right", "auto"); };
   /* v41: the last work panel was closed → the video becomes full again (not when the layout is locked; the call is never touched) */
   window.__camAutoFull = function(){ if(mode !== "full" && mode !== "hidden") setMode("full", "auto"); };
+  /* v69: used by the one central automatic layout (see v69 below) */
+  window.__camSetMode = setMode; window.__camMode = function(){ return mode; };
 
   /* menu */
   function closeMenu(){ menu.hidden = true; }
@@ -3736,7 +3737,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   var SHARED = ["cv", "wb", "games"], PSK = "klas-ps-" + (isT ? "t" : "s") + "-" + (ROOM || "x");
   var PS = (function(){ var s = store(PSK); return s && typeof s === "object" ? s : {}; })();
   function psFresh(x){ return !!(x && x.at && Date.now() - x.at < 6 * 3600e3); }
-  OPEN.cv = psFresh(PS.cv) ? !!PS.cv.open : true;
+  OPEN.cv = psFresh(PS.cv) ? !!PS.cv.open : false; /* v69: a lesson opens with the big cameras; Canvas opens on a click */
   if(psFresh(PS.wb)) OPEN.wb = !!PS.wb.open;
   function psDecide(k, open){ if(SHARED.indexOf(k) < 0) return; PS[k] = {open:!!open, at:Date.now()}; store(PSK, PS); var o = {}; o[k] = PS[k]; send({t:"panels", s:o}); }
   function psAll(){ var o = {}, n = 0; SHARED.forEach(function(k){ if(psFresh(PS[k])){ o[k] = PS[k]; n++; } }); if(n) send({t:"panels", s:o}); }
@@ -3840,11 +3841,9 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     if(k === "scr"){
       if(OPEN.scr && !full){
         /* v42: sharing is stopped only on an explicit choice; otherwise the panel is just hidden and the stream keeps going */
-        if(screenStream && confirm("Scherm delen stoppen?\n\nOK = delen stoppen · Annuleren = alleen het paneel verbergen")){ stopShare(); setOpen("scr", false); return; }
-        setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: ⋯ → Scherm delen stoppen."); return; }
+        /* v69: no extra dialog — hiding the panel never stops sharing; the separate "Delen" button starts/stops it */
+        setOpen("scr", false); if(screenStream) toast("Je scherm wordt nog gedeeld. Stoppen: knop Delen."); return; }
       setOpen("scr", true, "user");
-      /* teacher, nothing to show yet (no shared screen, no slides): start sharing — the browser asks only now */
-      if(isT && peer && !screenStream && !SL.screen && !(SL.key)) startShare();
       return;
     }
     setOpen(k, full ? true : !OPEN[k], "user");
@@ -3916,7 +3915,7 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   document.addEventListener("keydown", function(e){ if(e.key === "Escape" && document.body.classList.contains("wb-max")) wbMax(false); });
   layout();
   /* v46: the Canvas is open on entering → the cameras move to the right next to it (stay visible) */
-  if(OPEN.cv && window.__camWork) window.__camWork("auto");
+  if(OPEN.cv && window.__camWork) window.__camWork("auto"); /* v69: __camWork is the central automatic layout */
 })();
 
 /* =================================================================== v40: NEW CANVAS TOOLBAR
@@ -4615,6 +4614,99 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   window.addEventListener("resize", draw); holder.addEventListener("scroll", draw); document.addEventListener("scroll", draw, true);
   if(window.MutationObserver) new MutationObserver(function(){ if(theirs) requestAnimationFrame(draw); }).observe(CV, {childList:true, subtree:true, characterData:true});
   setInterval(function(){ if(theirs) draw(); }, 1500);
+})();
+
+/* =================================================================== v69: AUTOMATIC CLASSROOM LAYOUT
+   ONE rule decides where the cameras go, based on what is open NOW (Canvas, Bord, Slides/Scherm, Spelletjes):
+   nothing open → both cameras big, side by side; something open → cameras on the right, stacked, equal size.
+   Only the existing camera modes change (CSS classes + position of the SAME video window): no <video>, track, PeerJS
+   call or recording is recreated. Camera bar: settings · own picture on/off · close (the call keeps running). */
+(function(){
+  var B = document.body; B.classList.add("v69");
+  function active(){ var o = window.__klasOpen ? window.__klasOpen() : {}; return !!(o.cv || o.wb || o.scr || o.games); }
+  function want(){ return active() ? "right" : "full"; }
+  var fitT = 0;
+  function refit(){ clearTimeout(fitT); fitT = setTimeout(function(){ try{ WB.fit(); SL.fit(); }catch(e){} }, 320); } /* after the slide-in */
+  function autoCam(){
+    if(!window.__camMode || !window.__camSetMode) return;
+    var m = window.__camMode(); if(m === "hidden") return; /* closed by the user: stays closed until reopened */
+    var w = want(); if(m !== w){ window.__camSetMode(w, "v69"); refit(); }
+  }
+  /* every older entry point now goes through the same rule (no component decides the layout on its own) */
+  window.__klasAutoLayout = autoCam; window.__camWork = autoCam; window.__camAutoFull = autoCam; window.__camToggleFull = autoCam;
+  window.__camShow = function(v){ if(window.__camSetMode){ window.__camSetMode(v ? want() : "hidden", "v69"); refit(); } };
+  var _layout = layout; layout = function(){ _layout(); autoCam(); };
+
+  /* ---- camera bar: three buttons ---- */
+  var sb = $("selfBtn"); if(sb){ sb.title = "Eigen camerabeeld tonen of verbergen (alleen voor jou; de ander blijft je zien)"; sb.setAttribute("aria-label", "Eigen camerabeeld tonen of verbergen"); }
+  var vc = $("vClose"); if(vc){ vc.title = "Camerapaneel sluiten (gesprek, geluid en opname lopen door)"; vc.setAttribute("aria-label", "Camerapaneel sluiten"); }
+  var vs = $("vShow"); if(vs){ vs.title = "Camera's weer tonen"; }
+  /* settings panel: position/size are automatic now; the floating window (PiP) moves in here */
+  var box = document.querySelector(".v53-cam");
+  if(box){
+    var ps = box.querySelector(".v53-pos"); if(ps && ps.closest("section")) ps.closest("section").hidden = true;
+    var sec = document.createElement("section"); sec.className = "v53-sec v69-pip";
+    sec.innerHTML = '<h3>Zwevend videovenster</h3><button type="button" class="v69-pipbtn" id="v69Pip">Zwevend venster openen</button>';
+    var pa = document.querySelector("label.pipauto"); if(pa){ pa.classList.add("v53-sw"); sec.appendChild(pa); }
+    box.insertBefore(sec, box.querySelector(".v53-note"));
+    sec.querySelector("#v69Pip").addEventListener("click", function(){ if(window.__pip) window.__pip.open(false); });
+    if(!(window.__pip && window.__pip.supported) && !document.pictureInPictureEnabled) sec.hidden = true;
+  }
+  /* back in the classroom: a video-element PiP (fallback browsers) closes again too */
+  try{ var hd = window.parent && window.parent !== window ? window.parent.document : document;
+    hd.addEventListener("visibilitychange", function(){ if(hd.visibilityState === "visible" && document.pictureInPictureElement){ document.exitPictureInPicture().catch(function(){}); } });
+  }catch(e){}
+
+  /* ---- screen sharing: ONE click opens the browser's own picker; stop via the button, the browser bar, or the
+     shared source closing (track "ended", already wired to stopShare). The panel that sharing opened closes again. ---- */
+  var scrBtn = document.querySelector('.dock [data-open="scr"]');
+  if(scrBtn){ var l = scrBtn.querySelector(".lbl"); if(l) l.textContent = "Slides"; scrBtn.title = "Slides en gedeeld scherm (aan/uit)"; scrBtn.setAttribute("aria-label", "Slides"); }
+  if(scrBtn && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia){
+    var sh = document.createElement("button"); sh.type = "button"; sh.className = "db navtab v40 v69share"; sh.id = "v69Share"; sh.setAttribute("aria-pressed", "false");
+    sh.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span class="lbl">Delen</span>';
+    sh.addEventListener("click", function(){ if(screenStream) stopShare(); else startShare(); });
+    scrBtn.parentNode.insertBefore(sh, scrBtn.nextSibling);
+    var shUpd = function(){ var on = !!screenStream; sh.setAttribute("aria-pressed", on ? "true" : "false"); sh.classList.toggle("live", on); sh.querySelector(".lbl").textContent = on ? "Stop delen" : "Delen"; sh.title = on ? "Stop met je scherm delen" : "Scherm delen: kies direct een tabblad, venster of scherm"; };
+    setInterval(shUpd, 700); shUpd();
+  }
+  var byShare = false;
+  var _show = showScreen; showScreen = function(stream, key, who){ if(!SL.screen) byShare = !!window.__klasOpen && !window.__klasOpen().scr; _show(stream, key, who); };
+  var _hide = hideScreen; hideScreen = function(){ var was = SL.screen; _hide(); if(was && byShare && window.__klasToggle) window.__klasToggle("scr", false); byShare = false; if(was) autoCam(); };
+
+  /* ---- slides toolbar: always visible and usable, also in a very narrow panel ---- */
+  var bar = document.querySelector("#pSl .slbar"), pSl = $("pSl");
+  if(bar && pSl){
+    var fs = document.createElement("button"); fs.type = "button"; fs.className = "ib v69fs"; fs.id = "slFsBtn"; fs.title = "Slides op volledig scherm"; fs.setAttribute("aria-label", "Volledig scherm");
+    fs.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+    fs.addEventListener("click", function(){ try{ if(document.fullscreenElement) document.exitFullscreen(); else if(pSl.requestFullscreen) pSl.requestFullscreen(); }catch(e){} });
+    document.addEventListener("fullscreenchange", function(){ fs.setAttribute("aria-pressed", document.fullscreenElement === pSl ? "true" : "false"); setTimeout(function(){ try{ SL.fit(); }catch(e){} }, 80); });
+    if(!pSl.requestFullscreen) fs.hidden = true;
+    bar.insertBefore(fs, bar.querySelector(".popmenu") || bar.querySelector(".pclose43"));
+    var zf = bar.querySelector(".zoomfit"); if(zf) zf.title = "Passend maken";
+  }
+
+  /* ---- styles ---- */
+  var st = document.createElement("style"); st.setAttribute("data-v69", "");
+  st.textContent = [
+    /* camera bar: settings · own picture · close */
+    "body.v69 #camPin,body.v69 #camFull,body.v69 #vSize,body.v69 #vMin,body.v69 #pipBtn{display:none!important}",
+    /* subtle move between the two layouts (the same video window; not while dragging) */
+    "body.v69 .vwin{transition:left .26s ease,top .26s ease,width .26s ease,height .26s ease}",
+    "body.v69 .vwin.dragging{transition:none}",
+    "@media(prefers-reduced-motion:reduce){body.v69 .vwin{transition:none}}",
+    ".v69-pipbtn{width:100%;min-height:36px;border:1px solid var(--line,#dfe7e5);border-radius:10px;background:#fff;font:inherit;font-weight:700;cursor:pointer;margin-bottom:8px}",
+    ".v69share.live{background:#d64534!important;color:#fff!important}",
+    /* slides toolbar: one row, never cut off; labels and less important buttons give way first */
+    "#pSl{container-type:inline-size}",
+    "body.v69 .slbar{opacity:1;max-width:calc(100% - 12px);flex-wrap:nowrap;white-space:nowrap;overflow:visible}",
+    "body.v69 .slbar>*{flex:none}body.v69 .slbar .slnav,body.v69 .slbar .zoom-controls{display:flex;align-items:center;flex-wrap:nowrap}",
+    "body.v69 #slShareBtn{display:none}",
+    "@container (max-width:560px){body.v69 .slbar .slink .lbl{display:none}body.v69 .slbar .slink{width:30px;padding:0;justify-content:center}body.v69 .slbar .zoomfit{display:none}}",
+    "@container (max-width:400px){body.v69 .slbar{gap:1px;padding:2px 3px;bottom:6px}body.v69 .slbar #slInfo{display:none}body.v69 .slbar .ib,body.v69 .slbar .popmenu>summary{width:26px;min-width:26px;height:28px}body.v69 .slbar .zoom-level{font-size:.7rem;padding:0 2px}}",
+    "@container (max-width:300px){body.v69 .slbar .slnav{display:none}}"
+  ].join("\n");
+  document.head.appendChild(st);
+  autoCam();
 })();
 
 })();
