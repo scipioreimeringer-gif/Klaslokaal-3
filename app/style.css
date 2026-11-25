@@ -1340,3 +1340,16 @@ div.drill-result.correct{background:#e9f7ef}div.drill-result.accent{background:#
 .pr-explain{display:inline-flex;align-items:center;gap:6px}.pr-explain select{width:auto;padding:2px 8px;min-height:0}
 .pr-ask{margin:4px 0 0;text-align:center}.dp-top .pr-explain{margin-left:auto}
 
+
+/* v68: lesson topics (agenda + classroom) and curriculum extras */
+.lt68-box{border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px;margin:10px 0;background:var(--card,#fff)}
+.lt68-box>summary{cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:600}
+.lt68-box h4{display:flex;align-items:center;gap:6px;margin:0 0 6px}
+.lt68{display:grid;gap:8px;margin-top:8px}
+.lt68-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.lt68-item{border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:8px 10px;display:grid;gap:6px}
+.lt68-item.o-covered{border-color:#9bd8c2;background:#f3fbf8}.lt68-item.o-not_covered{opacity:.7}
+.lt68-out button{font-size:12px;padding:3px 8px;display:inline-flex;align-items:center;gap:3px}
+.lt68-sub .hw-chip{font-size:12px}.lt68-recs{display:grid;gap:4px}.lt68-recs small svg{vertical-align:-2px}
+.live-private .lt68-box{margin:0 0 10px}
+.nt2-ex,.nt2-errs{margin:4px 0;font-size:13px}.nt2-errs{color:#9a3412}.nt2-acts{margin-top:6px;gap:6px}

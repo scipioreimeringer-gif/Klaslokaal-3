@@ -14,6 +14,7 @@ import {ArrowLeft,Video,X} from 'lucide-react';
 import {useAuth} from '../../../components/Auth';
 import Nav from '../../../components/Nav';
 import {PrivateNotes} from '../../../components/StudentData';
+import {LessonTopics} from '../../../components/LessonTopics';
 import {AssistantPanel} from '../../../components/Assistant';
 import {GamesPanel} from '../../../components/Games';
 import {usePhoto} from '../../../components/Avatar';
@@ -45,6 +46,7 @@ function Picker(){
 
 function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:string|null;asParam?:string|null}){
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
+ const [lessonRef,setLessonRef]=useState<{id:string;day:string}|null>(null);
  const [assistOpen,setAssistOpen]=useState(false);const [gamesOpen,setGamesOpen]=useState(false);const [gamesHost,setGamesHost]=useState<Element|null>(null);const [frameLoads,setFrameLoads]=useState(0);
  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
   const db=supabase()!;const r=await db.from('students').select('id,teacher_id,user_id,name,email,subject,notes,goals,homework,history,level,lesson_language,about,room_code').eq('id',studentId).maybeSingle();
@@ -59,6 +61,7 @@ function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:
   if(!s.room_code){setError(t(MIGRATION_HINT));return}
   // v66: teacher AND student know the planned lesson → the same timer (countdown, elapsed, overrun)
   const lesson=await findLesson(db,s.id,lessonParam);const lessonId=lesson?.id||null;if(cancelled)return;
+  setLessonRef(lesson?{id:lesson.id,day:new Date(lesson.starts_at||Date.now()).toLocaleDateString('en-CA')}:null);
   window.teachyBridge=as==='teacher'?createTeacherBridge(db,{teacherId:user.id,userId:user.id,studentId:s.id,studentName:s.name,lessonId,lessonStartsAt:lesson?.starts_at||null,onSwitch:id=>router.push('/klaslokaal/live?student='+id)}):createStudentBridge(db,{studentId:s.id,studentName:s.name});
   // One combined top bar: page actions are offered inside the classroom's own ⋯ menu.
   window.teachyBridge.uiLang=getLang();
@@ -92,7 +95,8 @@ function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:
  return <main className="live-page bar-hidden">
   <div className="live-body">
    <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame" onLoad={()=>setFrameLoads(n=>n+1)}/>
-   {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><PrivateNotes studentId={s.id}/></aside>}
+   {/* v68: the lesson topics (add, remove, mark as covered, observation) in the teacher's existing side panel */}
+   {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><LessonTopics studentId={s.id} lessonId={lessonRef?.id||null} lessonDate={lessonRef?.day||new Date().toLocaleDateString('en-CA')}/><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
    {/* always mounted: receives the game state even while closed (the student's panel opens when a game starts) */}
    <GamesPanel studentId={s.id} role={room.as} open={gamesOpen||!!gamesHost} mount={gamesHost} onOpen={()=>{if(gamesHost)frameCall('__klasTab','games','content');else setGamesOpen(true)}} onClose={()=>{if(gamesHost)frameCall('__klasToggle','games',false);else setGamesOpen(false)}}/>

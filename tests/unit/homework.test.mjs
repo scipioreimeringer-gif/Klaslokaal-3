@@ -65,7 +65,7 @@ test('form: compact card, default "Vanuit mijn les", 5–30 min, all exercise ty
 });
 test('teacher homework tab: card always visible; manual assignment folded; student self-practice is not official homework', () => {
   const h = read('app/huiswerk-client.tsx');
-  assert.match(h, /\{!aiSet&&<ExerciseForm studentId=\{studentId\} teacher onReady=\{setAiSet\}\/>\}/);
+  assert.match(h, /\{!aiSet&&<ExerciseForm studentId=\{studentId\} teacher onReady=\{setAiSet\}( initialTopic=\{topicParam\|\|undefined\})?\/>\}/);
   assert.match(h, /<details className="hw-manual">/);
   assert.match(h, /origin:'ai'\}\)/, 'AI homework is saved as a draft for the teacher to check');
   assert.match(read('app/oefenen/page.tsx'), /geen officieel huiswerk van je docent/);

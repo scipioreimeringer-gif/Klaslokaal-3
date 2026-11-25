@@ -2,6 +2,7 @@
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import {useAuth} from '../components/Auth';
+import {useQueryParam} from '../lib/useQuery';
 import {supabase} from '../lib/supabase';
 import {authFetch} from '../lib/authFetch';
 import {ExerciseForm,ExercisePlayer,type ExerciseSet,type ExerciseItem} from '../components/Learning';
@@ -51,6 +52,7 @@ function HwHead({a,subs,teacher,onDue}:{a:Assignment;subs:Submission[];teacher:b
 }
 type Submission={id:string;assignment_id:string;answer:string;file_path:string|null;file_name:string|null;submitted_at:string;teacher_feedback:string|null;feedback_published_at:string|null};
 export default function Homework({studentId,teacher}:{studentId:string;teacher:boolean}){
+ const topicParam=useQueryParam('onderwerp'); // v68: "Huiswerk over dit onderwerp" from the learning line
  const {user}=useAuth();const [assignments,setAssignments]=useState<Assignment[]>([]);const [submissions,setSubmissions]=useState<Submission[]>([]);const [title,setTitle]=useState('');const [instructions,setInstructions]=useState('');const [answers,setAnswers]=useState<Record<string,string>>({});const [files,setFiles]=useState<Record<string,File|null>>({});const [drafts,setDrafts]=useState<Record<string,string>>({});const [reviews,setReviews]=useState<Record<string,string>>({});const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [aiSet,setAiSet]=useState<ExerciseSet|null>(null);const [playing,setPlaying]=useState<string|null>(null);
  async function load(){const db=supabase();if(!db||!user)return;let a=await db.from('assignments').select('id,student_id,title,instructions,published_at,exercises,origin,due_at').eq('student_id',studentId).order('created_at',{ascending:false});if(a.error&&/due_at/.test(a.error.message))a=await db.from('assignments').select('id,student_id,title,instructions,published_at,exercises,origin').eq('student_id',studentId).order('created_at',{ascending:false}) as typeof a;/* v44: deadline optional until v44.sql */if(a.error&&/exercises|origin|column/i.test(a.error.message))a=await db.from('assignments').select('id,student_id,title,instructions,published_at').eq('student_id',studentId).order('created_at',{ascending:false}) as typeof a;if(a.error){setMessage(a.error.message);return}setAssignments(a.data||[]);const ids=(a.data||[]).map(x=>x.id);if(!ids.length){setSubmissions([]);return}const s=await db.from('homework_submissions').select('id,assignment_id,answer,file_path,file_name,submitted_at,teacher_feedback,feedback_published_at').in('assignment_id',ids).order('submitted_at',{ascending:false});if(s.error)setMessage(s.error.message);else setSubmissions(s.data||[])}
  useEffect(()=>{void load()},[studentId,user?.id]);
@@ -67,7 +69,7 @@ export default function Homework({studentId,teacher}:{studentId:string;teacher:b
  async function openFile(s:Submission){if(!s.file_path)return;const db=supabase()!;if(teacher){const res=await authFetch(db,'/api/homework-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({submissionId:s.id})});const j=await res.json().catch(()=>({error:t('Fout {0}',res.status)}));if(j.url)window.open(j.url,'_blank','noopener,noreferrer');else setMessage(j.error||t("Bestand niet beschikbaar"))}else{const {data,error}=await db.storage.from('homework').createSignedUrl(s.file_path,60);if(error)setMessage(error.message);else window.open(data.signedUrl,'_blank','noopener,noreferrer')}}
  return <section className="card hw-section"><h2>{t("Huiswerk")}</h2>{message&&<p className="muted" role="status">{message}</p>}{teacher&&<div className="ai-homework">
   {/* v40: the compact generator card is always visible (no extra toggle) */}
-  {!aiSet&&<ExerciseForm studentId={studentId} teacher onReady={setAiSet}/>}
+  {!aiSet&&<ExerciseForm studentId={studentId} teacher onReady={setAiSet} initialTopic={topicParam||undefined}/>}
   {aiSet&&<div className="ai-draft"><input className="field" value={aiSet.title} onChange={e=>setAiSet({...aiSet,title:e.target.value})}/><HomeworkDraft set={aiSet} studentId={studentId} onChange={setAiSet}/>
    <div className="row"><button className="button" disabled={busy||!aiSet.items.length} onClick={()=>void saveAi()}>{t("Opslaan als concept")}</button><button className="button secondary" onClick={()=>setAiSet(null)}>{t("Opnieuw")}</button></div></div>}</div>}
  {teacher&&<details className="hw-manual"><summary>{t("Nieuwe opdracht")}</summary><div style={{display:'grid',gap:8,marginTop:8}}><input className="field" placeholder={t("Titel")} value={title} onChange={e=>setTitle(e.target.value)}/><textarea className="field" rows={5} placeholder={t("Opdracht en vragen")} value={instructions} onChange={e=>setInstructions(e.target.value)}/><button className="button" disabled={busy||!title.trim()||!instructions.trim()} onClick={()=>void create()}>{t("Conceptopdracht maken")}</button></div></details>}

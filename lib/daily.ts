@@ -83,7 +83,7 @@ export function uniqueMistakes(list: Mistake[]): Mistake[] {
   return [...by.values()];
 }
 
-export function buildDaily(input: {studentId: string; day: string; level?: string | null; lang?: string; words: Word[]; mistakes: Mistake[]; homework: HwItem[]; state: ItemState[]; topics?: string[]; now?: number; max?: number}): DailySet {
+export function buildDaily(input: {studentId: string; day: string; level?: string | null; lang?: string; words: Word[]; mistakes: Mistake[]; homework: HwItem[]; state: ItemState[]; topics?: string[]; /** v68: grammar keys of learning-line topics in development / extra practice / recent lesson topics */ focusTopics?: string[]; now?: number; max?: number}): DailySet {
   const now = input.now ?? Date.now(), r = rng(seedOf(input.studentId + '|' + input.day)), L = lvl(input.level), max = input.max ?? 10;
   const st = new Map(input.state.map(s => [s.item_key, s]));
   const words = input.words.filter(w => w.term && w.translation);
@@ -102,6 +102,7 @@ export function buildDaily(input: {studentId: string; day: string; level?: strin
   const weak = new Map<string, number>();
   const bump = (t: string, w: number) => { for (const x of TOPIC_GROUP[t] || [t]) weak.set(x, (weak.get(x) || 0) + w * (x === t ? 1 : 0.5)); };
   for (const m of mistakes) { const k = categoryKey(m.label).key; bump(k, Math.min(4, m.repeats)); if (m.type === 'conjugation') bump('conjugation', 1); if (m.type === 'article') bump('articles', 1); if (m.type === 'preposition') bump('prepositions', 1); if (m.type === 'word_order') bump('word_order', 1); }
+  for (const k of input.focusTopics || []) bump(k, 2);
   const gTopic = new Map(bank.map(g => [g.key, g.topic]));
   for (const s of input.state) if (s.item_key.startsWith('gr:') && s.wrong_count > 0) { const t = gTopic.get(s.item_key); if (t) bump(t, Math.min(3, s.wrong_count) * 0.5); }
   const known = new Set([...(input.topics || []), ...weak.keys()]);

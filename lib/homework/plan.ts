@@ -4,7 +4,8 @@
 // v66 focus options: auto (personalised 40/30/20/10), last_lesson, mix (everything evenly), developing (topics in
 // progress / to review), choose (teacher picks topics from the learning line). Older values stay accepted.
 import {templateFor, itemProblem} from './templates.ts';
-export type Focus = 'auto' | 'last_lesson' | 'mix' | 'developing' | 'choose' | 'weak' | 'review' | 'vocab' | 'topics';
+// v68: 'lesson' = the topics selected / covered for the latest lesson (lesson_goals), only that grammar
+export type Focus = 'auto' | 'last_lesson' | 'mix' | 'developing' | 'choose' | 'lesson' | 'weak' | 'review' | 'vocab' | 'topics';
 export type Role = 'recent' | 'weak' | 'review' | 'vocab' | 'reading' | 'writing';
 export type BlockType = 'conjugate' | 'fill_in' | 'multiple_choice' | 'translate' | 'correct_error' | 'make_sentence' | 'transform' | 'reading' | 'write';
 export type Block = {i: number; role: Role; type: BlockType; count: number; weight: number; topic?: string; open: boolean};
@@ -51,7 +52,7 @@ export function planBlocks(minutes: number, level: string, focus: Focus = 'auto'
   n = Math.max(1, n);
   const MIX: Role[] = ['recent', 'review', 'weak', 'vocab'];
   const roles: Role[] = focus === 'last_lesson' ? Array(n).fill('recent') : focus === 'weak' || focus === 'developing' ? Array(n).fill('weak') : focus === 'review' ? Array(n).fill('review')
-    : focus === 'vocab' ? Array(n).fill('vocab') : focus === 'topics' || focus === 'choose' ? Array(n).fill('recent') : focus === 'mix' ? Array.from({length: n}, (_, j) => MIX[j % 4]) : splitRoles(n);
+    : focus === 'vocab' ? Array(n).fill('vocab') : focus === 'topics' || focus === 'choose' || focus === 'lesson' ? Array(n).fill('recent') : focus === 'mix' ? Array.from({length: n}, (_, j) => MIX[j % 4]) : splitRoles(n);
   const types = typesFor(level);
   roles.forEach((role, j) => {
     const type: BlockType = role === 'vocab' ? (j % 2 ? 'translate' : 'fill_in') : types[j % types.length];

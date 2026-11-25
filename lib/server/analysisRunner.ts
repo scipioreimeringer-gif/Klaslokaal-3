@@ -12,6 +12,7 @@ import {detectCanvasVocab} from './vocab';
 import {publishable} from '../analysis/catchup';
 import {applyMemory} from './memory';
 import {normTerm} from '../vocab/core';
+import {visibleGoals} from '../curriculum/topics';
 
 export const LANG_GUIDE: Record<string, string> = {
   pt: 'BRAZILIAN Portuguese: verb conjugation (e.g. "ontem eu vai" → "ontem eu fui"), ser/estar, gender/number agreement, prepositions and contractions, word order, word choice and false friends. Normal informal Brazilian speech is NOT an error ("a gente", "tá", "pra", "né", omitted object pronouns, "ter" for "haver").',
@@ -40,8 +41,8 @@ export async function loadTopics(db: SupabaseClient, studentId: string, subject:
   const prog = new Map(((p.data || []) as {goal_id: string; status: string; hidden?: boolean; title_override?: string | null; level_override?: string | null}[]).map(x => [x.goal_id, x]));
   // v64: Dutch = the NT2 curriculum (stable nt2-* ids) + own topics; older Dutch standard goals are no longer offered
   const goals = (g.data || []) as {id: string; level: string; title: string; code?: string | null}[];
-  const nt2 = subject === 'nl' && goals.some(t => t.code?.startsWith('nt2-'));
-  return goals.filter(t => !nt2 || !t.code || t.code.startsWith('nt2-'))
+  // v68: Portuguese = the Brazilian-Portuguese curriculum (ptbr-*) in the same way
+  return visibleGoals(goals, subject)
     .filter(t => !prog.get(t.id)?.hidden)
     .map(t => { const x = prog.get(t.id); return {id: t.id, title: x?.title_override || t.title, level: x?.level_override || t.level, status: STATUS_ALIAS[x?.status || 'not_started'] || 'not_started'}; });
 }
@@ -86,7 +87,8 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
       test ? null : db.from('lesson_entries').select('notes,homework').eq('student_id', student.id).eq('lesson_date', a.lesson_date).maybeSingle().then(r => r.data as {notes?: string; homework?: string} | null),
       test || !a.lesson_id ? null : db.from('lesson_teacher_notes').select('notes').eq('lesson_id', a.lesson_id).maybeSingle().then(r => (r.data as {notes?: string} | null)?.notes || '', () => ''),
       test ? Promise.resolve('') : canvasText(db, student.id, 4000),
-      db.from('lesson_goals').select('goal_id,custom_title,curriculum_goals(title)').eq('student_id', student.id).eq('lesson_date', a.lesson_date).then(r => r.error ? [] : (r.data || []) as unknown as {goal_id: string | null; custom_title: string | null; curriculum_goals: {title: string} | null}[]),
+      // v68: '*' also reads the teacher's observation (note) and outcome when v68.sql is installed
+      db.from('lesson_goals').select('*,curriculum_goals(title)').eq('student_id', student.id).eq('lesson_date', a.lesson_date).then(r => r.error ? [] : (r.data || []) as unknown as {goal_id: string | null; custom_title: string | null; outcome?: string; note?: string; sub?: string[]; curriculum_goals: {title: string} | null}[]),
       loadTopics(db, student.id, subject),
       test ? Promise.resolve([] as HistoryItem[]) : db.from('lesson_analyses').select('lesson_date,final,is_test,pipeline_version').eq('student_id', student.id).eq('status', 'approved').neq('id', analysisId).order('lesson_date', {ascending: false}).limit(5)
         .then(r => ((r.data || []) as {lesson_date: string; final: AnalysisV2 | null; is_test?: boolean; pipeline_version?: number}[])
@@ -138,7 +140,9 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
     };
     const res = await runPipeline({
       utterances, lessonDate: a.lesson_date, targetLang: subject, targetName: target, uiName: ui, level: student.level || 'A1',
-      notes, board, lessonGoals: goals.map(g => ({topic_id: g.goal_id, title: g.custom_title || g.curriculum_goals?.title || ''})).filter(g => g.title),
+      // v68: planned ≠ covered — the teacher's mark and observation travel along (short), a "not covered" topic is not a lesson goal
+      notes, board, lessonGoals: goals.filter(g => g.outcome !== 'not_covered').map(g => { const t = g.custom_title || g.curriculum_goals?.title || '';
+        return {topic_id: g.goal_id, title: !t ? '' : (t + (g.sub?.length ? ` (${g.sub.slice(0, 3).join(', ')})` : '') + (g.outcome === 'covered' ? ' [covered per teacher]' : ' [planned]') + (g.note ? ` — teacher: ${g.note.slice(0, 160)}` : '')).slice(0, 300)}; }).filter(g => g.title),
       topics, history: hist, isTest: test, guide: LANG_GUIDE[subject] || '', knownWords,
       thinNote: studentWords < 60 && !notes && !board ? `Te weinig lesinhoud voor zinvol huiswerk (${studentWords} woorden van de leerling, geen notities of bord).` : undefined,
       deadline: opts.started + 240_000,

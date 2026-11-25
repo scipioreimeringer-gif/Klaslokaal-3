@@ -10,6 +10,7 @@ import {supabase} from '../lib/supabase';
 import {t,locale} from '../lib/i18n';
 import {authedPost} from '../lib/learning';
 import {useExplainLang, ExplainLangSelect, NoteList} from './ExplainLang';
+import {focusKeysOf} from '../lib/curriculum/focus';
 import {errorsOf} from '../lib/analysis/core';
 import {buildDaily,checkAnswer,streakOf,summaryOf,type DailySet,type HwItem,type ItemState,type Mistake,type Question,type Word} from '../lib/daily';
 
@@ -22,13 +23,14 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
   const [d, setD] = useState<DailyData | null>(null);
   const load = useCallback(async () => {
     const db = supabase()!, day = today();
-    const [v, s, a, st, ps, mf] = await Promise.all([
+    const [v, s, a, st, ps, mf, fk] = await Promise.all([
       db.from('vocab_items').select('id,term,translation,example,pos,status,due_at,difficult,wrong_count,streak,last_practiced_at,lesson_date').eq('student_id', studentId),
       db.rpc('student_lesson_summaries', {sid: studentId}),
       db.from('assignments').select('id,title,exercises,published_at').eq('student_id', studentId).not('published_at', 'is', null),
       db.from('practice_items').select('item_key,streak,wrong_count,due_at,last_practiced_at').eq('student_id', studentId),
       db.from('practice_sessions').select('created_at,score,total,details').eq('student_id', studentId).eq('kind', 'daily').order('created_at', {ascending: false}).limit(120),
       db.rpc('memory_focus', {sid: studentId}),
+      focusKeysOf(db, studentId),
     ]);
     // v60: AI memory — mistakes of points that need practice across lessons come first; mastered points less often
     const focus = new Map(((mf.error ? [] : mf.data || []) as {key: string; status: string}[]).map(f => [f.key, f.status]));
@@ -44,7 +46,7 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
     const words = (v.data || []) as Word[];
     const sessions = (ps.error ? [] : ps.data || []) as Session[];
     const days = sessions.map(x => x.details?.day || x.created_at.slice(0, 10));
-    const set = buildDaily({studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[]});
+    const set = buildDaily({studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[], topics: fk.known, focusTopics: fk.focus});
     setD({set, sessions, streak: streakOf(days, day), doneToday: sessions.find(x => (x.details?.day || x.created_at.slice(0, 10)) === day) || null,
       hasMaterial: !set.empty, migration: !st.error && !ps.error});
   }, [studentId, level, lang]);

@@ -7,7 +7,11 @@ import {useCallback,useEffect,useMemo,useState} from 'react';
 import {Plus,Search,Target,EyeOff,Eye,Pencil,X,CalendarDays,ListChecks} from 'lucide-react';
 import {InfoTip} from './InfoTip';
 import {supabase} from '../lib/supabase';
-import {NT2_BY_CODE,NT2_STAGES} from '../lib/curriculum/nt2';
+import Link from 'next/link';
+import {NT2,NT2_STAGES} from '../lib/curriculum/nt2';
+const NT2_BIG=new Set(NT2.filter(t=>t.big).map(t=>t.code));
+import {goalTitle,stagedPrefix,topicInfo,visibleGoals} from '../lib/curriculum/topics';
+import {getLang} from '../lib/i18n';
 import {GOAL_STATUSES,shownStatus,GOAL_STATUS_LABEL,LEVELS,SKILLS,SKILL_LABEL,SUBJECTS,subjectOf,type Goal,type GoalProgress,type GoalStatus} from '../lib/learning';
 import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
@@ -33,16 +37,17 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  const load=useCallback(async()=>{const db=supabase()!;
   const [g,p,s]=await Promise.all([db.from('curriculum_goals').select('*').eq('subject',subject).order('level').order('sort'),db.from('student_goal_progress').select('*').eq('student_id',student.id),db.from('students').select('level,target_level').eq('id',student.id).maybeSingle()]);
   if(g.error){setErr(/curriculum_goals/.test(g.error.message)||g.error.code==='PGRST205'?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):g.error.message);return}
-  // v64: Dutch = the NT2 curriculum of the PDF (nt2-*) + own topics; older Dutch standard goals stay stored but are not shown
-  const gl=(g.data||[]) as (Goal&{code?:string|null})[];const nt=subject==='nl'&&gl.some(x=>x.code?.startsWith('nt2-'));
-  setGoals(nt?gl.filter(x=>!x.code||x.code.startsWith('nt2-')):gl);
+  // v64/v68: Dutch = NT2 (nt2-*), Portuguese = the Brazilian-Portuguese curriculum (ptbr-*), + own topics; older
+  // standard goals of that language stay stored (their progress was carried over by v68.sql) but are not shown
+  setGoals(visibleGoals((g.data||[]) as Goal[],subject));
   if(teacher){const m=await db.from('memory_patterns').select('kind,key,label,status,teacher_status,lessons_seen,clean_lessons,first_seen,last_seen,last_clean,hidden').eq('student_id',student.id);setMem(m.error?[]:((m.data||[]) as MemRow[]).filter(x=>!x.hidden))}setProg(Object.fromEntries(((p.data||[]) as GoalProgress[]).map(x=>[x.goal_id,x])));
   const st=s.data as {level?:string|null;target_level?:string|null}|null;if(st){if(st.level)setLevel(st.level);setTarget(st.target_level||'')}else if(s.error&&v34Error(s.error.message))setErr(V34);
  },[subject,student.id,teacher]);
  const loadDay=useCallback(async()=>{const r=await supabase()!.from('lesson_goals').select('id,lesson_date,goal_id,custom_title').eq('student_id',student.id).eq('lesson_date',day).order('created_at');if(r.error){if(teacher&&v34Error(r.error.message))setErr(V34);return}setLgoals((r.data||[]) as LessonGoal[])},[student.id,day,teacher]);
  useEffect(()=>{void load()},[load]);useEffect(()=>{void loadDay()},[loadDay]);
 
- const view=(g:Goal)=>{const p=prog[g.id];return {title:p?.title_override||g.title,level:p?.level_override||g.level,status:shownStatus(p?.status),hidden:!!p?.hidden,p}};
+ const ui=getLang();
+ const view=(g:Goal)=>{const p=prog[g.id];return {title:goalTitle(g,p?.title_override,ui),level:p?.level_override||g.level,status:shownStatus(p?.status),hidden:!!p?.hidden,p}};
  const all=useMemo(()=>goals.map(g=>({g,...view(g)})),[goals,prog]);
  const shown=all.filter(x=>(showHidden&&teacher||!x.hidden)&&(fLevel==='all'||x.level===fLevel)&&(fSkill==='all'||(fSkill==='own'?!!x.g.owner_teacher:x.g.skill===fSkill))&&(fStatus==='all'||x.status===fStatus)&&(x.title+' '+(x.g.description||'')).toLowerCase().includes(q.toLowerCase()));
  const active=all.filter(x=>!x.hidden);
@@ -70,13 +75,21 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
  async function addLessonGoal(){const row=lgPick?{goal_id:lgPick}:lgCustom.trim()?{custom_title:lgCustom.trim()}:null;if(!row)return;
   const r=await supabase()!.from('lesson_goals').insert({student_id:student.id,lesson_date:day,...row});if(r.error){setErr(v34Error(r.error.message)?V34:r.error.message);return}setLgPick('');setLgCustom('');await loadDay()}
  async function delLessonGoal(id:string){await supabase()!.from('lesson_goals').delete().eq('id',id);await loadDay()}
+ /** v68: put a topic on the next planned lesson (agenda) — the teacher still decides what is really covered */
+ async function toNextLesson(goalId:string,title:string){const db=supabase()!;
+  const n=await db.from('lessons').select('id,starts_at').eq('student_id',student.id).neq('status','cancelled').gt('starts_at',new Date().toISOString()).order('starts_at').limit(1);
+  const l=((n.data||[]) as {id:string;starts_at:string}[])[0];const date=l?new Date(l.starts_at).toLocaleDateString('en-CA'):today();
+  const r=await db.from('lesson_goals').insert({student_id:student.id,lesson_date:date,lesson_id:l?.id||null,goal_id:goalId});
+  if(r.error){setErr(v34Error(r.error.message)?V34:r.error.message);return}
+  setMsg(l?tt('“{0}” staat bij de volgende les ({1}).',title,niceDate(date)):tt('Geen geplande les gevonden; “{0}” staat bij vandaag.',title));if(date===day)await loadDay()}
  const titleOf=(id:string|null)=>{const x=all.find(a=>a.g.id===id);return x?x.title:''};
  const toggle=(id:string)=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n});
 
  const byLevel=LEVELS.map(l=>({l,items:shown.filter(x=>x.level===l)})).filter(x=>x.items.length);
  const levelStats=LEVELS.map(l=>{const its=active.filter(x=>x.level===l);return {l,n:its.length,c:count('review',its),p:count('in_progress',its),m:count('mastered',its)}}).filter(x=>x.n);
- const nt2=goals.some(g=>(g as {code?:string|null}).code?.startsWith('nt2-'));
- const memFor=(code:string|null|undefined)=>{const t=code?NT2_BY_CODE.get(code):undefined;if(!t?.keys)return {topic:[] as MemRow[],errors:[] as MemRow[]};return {topic:mem.filter(m=>m.kind==='topic'&&t.keys!.includes(m.key)),errors:mem.filter(m=>m.kind==='error'&&t.keys!.includes(m.key)&&m.lessons_seen>0)}};
+ const pre=stagedPrefix(subject);const nt2=!!pre&&goals.some(g=>(g as {code?:string|null}).code?.startsWith(pre));
+ const info=(g:Goal)=>topicInfo((g as {code?:string|null}).code);
+ const memFor=(code:string|null|undefined)=>{const t=topicInfo(code);if(!t?.keys.length)return {topic:[] as MemRow[],errors:[] as MemRow[]};return {topic:mem.filter(m=>m.kind==='topic'&&t.keys!.includes(m.key)),errors:mem.filter(m=>m.kind==='error'&&t.keys!.includes(m.key)&&m.lessons_seen>0)}};
  return <div className="goals learning-path">
   {err&&<div className="notice">{err}</div>}
   {msg&&<p className="muted" role="status">{msg}</p>}
@@ -130,15 +143,21 @@ export function LearningPath({student,viewer}:{student:Student;viewer:'teacher'|
   <p className="muted small-print">{tt("Leerlijn volgens ERK/CEFR")} <InfoTip text={tt("Standaardleerlijn op basis van het ERK/CEFR (A0 is een optionele voorbereidende fase). Niveaus zijn richtpunten. Alleen de docent stelt de status vast; AI-voorstellen uit lesanalyses moet de docent eerst accepteren.")}/></p>
   {!byLevel.length&&<p className="muted">{tt("Geen onderwerpen gevonden met deze filters.")}</p>}
   {nt2&&<p className="lp-levelnote">{tt('Het taalniveau ({0}) is het algemene niveau. De status per onderwerp is de beheersing van die grammatica — ook een B1-leerling kan nog A1-grammatica oefenen.',level)}</p>}
-  {nt2?<>{NT2_STAGES.map(stage=>{const its=shown.filter(x=>NT2_BY_CODE.get((x.g as {code?:string}).code||'')?.stage===stage).sort((a,b)=>(NT2_BY_CODE.get((a.g as {code?:string}).code!)!.n)-(NT2_BY_CODE.get((b.g as {code?:string}).code!)!.n));if(!its.length)return null;
+  {nt2?<>{NT2_STAGES.map(stage=>{const its=shown.filter(x=>info(x.g)?.stage===stage).sort((a,b)=>info(a.g)!.n-info(b.g)!.n);if(!its.length)return null;
    const done=its.filter(x=>x.status==='mastered').length;
    return <details key={stage} className="nt2-stage" open={stage.endsWith(level)||stage.startsWith(level)}><summary><span className="nt2-stage-t">{tt(stage)}</span><span className="nt2-stage-n">{tt('{0} van {1} beheerst',done,its.length)}</span></summary>
-    <ol className="nt2-list">{its.map(x=>{const {g,p,status}=x;const t=NT2_BY_CODE.get((g as {code?:string}).code!)!;const m=memFor(t.code);const lines=(g.description||'').split('\n').filter(Boolean);
+    <ol className="nt2-list">{its.map(x=>{const {g,p,status}=x;const t=info(g)!;const m=memFor(t.code);const lines=(g.description||'').split('\n').filter(Boolean);
+     const extra=/^(Didactiek|Voorbeeld|Veelgemaakte fout):/;
      return <li key={g.id} className={'nt2-topic st-'+status}>
-      <div className="nt2-head">{teacher&&<input type="checkbox" checked={sel.has(g.id)} onChange={()=>toggle(g.id)} aria-label={tt("Selecteren")}/>}<span className="nt2-num">{t.level==='-'?'∞':t.n}</span>
-       <details className="nt2-more grow"><summary><b>{x.title}</b>{t.big&&<span className="tag">{tt('groot onderwerp')}</span>}</summary>
-        <ul className="nt2-sub">{lines.filter(l=>!l.startsWith('Didactiek:')).map(l=><li key={l}>{l.replace(/^• /,'')}</li>)}</ul>
-        {lines.filter(l=>l.startsWith('Didactiek:')).map(l=><p key={l} className="nt2-did">{l}</p>)}</details>
+      <div className="nt2-head">{teacher&&<input type="checkbox" checked={sel.has(g.id)} onChange={()=>toggle(g.id)} aria-label={tt("Selecteren")}/>}<span className="nt2-num">{t.continuous?'∞':t.n}</span>
+       <details className="nt2-more grow"><summary><b>{x.title}</b>{t.pt&&ui!=='pt'&&!p?.title_override&&<small className="muted"> · {t.pt}</small>}{(NT2_BIG.has(t.code))&&<span className="tag">{tt('groot onderwerp')}</span>}</summary>
+        <ul className="nt2-sub">{lines.filter(l=>!extra.test(l)).map(l=><li key={l}>{l.replace(/^• /,'')}</li>)}</ul>
+        {lines.filter(l=>/^Voorbeeld:/.test(l)).length>0&&<p className="nt2-ex"><b>{tt('Voorbeelden')}:</b> {lines.filter(l=>/^Voorbeeld:/.test(l)).map(l=>l.replace(/^Voorbeeld:\s*/,'')).join(' · ')}</p>}
+        {lines.filter(l=>/^Veelgemaakte fout:/.test(l)).length>0&&<p className="nt2-errs"><b>{tt('Veelgemaakte fouten')}:</b> {lines.filter(l=>/^Veelgemaakte fout:/.test(l)).map(l=>l.replace(/^Veelgemaakte fout:\s*/,'')).join(' · ')}</p>}
+        {lines.filter(l=>l.startsWith('Didactiek:')).map(l=><p key={l} className="nt2-did">{l}</p>)}
+        {t.continuous&&<p className="muted small">{tt('Doorlopende leerlijn: geen eindstatus, blijft periodiek terugkomen.')}</p>}
+        {teacher&&<div className="row wrap nt2-acts"><button type="button" className="button small secondary" onClick={()=>void toNextLesson(g.id,x.title)}><CalendarDays size={13}/> {tt('Naar de volgende les')}</button>
+         <Link className="button small secondary" href={`/leerlingen?student=${student.id}&tab=huiswerk&onderwerp=${encodeURIComponent(x.title)}`}>{tt('Huiswerk over dit onderwerp')}</Link></div>}</details>
        {teacher?<select className={'cell gsel gs-'+status} value={status} onChange={e=>void patch([g.id],{status:e.target.value as GoalStatus})} aria-label={tt("Status")}>{STATUSES.map(st=><option key={st} value={st}>{GOAL_STATUS_LABEL[st]}</option>)}</select>:<span className={'gstat gs-'+status}>{GOAL_STATUS_LABEL[status]}</span>}</div>
       {(p&&status!=='not_started'||m.topic.length>0||m.errors.length>0)&&<div className="nt2-meta">
        {p&&status!=='not_started'&&<span>{p.basis==='ai_confirmed'?tt("AI-voorstel, bevestigd door docent"):p.basis==='intake'?tt("Intake"):tt("Docent")}{p.lesson_date?' · '+niceDate(p.lesson_date):''}</span>}

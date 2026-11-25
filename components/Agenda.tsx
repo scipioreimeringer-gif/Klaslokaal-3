@@ -2,6 +2,7 @@
 // Lesson agenda (v30): planned lessons per teacher–student relation, shown in each viewer's own time zone.
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
+import {LessonTopics} from './LessonTopics';
 import {Check,CalendarDays,CalendarPlus,ChevronLeft,ChevronRight,Clock,Video,X,Repeat,Sparkles,Mic,FileText,ClipboardList,Pencil,Ban,Presentation,GraduationCap,UserRound,Plus,Trash2} from 'lucide-react';
 import {mergeAgenda,applyFilter,readFilter,overlaps,spreadByDay,FILTERS,PERSONAL_COLUMNS,type AgendaItem,type AgendaKind,type AgendaFilter,type PersonalEvent} from '../lib/agenda';
 import {googleTemplateUrl,outlookUrl,icsFile,type ExtraItem} from '../lib/gcal/items';
@@ -361,6 +362,8 @@ function LessonDetail({lesson:l,rel,mode,teacherName,onClose,onEdit,onChanged}:{
    <li><FileText size={15}/> {links.notes?<Link href={base+'lessen'}>{t('Lesnotities en canvas')}</Link>:<span className="muted">{t('Geen lesnotities')}</span>}</li>
    <li><ClipboardList size={15}/> {links.homework?<Link href={base+'huiswerk'}>{t('{0} huiswerkopdracht(en)',links.homework)}</Link>:<Link href={base+'huiswerk'}>{t('Huiswerk')}</Link>}</li>
   </ul></div>}
+  {/* v68: optional lesson topics from the personal learning line (with recommendations) */}
+  {mode==='teacher'&&st!=='cancelled'&&<LessonTopics studentId={l.student_id} lessonId={l.id} lessonDate={dayKey(l.starts_at,l.timezone)} collapsed/>}
   {mode==='teacher'&&<label className="stack"><span className="label">{t('Lesnotities (alleen voor jou)')}</span><textarea className="field" rows={3} value={notes} onChange={e=>setNotes(e.target.value)} placeholder={t('Bijvoorbeeld: herhaal de verleden tijd, neem de tekst over werk mee')}/>{notes!==savedNotes&&<button className="button small secondary" onClick={()=>void saveNotes()}>{t('Opslaan')}</button>}</label>}
   {msg&&<p className="muted" role="status">{msg}</p>}
   {mode==='teacher'&&<div className="row ld-actions">

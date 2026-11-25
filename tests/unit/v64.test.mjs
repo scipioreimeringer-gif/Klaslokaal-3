@@ -58,7 +58,9 @@ test('learning line: four statuses, NT2 for Dutch only, level separate from topi
   const l = read('lib/learning.ts');
   assert.match(l, /GOAL_STATUSES: GoalStatus\[\] = \['not_started', 'in_progress', 'review', 'mastered'\]/);
   const p = read('components/LearningPath.tsx');
-  assert.match(p, /subject==='nl'&&gl\.some\(x=>x\.code\?\.startsWith\('nt2-'\)\)/);
+  // v68: one rule for both structured curricula (nt2-* for Dutch, ptbr-* for Portuguese), see lib/curriculum/topics.ts
+  assert.match(p, /setGoals\(visibleGoals\(\(g\.data\|\|\[\]\) as Goal\[\],subject\)\)/);
+  assert.match(read('lib/curriculum/topics.ts'), /subject === 'nl' \? 'nt2-' : subject === 'pt' \? 'ptbr-' : ''/);
   assert.match(p, /ook een B1-leerling kan nog A1-grammatica oefenen/);
-  assert.match(read('lib/server/analysisRunner.ts'), /subject === 'nl' && goals\.some\(t => t\.code\?\.startsWith\('nt2-'\)\)/);
+  assert.match(read('lib/server/analysisRunner.ts'), /visibleGoals\(goals, subject\)/);
 });

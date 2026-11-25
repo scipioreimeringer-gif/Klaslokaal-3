@@ -8,6 +8,7 @@ import {addVocab,authedPost,loadVocab,LEVELS,VOCAB_STATUS_LABEL,type VocabItem} 
 import {checkText,mcOptions,practiceOrder} from '../lib/answers';
 import {wordDeck,quizOptions,quizAnswer,grammarQuiz,matchDeck,flashFace,sentenceSet,conjugationSet,correctionSet,progressOf,levelNum,rng,shuffle,DECK,MATCH,type Lvl,type OwnWord,type Card,type TItem,type SessionRow,ownConjugations} from '../lib/practice';
 import {answerVariants} from '../lib/quiz';
+import {focusKeysOf} from '../lib/curriculum/focus';
 import {useExplainLang,ExplainLangSelect,NoteList} from './ExplainLang';
 import {grammarBank,type GItem,type Note} from '../lib/grammar';
 import {loadBank,type BankItem} from '../lib/wordbank';
@@ -142,7 +143,7 @@ function recordItem(ctx:Ctx,x:{vocabId?:string;itemKey?:string;label?:string},ok
 const BankTag=({on}:{on:boolean})=>on?<span className="tag pr-bank" title={tt('Niet uit je eigen woordenlijst')}>{tt('uit de oefenbank')}</span>:null;
 
 export function VocabGames({studentId,lang,level,start}:{studentId:string|null;lang:string;level:Lvl;start?:string|null}){
- const [ex,setEx]=useExplainLang(lang);
+ const [ex,setEx]=useExplainLang(lang);const [focusKeys,setFocusKeys]=useState<string[]>([]);
  const ctx:Ctx={studentId,lang,level,ex};
  const [own,setOwn]=useState<OwnWord[]|null>(null);const [bank,setBank]=useState<BankItem[]>([]);const [errs,setErrs]=useState<{key:string;original:string;corrected:string;why?:string}[]>([]);
  const [sessions,setSessions]=useState<SessionRow[]>([]);const [game,setGame]=useState<GameKind|null>(null);const [seed,setSeed]=useState(()=>Date.now()%2147483647);const [result,setResult]=useState('');const [due,setDue]=useState(0);
@@ -154,6 +155,7 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
   const s=await db.rpc('student_lesson_summaries',{sid:studentId});const seen=new Set<string>();
   setErrs(((s.data||[]) as {id:string;final:unknown}[]).flatMap(x=>errorsOf(x.final as never).filter(e=>e.status!=='rejected'&&!e.later&&e.original&&e.corrected).map(e=>({key:`err:${x.id}:${e.id}`.slice(0,200),original:e.original,corrected:e.corrected,why:e.why})))
    .filter(e=>{const k=(e.original+'|'+e.corrected).toLowerCase();if(seen.has(k))return false;seen.add(k);return true}));
+  setFocusKeys((await focusKeysOf(db,studentId)).focus); // v68: learning-line topics in development / recent lesson topics first
   const p=await db.from('practice_sessions').select('kind,score,total,created_at,details').eq('student_id',studentId).in('kind',GAME_KINDS).order('created_at',{ascending:false}).limit(300);
   setSessions(p.error?[]:(p.data||[]) as SessionRow[])},[studentId,lang]);
  useEffect(()=>{setOwn(null);void load()},[load]);
@@ -162,8 +164,8 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
   const words=wordDeck(own,bank,level,n,seed),pairsRaw=wordDeck(own,bank,level,MATCH[level]*2,seed+1);
   // v67: match = unique, unambiguous pairs of one coherent group; quiz = vocabulary + grammar of the level (~40%)
   const pairs={...pairsRaw,cards:matchDeck(pairsRaw.cards,MATCH[level],seed+1)};
-  return {words,pairs,quizPool:[...own.map(w=>({key:'v:'+w.id,term:w.term,meaning:w.translation,pos:w.pos||undefined,source:'own' as const})),...wordDeck([],bank,level,60,seed+2).cards],gquiz:grammarQuiz(lang,level,Math.round(n*0.4),seed),
-   sentence:sentenceSet(own,lang,level,10,seed),conjugate:(()=>{const mine=ownConjugations(own as Parameters<typeof ownConjugations>[0],lang,level,4,seed);return [...mine,...conjugationSet(lang,level,10-mine.length,seed)]})(),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed]);
+  return {words,pairs,quizPool:[...own.map(w=>({key:'v:'+w.id,term:w.term,meaning:w.translation,pos:w.pos||undefined,source:'own' as const})),...wordDeck([],bank,level,60,seed+2).cards],gquiz:grammarQuiz(lang,level,Math.round(n*0.4),seed,focusKeys),
+   sentence:sentenceSet(own,lang,level,10,seed),conjugate:(()=>{const mine=ownConjugations(own as Parameters<typeof ownConjugations>[0],lang,level,4,seed);return [...mine,...conjugationSet(lang,level,10-mine.length,seed)]})(),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed,focusKeys]);
  const autoStarted=useRef(false);
  useEffect(()=>{if(start==='flashcards'&&sets&&sets.words.cards.length>=2&&!autoStarted.current){autoStarted.current=true;setGame('flashcards')}},[start,sets]);
  if(!sets)return <div className="loader small"/>;
@@ -305,8 +307,9 @@ export type ExerciseSet={title:string;items:ExerciseItem[];sections?:ExerciseSec
 const KIND_LABELS:Record<string,string>=translated({woordenschat:'Woordenschat',grammatica:'Grammatica',vertalen:'Vertalen',invullen:'Invulzinnen',meerkeuze:'Meerkeuze',werkwoorden:'Werkwoorden vervoegen',fouten:'Fouten verbeteren',zinnen:'Zinnen maken',schrijven:'Schrijven',lezen:'Begrijpend lezen',gemengd:'Gemengde herhaling'});void KIND_LABELS;
 /* v64: the teacher chooses only level, duration and (optionally) a focus; the rest comes from the student's own data */
 /* v66: five focus options; "Zelf onderwerpen kiezen" picks topics from the learner's own learning line */
-type ShownFocus='auto'|'last_lesson'|'mix'|'developing'|'choose';
-const FOCUS_LABEL:Record<ShownFocus,string>=translated({auto:'Automatisch gepersonaliseerd',last_lesson:'Laatste les herhalen',mix:'Mix van alles',developing:'Onderwerpen in ontwikkeling',choose:'Zelf onderwerpen kiezen'});
+/* v68: "Geselecteerde lesonderwerpen" = the topics chosen / covered for the latest lesson */
+type ShownFocus='auto'|'last_lesson'|'mix'|'developing'|'lesson'|'choose';
+const FOCUS_LABEL:Record<ShownFocus,string>=translated({auto:'Automatisch gepersonaliseerd',last_lesson:'Laatste les herhalen',mix:'Mix van alles',developing:'Onderwerpen in ontwikkeling',lesson:'Geselecteerde lesonderwerpen',choose:'Zelf onderwerpen kiezen'});
 const DURATIONS=[5,10,15,20,30,45];
 const exCache=new Map<string,ExerciseSet>();
 export function ExerciseForm({studentId,defaultLevel,onReady,teacher,initialTopic}:{studentId:string;defaultLevel?:string|null;onReady:(s:ExerciseSet)=>void;teacher?:boolean;initialTopic?:string}){

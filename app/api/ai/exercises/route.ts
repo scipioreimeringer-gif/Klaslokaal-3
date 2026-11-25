@@ -27,7 +27,7 @@ const BlockOut = z.object({
   items: z.array(Item),
 });
 type BlockResult = z.infer<typeof BlockOut>;
-const FOCUS: Focus[] = ['auto', 'last_lesson', 'mix', 'developing', 'choose', 'weak', 'review', 'vocab', 'topics'];
+const FOCUS: Focus[] = ['auto', 'last_lesson', 'mix', 'developing', 'choose', 'lesson', 'weak', 'review', 'vocab', 'topics'];
 const BLOCK_TYPES = ['conjugate', 'fill_in', 'multiple_choice', 'translate', 'correct_error', 'make_sentence', 'transform', 'reading', 'write'];
 const strip = (s: unknown) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 /* v66 review: one batched AI check of all closed items (natural? unambiguous? one correct answer? level?) — only the
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     const lessonDate = /^\d{4}-\d{2}-\d{2}$/.test(body.lessonDate || '') ? body.lessonDate : null;
 
     /* ---------- compact context (database queries only, capped) ---------- */
-    const [vocab, summaries, focusRows, prog, practice, entries, feedback] = await Promise.all([
+    const [vocab, summaries, focusRows, prog, practice, entries, feedback, lgoals] = await Promise.all([
       db.from('vocab_items').select('term,translation,status,wrong_count,difficult,due_at,lesson_date,grammar').eq('student_id', student.id).limit(400).then(r => (r.data || []) as {term: string; translation: string; status: string; wrong_count: number; difficult?: boolean; due_at?: string; lesson_date?: string | null; grammar?: {pos?: string; past_sg?: string; past_pl?: string; participle?: string; aux?: string} | null}[]),
       db.rpc('student_lesson_summaries', {sid: student.id}).then(r => (r.data || []) as {lesson_date: string; final: unknown}[]),
       db.rpc('memory_focus', {sid: student.id}).then(r => (r.error ? [] : r.data || []) as {label: string; status: string}[], () => []),
@@ -72,17 +72,25 @@ export async function POST(req: Request) {
       // v66: canvas text of the latest lessons and the teacher's feedback on recent homework (short excerpts only)
       db.from('lesson_entries').select('lesson_date,notes').eq('student_id', student.id).order('lesson_date', {ascending: false}).limit(3).then(r => (r.data || []) as {lesson_date: string; notes: string | null}[], () => []),
       db.from('homework_submissions').select('teacher_feedback,submitted_at,assignments!inner(student_id)').eq('assignments.student_id', student.id).not('teacher_feedback', 'is', null).order('submitted_at', {ascending: false}).limit(3).then(r => (r.error ? [] : r.data || []) as {teacher_feedback: string | null}[], () => []),
+      // v68: lesson topics (selected before / covered in the lesson) of the latest lessons up to today
+      db.from('lesson_goals').select('lesson_date,outcome,custom_title,sub,curriculum_goals(title)').eq('student_id', student.id).lte('lesson_date', new Date(Date.now() + 86400e3).toISOString().slice(0, 10)).order('lesson_date', {ascending: false}).limit(12)
+        .then(r => (r.error ? [] : r.data || []) as unknown as {lesson_date: string; outcome: string; custom_title: string | null; sub?: string[] | null; curriculum_goals: {title: string} | null}[], () => []),
     ]);
+    // the latest lesson with topics; "not covered" topics are left out; sub-topics narrow the grammar point
+    const lastDay = lgoals.find(g => g.outcome !== 'not_covered')?.lesson_date;
+    const lessonTopics = lgoals.filter(g => g.lesson_date === lastDay && g.outcome !== 'not_covered')
+      .map(g => { const t = g.custom_title || g.curriculum_goals?.title || ''; return t && g.sub?.length ? `${t} (${g.sub.slice(0, 3).join(', ')})` : t; }).filter(Boolean);
     const picked = focus === 'last_lesson' ? (lessonDate ? summaries.filter(s => s.lesson_date === lessonDate) : summaries.slice(0, 1)) : summaries.slice(0, 3);
     const mat = lessonMaterial(picked.map(s => s.final));
     const goals = prog.filter(p => p.curriculum_goals && (p.curriculum_goals.subject === subject) && p.status !== 'not_started');
     const recentCut = Date.now() - 35 * 86400e3;
     const lists = {
-      recent: [...mat.grammar, ...goals.filter(g => Date.parse(g.lesson_date || g.updated_at) > recentCut && g.status !== 'mastered').map(g => g.curriculum_goals!.title)],
+      recent: [...lessonTopics, ...mat.grammar, ...goals.filter(g => Date.parse(g.lesson_date || g.updated_at) > recentCut && g.status !== 'mastered').map(g => g.curriculum_goals!.title)],
       weak: [...focusRows.filter(f => f.status === 'review' || f.status === 'learning').map(f => f.label), ...goals.filter(g => g.status === 'review').map(g => g.curriculum_goals!.title), ...mat.repeat],
       review: [...goals.filter(g => g.status === 'mastered' || Date.parse(g.lesson_date || g.updated_at) <= recentCut).map(g => g.curriculum_goals!.title), ...focusRows.filter(f => f.status === 'fair' || f.status === 'mastered').map(f => f.label)],
-      topics: (focus === 'topics' || focus === 'choose') && topicReq ? topicReq.split(/;\s*/).filter(Boolean) : undefined,
+      topics: (focus === 'topics' || focus === 'choose') && topicReq ? topicReq.split(/;\s*/).filter(Boolean) : focus === 'lesson' ? lessonTopics : undefined,
     };
+    if (focus === 'lesson' && !lessonTopics.length) throw new HttpError(400, 'Er zijn nog geen lesonderwerpen gekozen voor de laatste les.');
     // "Onderwerpen in ontwikkeling": topics in progress / to review in the learning line + the memory's open points
     if (focus === 'developing') lists.weak = [...goals.filter(g => g.status === 'in_progress' || g.status === 'review' || g.status === 'covered').map(g => g.curriculum_goals!.title), ...focusRows.filter(f => f.status === 'review' || f.status === 'learning').map(f => f.label)];
     const dedupe = (l: string[]) => [...new Set(l.map(x => x.trim()).filter(Boolean))].slice(0, 12);
