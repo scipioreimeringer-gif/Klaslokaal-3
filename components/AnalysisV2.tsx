@@ -122,7 +122,7 @@ export function TeacherAnalysisV2({a,onChange,lessonLang}:{a:V2Row;onChange:()=>
  const hw=doc.homework;
  return <div className="analysis-editor v2">
   <div className={'quality q-'+doc.source_quality}><Bot size={15}/> <b>{tt("AI-lesanalyse")}</b> {tt("· brongegevens:")} {doc.source_quality==='good'?tt("goed"):doc.source_quality==='partial'?tt("gedeeltelijk"):tt("onvoldoende")}{doc.quality_note&&<> — {doc.quality_note}</>}
-   <small className="muted block">{tt("{0} transcriptdelen · {1} leerlingzinnen · {2} niet-verifieerbare fouten weggelaten · taal van de uitleg: {3}",doc.chunks,doc.student_utterances,doc.dropped_unverified,doc.explanation_language)}</small></div>
+   <small className="muted block">{tt("{0} transcriptdelen · {1} leerlingzinnen · {2} niet-verifieerbare fouten weggelaten · taal van de uitleg: {3}",doc.chunks,doc.student_utterances,doc.dropped_unverified,doc.explanation_language)}{doc.transcript_doubts?' · '+tt('{0} vermoedelijke transcriptiefouten genegeerd',doc.transcript_doubts):''}{doc.method==='v72'?' · '+tt('volledige les in {0} delen geanalyseerd',doc.analysed_parts||doc.chunks):''}</small></div>
   {a.is_test?<p className="notice test-note"><span className="test-badge">{'TEST'}</span> {tt('TEST-analyse: nooit gedeeld met de leerling; geen huiswerk, geen voorstellen voor het leertraject.')}</p>
    :published?<p className="muted row between wrap"><span><CheckCircle2 size={14}/> {tt("Verslag en foutenanalyse zijn automatisch gedeeld met de leerling{0}. Je kunt ze hier aanpassen.",a.published_at?' ('+niceDate(a.published_at)+')':'')}</span>
      <button type="button" className="button small secondary" disabled={busy} onClick={()=>void visible(false)}>{tt('Verbergen voor de leerling')}</button></p>

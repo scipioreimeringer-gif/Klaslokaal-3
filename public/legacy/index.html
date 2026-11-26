@@ -4663,10 +4663,10 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   if(scrBtn){ var l = scrBtn.querySelector(".lbl"); if(l) l.textContent = "Slides"; scrBtn.title = "Slides en gedeeld scherm (aan/uit)"; scrBtn.setAttribute("aria-label", "Slides"); }
   if(scrBtn && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia){
     var sh = document.createElement("button"); sh.type = "button"; sh.className = "db navtab v40 v69share"; sh.id = "v69Share"; sh.setAttribute("aria-pressed", "false");
-    sh.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span class="lbl">Delen</span>';
+    sh.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 14V8M9 10.5 12 7.5l3 3M8 21h8"/></svg><span class="lbl">Scherm delen</span>';
     sh.addEventListener("click", function(){ if(screenStream) stopShare(); else startShare(); });
     scrBtn.parentNode.insertBefore(sh, scrBtn.nextSibling);
-    var shUpd = function(){ var on = !!screenStream; sh.setAttribute("aria-pressed", on ? "true" : "false"); sh.classList.toggle("live", on); sh.querySelector(".lbl").textContent = on ? "Stop delen" : "Delen"; sh.title = on ? "Stop met je scherm delen" : "Scherm delen: kies direct een tabblad, venster of scherm"; };
+    var shUpd = function(){ var on = !!screenStream; sh.setAttribute("aria-pressed", on ? "true" : "false"); sh.classList.toggle("live", on); sh.querySelector(".lbl").textContent = on ? "Stop delen" : "Scherm delen"; sh.title = on ? "Stop met je scherm delen" : "Scherm delen: kies direct een tabblad, venster of scherm"; };
     setInterval(shUpd, 700); shUpd();
   }
   var byShare = false;
@@ -4709,6 +4709,228 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   autoCam();
 })();
 
+/* =================================================================== v72: FLEXIBLE PANELS (own layout per person)
+   Canvas, Bord, Scherm/slides and Spelletjes can be dragged by the grip at the top onto a drop zone of another panel
+   (left / right / above / below, or the middle to swap), resized with the bars between them, maximised and closed.
+   Layout model: rows of panels side by side ({rows, rh, cw}), drawn with absolute positions in % of the workspace, so
+   panels never overlap, never leave the screen and always fill the space. The automatic layout stays the default; a
+   manual change is respected (stored LOCALLY per role) until "Indeling herstellen". Positions and sizes are NEVER sent
+   to the other side; panel CONTENT keeps syncing as before. No panel element is moved in the DOM or re-created, so
+   Canvas text, drawings, video streams, recordings and game state are untouched by layout changes. */
+(function(){
+  var ws = $("ws"); if(!ws || !window.__klasOpen) return;
+  var B = document.body; B.classList.add("v72");
+  var KEYS = ["cv", "wb", "scr", "games"], EL = {cv:$("pCv"), wb:$("pWb"), scr:$("pSl"), games:$("pGames")};
+  var NAME = {cv:"Canvas", wb:"Bord", scr:"Scherm en slides", games:"Spelletjes"};
+  var MINW = 300, MINH = 190, LK = "klas-lay72-" + (isT ? "t" : "s");
+  var L = store(LK); if(!L || !Array.isArray(L.rows)) L = {manual:false, rows:[], rh:[], cw:[], max:null};
+  function save(){ store(LK, L); }
+  function vis(){ return KEYS.filter(function(k){ return EL[k] && !EL[k].hidden; }); }
+  function narrow(){ return mqPhone.matches || mqPortrait.matches; }
+  function even(n){ var a = []; for(var i = 0; i < n; i++) a.push(1 / n); return a; }
+  function norm(a){ var s = a.reduce(function(x, y){ return x + (y > 0 ? y : 0); }, 0) || 1; return a.map(function(x){ return (x > 0 ? x : 0) / s; }); }
+  function W(){ return ws.clientWidth || 1000; } function H(){ return ws.clientHeight || 600; }
+  /* automatic: side by side while every panel keeps a usable width; otherwise two rows; otherwise stacked.
+     A game next to other material gets the larger share; a game alone gets the whole workspace. */
+  function auto(v){
+    var n = v.length, rows;
+    if(narrow()) rows = v.map(function(k){ return [k]; });
+    else if(n <= 1 || W() / n >= MINW + 80) rows = [v.slice()];
+    else if(W() / Math.ceil(n / 2) >= MINW && H() / 2 >= MINH){ var h = Math.ceil(n / 2); rows = [v.slice(0, h), v.slice(h)]; }
+    else rows = v.map(function(k){ return [k]; });
+    var cw = rows.map(function(r){ var g = r.indexOf("games"); if(g < 0 || r.length < 2) return even(r.length);
+      var w = r.map(function(){ return 0.42 / (r.length - 1); }); w[g] = 0.58; return w; });
+    var rh = rows.length === 2 && rows.some(function(r){ return r.length === 1 && r[0] === "games"; }) ? rows.map(function(r){ return r[0] === "games" && r.length === 1 ? 0.6 : 0.4; }) : even(rows.length);
+    return {rows:rows, rh:rh, cw:cw};
+  }
+  /* manual: closed panels drop out (the rest closes the gap), a newly opened one joins the last row if it fits */
+  function reconcile(v){
+    var rows = [], rh = [], cw = [];
+    L.rows.forEach(function(r, i){ var keep = [], w = []; (r || []).forEach(function(k, j){ if(v.indexOf(k) >= 0 && !rows.some(function(x){ return x.indexOf(k) >= 0; }) && keep.indexOf(k) < 0){ keep.push(k); w.push((L.cw[i] || [])[j] || 1 / r.length); } });
+      if(keep.length){ rows.push(keep); rh.push(L.rh[i] || 1 / L.rows.length); cw.push(norm(w)); } });
+    v.forEach(function(k){ if(rows.some(function(r){ return r.indexOf(k) >= 0; })) return;
+      var last = rows[rows.length - 1];
+      if(last && W() / (last.length + 1) >= MINW){ last.push(k); cw[cw.length - 1] = even(last.length); }
+      else { rows.push([k]); cw.push([1]); rh = even(rows.length); } });
+    return {rows:rows, rh:norm(rh), cw:cw};
+  }
+  var G = {rows:[], rh:[], cw:[]};
+  var GAP = 4;
+  function place(e, x, y, w, h){
+    e.style.left = "calc(" + (x * 100) + "% + " + GAP / 2 + "px)"; e.style.top = "calc(" + (y * 100) + "% + " + GAP / 2 + "px)";
+    e.style.width = "calc(" + (w * 100) + "% - " + GAP + "px)"; e.style.height = "calc(" + (h * 100) + "% - " + GAP + "px)";
+  }
+  var fitT = 0;
+  function apply(){
+    var v = vis();
+    if(L.max && v.indexOf(L.max) < 0) L.max = null;
+    if(!v.length){ ws.classList.remove("v72lay"); bars(null); reset.hidden = true; return; }
+    G = L.manual && !narrow() ? reconcile(v) : auto(v);
+    if(L.manual && !narrow()){ L.rows = G.rows; L.rh = G.rh; L.cw = G.cw; }
+    ws.classList.add("v72lay");
+    var y = 0;
+    G.rows.forEach(function(r, i){ var x = 0, h = G.rh[i]; r.forEach(function(k, j){ var w = G.cw[i][j]; if(L.max === k) place(EL[k], 0, 0, 1, 1); else place(EL[k], x, y, w, h); x += w; }); y += h; });
+    KEYS.forEach(function(k){ var e = EL[k]; if(!e) return; e.classList.toggle("v72max", L.max === k); e.classList.toggle("v72under", !!L.max && L.max !== k && !e.hidden);
+      var mb = e.querySelector(".v72maxbtn"); if(mb){ mb.setAttribute("aria-pressed", L.max === k ? "true" : "false"); mb.title = L.max === k ? "Terug naar de indeling" : "Maximaliseren"; } });
+    bars(L.max ? null : G);
+    reset.hidden = !(L.manual || L.max);
+    clearTimeout(fitT); fitT = setTimeout(function(){ try{ WB.fit(); SL.fit(); }catch(e){} }, 60);
+  }
+  /* ---- resize bars between columns and rows ---- */
+  var pool = [];
+  function bars(g){
+    pool.forEach(function(b){ b.hidden = true; });
+    if(!g) return; var n = 0, y = 0;
+    g.rows.forEach(function(r, i){
+      var h = g.rh[i], x = 0;
+      if(i > 0) bar(n++, "row", i, 0, 0, y, 1, 0);
+      r.forEach(function(k, j){ if(j > 0) bar(n++, "col", i, j, x, y, 0, h); x += g.cw[i][j]; });
+      y += h;
+    });
+  }
+  function bar(n, kind, i, j, x, y, w, h){
+    var b = pool[n]; if(!b){ b = document.createElement("div"); b.className = "v72bar"; b.setAttribute("role", "separator"); ws.appendChild(b); pool.push(b); grab(b); }
+    b.hidden = false; b.dataset.kind = kind; b.dataset.i = i; b.dataset.j = j;
+    b.setAttribute("aria-orientation", kind === "col" ? "vertical" : "horizontal"); b.title = kind === "col" ? "Sleep om de breedte aan te passen" : "Sleep om de hoogte aan te passen";
+    b.className = "v72bar " + kind;
+    if(kind === "col"){ b.style.left = "calc(" + (x * 100) + "% - 5px)"; b.style.top = (y * 100) + "%"; b.style.width = "10px"; b.style.height = (h * 100) + "%"; }
+    else { b.style.left = "0"; b.style.top = "calc(" + (y * 100) + "% - 5px)"; b.style.width = "100%"; b.style.height = "10px"; }
+  }
+  function grab(b){
+    var on = false;
+    b.addEventListener("pointerdown", function(e){ on = true; b.setPointerCapture(e.pointerId); B.classList.add("v72drag"); e.preventDefault(); });
+    b.addEventListener("pointermove", function(e){
+      if(!on) return; var r = ws.getBoundingClientRect(), i = +b.dataset.i, j = +b.dataset.j;
+      takeOver();
+      if(b.dataset.kind === "col"){
+        var cw = L.cw[i], before = 0; for(var q = 0; q < j - 1; q++) before += cw[q];
+        var pair = cw[j - 1] + cw[j], p = (e.clientX - r.left) / r.width - before, min = MINW / r.width;
+        p = Math.max(Math.min(min, pair / 2), Math.min(pair - Math.min(min, pair / 2), p)); cw[j - 1] = p; cw[j] = pair - p;
+      } else {
+        var rh = L.rh, top = 0; for(var t = 0; t < i - 1; t++) top += rh[t];
+        var pr = rh[i - 1] + rh[i], ph = (e.clientY - r.top) / r.height - top, mh = MINH / r.height;
+        ph = Math.max(Math.min(mh, pr / 2), Math.min(pr - Math.min(mh, pr / 2), ph)); rh[i - 1] = ph; rh[i] = pr - ph;
+      }
+      apply();
+    });
+    function up(){ if(!on) return; on = false; B.classList.remove("v72drag"); save(); }
+    b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
+  }
+  function takeOver(){ if(L.manual && !narrow()) return; L.manual = true; L.rows = G.rows.map(function(r){ return r.slice(); }); L.rh = G.rh.slice(); L.cw = G.cw.map(function(c){ return c.slice(); }); }
+
+  /* ---- grip at the top of every panel: drag · maximise ---- */
+  var GRIP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+  var MAXI = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+  KEYS.forEach(function(k){
+    var e = EL[k]; if(!e) return;
+    var g = document.createElement("div"); g.className = "v72grip";
+    g.innerHTML = '<button type="button" class="v72handle" title="' + NAME[k] + ' verslepen naar een andere plek" aria-label="' + NAME[k] + ' verplaatsen">' + GRIP + '</button><button type="button" class="v72maxbtn" title="Maximaliseren" aria-label="' + NAME[k] + ' maximaliseren" aria-pressed="false">' + MAXI + '</button>';
+    e.appendChild(g);
+    g.querySelector(".v72maxbtn").addEventListener("click", function(){ L.max = L.max === k ? null : k; save(); apply(); });
+    drag(g.querySelector(".v72handle"), k);
+  });
+  document.addEventListener("keydown", function(ev){ if(ev.key === "Escape" && L.max){ L.max = null; save(); apply(); } });
+
+  var zone = document.createElement("div"); zone.className = "v72zone"; zone.hidden = true; ws.appendChild(zone);
+  var hint = document.createElement("div"); hint.className = "v72hint"; hint.hidden = true; ws.appendChild(hint);
+  function drag(h, k){
+    var on = false, target = null;
+    h.addEventListener("pointerdown", function(e){ if(vis().length < 2 || narrow()){ toast(narrow() ? "Op een smal scherm staan de panelen onder elkaar." : "Open nog een paneel om de indeling te veranderen."); return; }
+      on = true; target = null; h.setPointerCapture(e.pointerId); B.classList.add("v72drag"); EL[k].classList.add("v72src"); e.preventDefault(); });
+    h.addEventListener("pointermove", function(e){
+      if(!on) return; target = null; zone.hidden = true; hint.hidden = true;
+      var wr = ws.getBoundingClientRect();
+      vis().forEach(function(t){
+        if(t === k || (L.max && L.max !== t)) return; var r = EL[t].getBoundingClientRect();
+        if(e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+        var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        var side = Math.min(x, 1 - x, y, 1 - y) > 0.28 ? "swap" : x === Math.min(x, 1 - x, y, 1 - y) ? "left" : 1 - x === Math.min(x, 1 - x, y, 1 - y) ? "right" : y < 0.5 ? "top" : "bottom";
+        target = {k:t, side:side};
+        var L0 = r.left - wr.left, T0 = r.top - wr.top, w = r.width, hh = r.height;
+        var box = side === "left" ? [L0, T0, w / 2, hh] : side === "right" ? [L0 + w / 2, T0, w / 2, hh] : side === "top" ? [L0, T0, w, hh / 2] : side === "bottom" ? [L0, T0 + hh / 2, w, hh / 2] : [L0, T0, w, hh];
+        zone.style.left = box[0] + "px"; zone.style.top = box[1] + "px"; zone.style.width = box[2] + "px"; zone.style.height = box[3] + "px"; zone.hidden = false;
+        hint.textContent = side === "swap" ? "Wisselen met " + NAME[t] : (side === "left" ? "Links van " : side === "right" ? "Rechts van " : side === "top" ? "Boven " : "Onder ") + NAME[t];
+        hint.style.left = (box[0] + box[2] / 2) + "px"; hint.style.top = (box[1] + box[3] / 2) + "px"; hint.hidden = false;
+      });
+    });
+    function up(){ if(!on) return; on = false; B.classList.remove("v72drag"); EL[k].classList.remove("v72src"); zone.hidden = true; hint.hidden = true; if(target) move(k, target.k, target.side); }
+    h.addEventListener("pointerup", up); h.addEventListener("pointercancel", function(){ target = null; up(); });
+  }
+  function where(k, rows){ for(var i = 0; i < rows.length; i++){ var j = rows[i].indexOf(k); if(j >= 0) return [i, j]; } return null; }
+  function move(src, tgt, side){
+    takeOver(); L.max = null;
+    var rows = L.rows, rh = L.rh, cw = L.cw, a = where(src, rows), b = where(tgt, rows); if(!a || !b) return;
+    if(side === "swap"){ rows[a[0]][a[1]] = tgt; rows[b[0]][b[1]] = src; save(); apply(); return; }
+    /* take the source out (its space goes to its row neighbours, an empty row's height to the others) */
+    rows[a[0]].splice(a[1], 1); cw[a[0]].splice(a[1], 1);
+    if(!rows[a[0]].length){ rows.splice(a[0], 1); cw.splice(a[0], 1); rh.splice(a[0], 1); } else cw[a[0]] = norm(cw[a[0]]);
+    b = where(tgt, rows); var i = b[0], j = b[1];
+    if(side === "left" || side === "right"){
+      var w = cw[i][j] / 2; cw[i][j] = w; var at = side === "left" ? j : j + 1; rows[i].splice(at, 0, src); cw[i].splice(at, 0, w);
+      if(W() * Math.min.apply(null, cw[i]) < MINW) cw[i] = even(rows[i].length);
+    } else {
+      var hh = (rh[i] || 1) / 2; rh[i] = hh; var ai = side === "top" ? i : i + 1; rows.splice(ai, 0, [src]); cw.splice(ai, 0, [1]); rh.splice(ai, 0, hh);
+      if(H() * Math.min.apply(null, rh) < MINH) L.rh = rh = even(rows.length);
+    }
+    L.rh = norm(rh); save(); apply();
+  }
+
+  /* ---- "Indeling herstellen" ---- */
+  var reset = document.createElement("button"); reset.type = "button"; reset.className = "v72reset"; reset.hidden = true;
+  reset.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Indeling herstellen</span>';
+  reset.title = "Terug naar de automatische indeling (alleen voor jou)";
+  reset.addEventListener("click", function(){ L = {manual:false, rows:[], rh:[], cw:[], max:null}; save(); apply(); });
+  ws.appendChild(reset);
+
+  var _layout = layout; layout = function(){ _layout(); apply(); };
+  if(window.ResizeObserver){ var rq = 0; new ResizeObserver(function(){ cancelAnimationFrame(rq); rq = requestAnimationFrame(apply); }).observe(ws); }
+
+  /* ---- bottom bar: ONE "Scherm delen" button; slides stay reachable from the ⋯ menu and the panel itself ---- */
+  var slBtn = document.querySelector('.dock [data-open="scr"]'); if(slBtn) slBtn.hidden = true;
+  var v40s = $("v40Share"); if(v40s) v40s.hidden = true;
+  var menu = Array.prototype.slice.call(document.querySelectorAll(".dock details.popmenu")).filter(function(d){ return d.id !== "aiMenu" && d.querySelector(".menu-pop"); })[0];
+  if(menu){
+    var pres = document.createElement("button"); pres.type = "button"; pres.id = "v72Slides";
+    var presUpd = function(){ var o = window.__klasOpen(); pres.textContent = o.scr ? "Presentatie (slides) sluiten" : "Presentatie (slides) openen"; };
+    pres.addEventListener("click", function(){ menu.open = false; window.__klasToggle("scr"); presUpd(); });
+    menu.querySelector(".menu-pop").insertBefore(pres, menu.querySelector(".menu-pop").firstChild);
+    menu.addEventListener("toggle", presUpd); presUpd();
+  }
+
+  /* ---- styles ---- */
+  var st = document.createElement("style"); st.setAttribute("data-v72", "");
+  st.textContent = [
+    "#ws.v72lay{display:block!important;position:relative}",
+    "#ws.v72lay>.panel{position:absolute!important;margin:0!important;box-sizing:border-box;min-width:0;min-height:0;transition:left .18s ease,top .18s ease,width .18s ease,height .18s ease}",
+    "body.v72drag #ws.v72lay>.panel{transition:none}body.v72drag{user-select:none;cursor:grabbing}",
+    "@media(prefers-reduced-motion:reduce){#ws.v72lay>.panel{transition:none}}",
+    "#ws.v72lay>.split{display:none!important}",
+    "#ws.v72lay>.panel.v72max{z-index:6}#ws.v72lay>.panel.v72under{visibility:hidden}",
+    ".v72grip{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:7;display:flex;gap:1px;padding:0 4px;height:18px;align-items:center;border-radius:0 0 9px 9px;background:rgba(255,255,255,.92);border:1px solid var(--line,#dfe7e5);border-top:0;box-shadow:0 2px 6px rgba(21,37,51,.08);opacity:.55;transition:opacity .15s}",
+    ".panel:hover>.v72grip,.v72grip:focus-within,body.v72drag .v72grip{opacity:1}",
+    ".v72grip button{border:0;background:none;padding:0 5px;height:18px;display:grid;place-items:center;color:#4d6170;cursor:pointer;border-radius:6px}",
+    ".v72grip .v72handle{cursor:grab;touch-action:none}.v72grip button:hover{background:#eef4f3;color:#13303c}",
+    ".v72grip .v72maxbtn[aria-pressed=true]{color:#0f7a6c}",
+    "#ws:not(.v72lay) .v72grip{display:none}",
+    ".panel.v72src{outline:2px dashed #12a594;outline-offset:-3px;opacity:.75}",
+    ".v72zone{position:absolute;z-index:20;pointer-events:none;border-radius:12px;background:rgba(18,165,148,.16);border:2px solid #12a594;box-shadow:inset 0 0 0 4px rgba(255,255,255,.5);transition:all .08s}",
+    ".v72hint{position:absolute;z-index:21;pointer-events:none;transform:translate(-50%,-50%);background:#13303c;color:#fff;font:700 .78rem/1.2 system-ui,sans-serif;padding:6px 10px;border-radius:999px;white-space:nowrap}",
+    ".v72bar{position:absolute;z-index:8;touch-action:none}.v72bar.col{cursor:col-resize}.v72bar.row{cursor:row-resize}",
+    ".v72bar::after{content:'';position:absolute;border-radius:3px;background:transparent;transition:background .15s}",
+    ".v72bar.col::after{left:4px;width:2px;top:30%;bottom:30%}.v72bar.row::after{top:4px;height:2px;left:30%;right:30%}",
+    ".v72bar:hover::after,body.v72drag .v72bar::after{background:#12a594}",
+    ".v72reset{position:absolute;right:8px;bottom:8px;z-index:9;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line,#dfe7e5);background:rgba(255,255,255,.95);color:#13303c;font:700 .74rem system-ui,sans-serif;padding:5px 10px;border-radius:999px;cursor:pointer;box-shadow:0 2px 8px rgba(21,37,51,.1)}",
+    ".v72reset:hover{background:#eef8f6}",
+    /* toolbars in narrow panels: one row, compact, scrollable instead of cut off; tooltips stay on every button */
+    "#pCv,#pWb,#pSl,#pGames{container-type:inline-size}",
+    "body.v72 .panel>.phead{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-width:0}",
+    "body.v72 .panel>.phead>*{flex:none}body.v72 .cvbar{flex-wrap:nowrap}",
+    "@container (max-width:520px){body.v72 .phead .lbl,body.v72 .phead .pdftxt,body.v72 #shareLbl{display:none}body.v72 .phead .btn.sm{padding-left:7px;padding-right:7px}body.v72 .phead .ptitle{display:none}}",
+    "@container (max-width:380px){body.v72 .phead .ib{width:26px;min-width:26px;height:28px;padding:0}body.v72 .phead{gap:1px!important;padding-left:4px;padding-right:4px}}"
+  ].join("\n");
+  document.head.appendChild(st);
+  apply();
+})();
 })();
 </script>
 </body>

@@ -47,16 +47,49 @@ export async function startForRecording(job: Job, recordingId: string): Promise<
 /** Continue an interrupted analysis or retry failed steps. Successful steps are kept (no double work or counts). */
 export async function resumeAnalysis(job: Job, id: string, retryFailed: boolean): Promise<StartResult> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'Ongeldige analyse');
-  const {data} = await job.db.from('lesson_analyses').select('id,student_id,status,is_test').eq('id', id).maybeSingle();
-  const a = data as {id: string; student_id: string; status: string; is_test?: boolean} | null;
+  const {data} = await job.db.from('lesson_analyses').select('id,student_id,status,is_test,stage,stage_detail').eq('id', id).maybeSingle();
+  const a = data as {id: string; student_id: string; status: string; is_test?: boolean; stage?: string | null; stage_detail?: {rerun?: boolean} | null} | null;
   if (!a) throw new HttpError(404, 'Analyse niet gevonden');
   const {role} = await studentAccess(job.db, job.userId, a.student_id);
   if (role !== 'teacher') throw new HttpError(403, 'Alleen de docent start een analyse');
-  if (a.status === 'approved' || (a.status === 'ready' && a.is_test)) return {id, status: a.status, existing: true};
+  const rerun = !!a.stage_detail?.rerun && a.stage !== 'done'; // v72: a running re-analysis continues; the old report stays visible
+  if (!rerun && (a.status === 'approved' || a.status === 'ready')) return {id, status: a.status, existing: true};
   if (retryFailed) await job.db.from('lesson_analysis_parts').delete().eq('analysis_id', id).eq('status', 'failed'); // failed parts get fresh attempts
-  await job.db.from('lesson_analyses').update({status: 'processing', error: null, pipeline_version: PIPELINE_VERSION, updated_at: new Date().toISOString()}).eq('id', id);
+  await job.db.from('lesson_analyses').update(rerun ? {error: null, updated_at: new Date().toISOString()} : {status: 'processing', error: null, pipeline_version: PIPELINE_VERSION, updated_at: new Date().toISOString()}).eq('id', id);
   startJob(job, id);
   return {id, status: 'processing'};
 }
 
 export {catchUpPlan, publishable, MAX_AUTO_RETRIES, type RecRow, type AnaRow} from '../analysis/catchup';
+
+/** v72: "AI-analyse opnieuw uitvoeren" for an existing report — by default with the stored transcript; optionally
+ *  re-transcribed from the original recording, or with an imported transcript / imported audio. The recording and the
+ *  current report are kept until the new analysis has succeeded; the teacher's error decisions are carried over.
+ *  Never runs automatically over the lesson history: one report per explicit request. */
+export async function rerunAnalysis(job: Job, id: string, o: {retranscribe?: boolean; transcript?: string; audio?: {paths: string[]; offsets: number[]; mime: string}}): Promise<StartResult> {
+  const {db, userId} = job;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'Ongeldige analyse');
+  const {data} = await db.from('lesson_analyses').select('id,student_id,status,stage,stage_detail,recording_id,transcript,updated_at').eq('id', id).maybeSingle();
+  const a = data as {id: string; student_id: string; status: string; stage: string | null; stage_detail: Record<string, unknown> | null; recording_id: string | null; transcript: string | null; updated_at: string | null} | null;
+  if (!a) throw new HttpError(404, 'Analyse niet gevonden');
+  const {role} = await studentAccess(db, userId, a.student_id);
+  if (role !== 'teacher') throw new HttpError(403, 'Alleen de docent start een analyse');
+  if (a.status !== 'approved' && a.status !== 'ready') throw new HttpError(409, 'Alleen een afgerond verslag kan opnieuw worden geanalyseerd. Gebruik bij een mislukte analyse "Opnieuw proberen".');
+  const busy = !!a.stage_detail?.rerun && a.stage !== 'done' && a.stage !== 'failed' && a.stage !== 'partial_failed' && !!a.updated_at && Date.now() - new Date(a.updated_at).getTime() < 6 * 60_000;
+  if (busy) return {id, status: 'processing', existing: true};
+  const text = typeof o.transcript === 'string' ? o.transcript.replace(/\r\n?/g, '\n').trim() : '';
+  if (o.transcript !== undefined && text.length < 40) throw new HttpError(400, 'Het transcript is te kort (minimaal een paar zinnen).');
+  if (text.length > 400000) throw new HttpError(400, 'Het transcript is te lang (maximaal 400.000 tekens).');
+  const audio = o.audio && Array.isArray(o.audio.paths) && o.audio.paths.length && o.audio.paths.length <= 30 && o.audio.paths.every(p => typeof p === 'string' && p.startsWith(a.student_id + '/import-')) ? o.audio : undefined;
+  if (o.audio && !audio) throw new HttpError(400, 'Ongeldige audio-upload.');
+  if (o.retranscribe && !a.recording_id) throw new HttpError(400, 'Bij dit verslag hoort geen opname om opnieuw te transcriberen.');
+  if (!text && !audio && !o.retranscribe && !a.transcript) throw new HttpError(400, 'Er is geen transcript; kies "Opnieuw transcriberen" of importeer een transcript.');
+  await enforceLimit(db, userId, 'analysis');
+  await db.from('lesson_analysis_parts').delete().eq('analysis_id', id);
+  const sd = a.stage_detail || {};
+  const up = await db.from('lesson_analyses').update({stage: 'collect', error: null, pipeline_version: PIPELINE_VERSION, updated_at: new Date().toISOString(),
+    stage_detail: {hidden: sd.hidden, rerun: true, run: Date.now().toString(36), retranscribe: !!o.retranscribe && !text && !audio, ...(text ? {pending_transcript: text} : {}), ...(audio ? {import_audio: {paths: audio.paths, offsets: audio.offsets.map(n => Math.max(0, Number(n) || 0)), mime: String(audio.mime || 'audio/mpeg').slice(0, 40)}} : {})}}).eq('id', id);
+  if (up.error) throw new HttpError(400, up.error.message);
+  startJob(job, id);
+  return {id, status: 'processing'};
+}

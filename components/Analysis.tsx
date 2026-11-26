@@ -9,6 +9,7 @@ import {CATEGORY_LABEL,STATUS_LABEL,type AnalysisDoc,type AnalysisStatus,type Co
 import {niceDate} from '../lib/data';
 import {t as tt} from '../lib/i18n';
 import {StageProgress,TeacherAnalysisV2,isV2,type V2Row} from './AnalysisV2';
+import {Reanalyse,rerunActive} from './Reanalyse';
 import type {AnalysisV2} from '../lib/analysis/pipeline';
 import {LessonReport} from './LessonReport';
 import {CompactAnalysis} from './CompactAnalysis';
@@ -126,7 +127,7 @@ export function TeacherAnalyses({studentId,focusId,lessonLang,onlyId}:{studentId
   if(a.error){setErr(a.error.message.includes('lesson_analyses')||a.error.code==='42P01'||a.error.code==='PGRST205'?tt("Database-update v28 ontbreekt: voer supabase/v28.sql uit."):a.error.message);return}
   setRows((a.data||[]) as unknown as AnalysisRow[]);setRecs(((r.data||[]) as {id:string;created_at:string;ai_consent_teacher_at:string|null;ai_consent_student_at:string|null}[]).map(x=>({id:x.id,created_at:x.created_at,ai:!!(x.ai_consent_teacher_at&&x.ai_consent_student_at)})))},[studentId]);
  useEffect(()=>{void load()},[load]);
- useEffect(()=>{if(!rows.some(r=>r.status==='processing'||r.status==='queued'))return;const t=setInterval(()=>void load(),8000);return()=>clearInterval(t)},[rows,load]);
+ useEffect(()=>{if(!rows.some(r=>r.status==='processing'||r.status==='queued'||rerunActive(r as V2Row)))return;const t=setInterval(()=>void load(),8000);return()=>clearInterval(t)},[rows,load]);
  async function start(recordingId:string){setBusy(true);setErr('');try{await authedPost(supabase()!,'/api/ai/analyze',{recordingId});await load()}catch(e){setErr(e instanceof Error?e.message:String(e))}setBusy(false)}
  async function remove(a:AnalysisRow){if(!confirm(tt("Deze analyse (inclusief transcriptie) definitief verwijderen? De opname zelf blijft bestaan.")))return;const r=await supabase()!.from('lesson_analyses').delete().eq('id',a.id);if(r.error)setErr(r.error.message);await load()}
  const pendingRecs=recs.filter(r=>r.ai&&!rows.some(a=>a.recording_id===r.id));
@@ -140,6 +141,7 @@ export function TeacherAnalyses({studentId,focusId,lessonLang,onlyId}:{studentId
   {(onlyId?rows.filter(r=>r.id===onlyId):rows).map(a=><div className="analysis-card" key={a.id} id={'an-'+a.id}>{/* v44: onlyId = inside the page of one lesson */}
    <div className="row between"><button className="analysis-head" onClick={()=>setOpen(open===a.id?null:a.id)}>{a.is_test&&<span className="test-badge">{'TEST'}</span>}<b>{niceDate(a.lesson_date)}</b><StatusChip status={a.status}/></button>
     <div className="row">{a.status==='failed'&&a.recording_id&&!isV2(a as V2Row)&&<button className="button small secondary" disabled={busy} onClick={()=>void start(a.recording_id!)}><RotateCcw size={14}/> {tt("Opnieuw")}</button>}<button className="iconbtn danger" title={tt("Analyse verwijderen")} onClick={()=>void remove(a)}><Trash2 size={15}/></button></div></div>
+   {open===a.id&&<Reanalyse a={a as V2Row} onChange={()=>void load()}/>}
    {isV2(a as V2Row)?<>
     {(a.status==='processing'||a.status==='queued'||a.status==='failed')&&<StageProgress a={a as V2Row} onChange={()=>void load()}/>}
     {open===a.id&&(a.status==='approved'||a.status==='ready'||(a.status==='failed'&&(a.draft as {steps?:{synthesis?:boolean}}|null)?.steps?.synthesis))&&(a.final||a.draft)&&<TeacherAnalysisV2 key={a.id} a={a as V2Row} lessonLang={lessonLang} onChange={()=>void load()}/>}

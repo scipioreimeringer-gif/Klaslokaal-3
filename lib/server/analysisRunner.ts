@@ -5,8 +5,8 @@ import 'server-only';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {askFast, askStrong, langName, transcribe, type UsageCtx} from './ai';
 import {canvasText, subjectCode, type StudentCtx} from './context';
-import {formatDialogue, mergeSpeakers, speakingTime} from '../transcript';
-import {parseUtterances, wordCount, type Topic, type HistoryItem, type RawChunk} from '../analysis/core';
+import {formatDialogue, mergeSpeakers, speakingTime, unknownLines} from '../transcript';
+import {parseUtterances, wordCount, errorsOf, type Topic, type HistoryItem, type RawChunk} from '../analysis/core';
 import {runPipeline, PIPELINE_VERSION, type Ask, type Store, type AnalysisV2, type Stage} from '../analysis/pipeline';
 import {detectCanvasVocab} from './vocab';
 import {publishable} from '../analysis/catchup';
@@ -54,15 +54,33 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
   try {
     const {data: row} = await db.from('lesson_analyses').select('*').eq('id', analysisId).maybeSingle();
     if (!row) return;
-    const a = row as {id: string; student_id: string; recording_id: string | null; transcript: string | null; is_test?: boolean; lesson_date: string; lesson_id?: string | null};
+    const a = row as {id: string; student_id: string; recording_id: string | null; transcript: string | null; is_test?: boolean; lesson_date: string; lesson_id?: string | null; status: string; final?: AnalysisV2 | null; draft?: AnalysisV2 | null; stage_detail?: Record<string, unknown> | null};
+    // v72: re-analysis of an existing report. The old report stays visible (status unchanged) until the new one is complete;
+    // a new transcript (re-transcribed or imported) is only stored when the new analysis succeeds.
+    const sd0 = (a.stage_detail || {}) as {rerun?: boolean; retranscribe?: boolean; pending_transcript?: string; import_audio?: {paths: string[]; offsets: number[]; mime: string}; hidden?: boolean; auto_retries?: number; run?: string};
+    const rerun = !!sd0.rerun && (a.status === 'approved' || a.status === 'ready');
+    const keep: Record<string, unknown> = {hidden: sd0.hidden, auto_retries: sd0.auto_retries, ...(sd0.rerun ? {rerun: true, run: sd0.run, retranscribe: sd0.retranscribe, import_audio: sd0.import_audio, pending_transcript: sd0.pending_transcript, rerun_draft: (sd0 as {rerun_draft?: unknown}).rerun_draft} : {})};
     const {data: st} = await db.from('students').select('id,name,subject,level,lesson_language,curriculum_subject,teacher_id,user_id').eq('id', a.student_id).maybeSingle();
     if (!st) return;
     const student = st as StudentCtx; const subject = subjectCode(student);
     const log: UsageCtx = {db, userId: opts.userId, kind: 'analysis', studentId: student.id};
-    const setStage = async (stage: Stage, detail: Record<string, unknown>) => { await db.from('lesson_analyses').update({stage, stage_detail: detail, status: 'processing', updated_at: new Date().toISOString()}).eq('id', analysisId); };
+    const setStage = async (stage: Stage, detail: Record<string, unknown>) => { await db.from('lesson_analyses').update({stage, stage_detail: {...keep, ...detail}, ...(rerun ? {} : {status: 'processing'}), updated_at: new Date().toISOString()}).eq('id', analysisId); };
 
     /* transcript (only once; stored) */
-    let transcript = a.transcript; let studentSeconds: number | null = null;
+    let transcript = sd0.pending_transcript || (sd0.rerun && (sd0.retranscribe || sd0.import_audio) ? null : a.transcript); let studentSeconds: number | null = null;
+    const failMsg = async (msg: string) => { await db.from('lesson_analyses').update(rerun ? {stage: 'failed', stage_detail: {hidden: sd0.hidden}, error: msg.slice(0, 500)} : {status: 'failed', stage: 'failed', error: msg.slice(0, 500)}).eq('id', analysisId); };
+    if (!transcript && sd0.import_audio?.paths?.length) {
+      // v72: imported audio (mp3 / m4a / wav, in pieces of max. 10 minutes): one speaker-unknown dialogue with real times
+      await setStage('collect', {step: 'transcribe'});
+      const im = sd0.import_audio; const hint = subject.length === 2 ? subject : undefined; const lines: ReturnType<typeof unknownLines> = []; let note = '';
+      for (let i = 0; i < im.paths.length; i += 3) {
+        const got = await Promise.all(im.paths.slice(i, i + 3).map(async (p, k) => { const b = await download(db, p, /\.wav$/i.test(p) ? 'audio/wav' : im.mime); return b ? {t: await transcribe(b, p.split('/').pop() || 'import', hint, log), off: im.offsets[i + k] || 0} : null; }));
+        for (const g of got) { if (!g || g.t.text === null) { note = g?.t.reason || 'Een deel van de audio kon niet worden gelezen.'; continue; } lines.push(...unknownLines(g.t.segments, g.off)); }
+      }
+      if (note || !lines.length) { await failMsg(note || 'Transcriptie mislukt.'); return; }
+      transcript = formatDialogue(lines.sort((x, y) => x.start - y.start), 400000);
+      keep.pending_transcript = transcript; await setStage('collect', {step: 'transcribed'});
+    }
     if (!transcript && a.recording_id) {
       await setStage('collect', {step: 'transcribe'});
       const {data: rec} = await db.from('lesson_recordings').select('*').eq('id', a.recording_id).maybeSingle();
@@ -75,11 +93,12 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
           if (tt.text !== null && stt.text !== null) { transcript = formatDialogue(mergeSpeakers(tt.segments, stt.segments), 400000); studentSeconds = speakingTime(stt.segments); } else note = tt.reason || stt.reason || '';
         }
       }
-      if (!transcript && r) { const mix = await download(db, r.storage_path, r.mime_type); if (mix) { const t = await transcribe(mix, 'les.' + ext(r.mime_type), hint, log); transcript = t.text; note = t.reason || note; } }
-      if (!transcript) { await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', error: (note || 'Transcriptie mislukt.').slice(0, 500)}).eq('id', analysisId); return; }
-      await db.from('lesson_analyses').update({transcript}).eq('id', analysisId);
+      // v72: a mixed recording becomes timestamped lines with an unknown speaker (was one block of text: not splittable)
+      if (!transcript && r) { const mix = await download(db, r.storage_path, r.mime_type); if (mix) { const t = await transcribe(mix, 'les.' + ext(r.mime_type), hint, log); transcript = t.text === null ? null : t.segments.length ? formatDialogue(unknownLines(t.segments), 400000) : t.text; note = t.reason || note; } }
+      if (!transcript) { await failMsg(note || 'Transcriptie mislukt.'); return; }
+      if (rerun) { keep.pending_transcript = transcript; await setStage('collect', {step: 'transcribed'}); } else await db.from('lesson_analyses').update({transcript}).eq('id', analysisId);
     }
-    if (!transcript) { await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', error: 'Geen transcript beschikbaar.'}).eq('id', analysisId); return; }
+    if (!transcript) { await failMsg('Geen transcript beschikbaar.'); return; }
 
     /* context: notes, board, lesson goals, checklist, history (missing sources never block) */
     const test = !!a.is_test;
@@ -114,8 +133,9 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
         await db.from('lesson_analysis_parts').upsert({analysis_id: analysisId, idx: index, status, result, error: error?.slice(0, 500) || null, attempts: ((prev as {attempts?: number} | null)?.attempts || 0) + 1, updated_at: new Date().toISOString()}, {onConflict: 'analysis_id,idx'});
       },
       stage: setStage,
-      async saveDraft(doc) { await db.from('lesson_analyses').update({draft: doc, updated_at: new Date().toISOString()}).eq('id', analysisId); },
-      async loadDraft() { const {data} = await db.from('lesson_analyses').select('draft').eq('id', analysisId).maybeSingle(); const d = (data as {draft?: AnalysisV2} | null)?.draft; return d?.version === 2 ? d : null; },
+      // v72: during a re-analysis the draft carries the run id, so an older draft is never mistaken for this run's
+      async saveDraft(doc) { if (rerun) keep.rerun_draft = {...doc, run: sd0.run}; await db.from('lesson_analyses').update(rerun ? {stage_detail: {...keep}, updated_at: new Date().toISOString()} : {draft: doc, updated_at: new Date().toISOString()}).eq('id', analysisId); },
+      async loadDraft() { if (rerun) { const d = (sd0 as {rerun_draft?: AnalysisV2 & {run?: string}}).rerun_draft; return d && d.run === sd0.run && d.version === 2 ? d : null; } const {data} = await db.from('lesson_analyses').select('draft').eq('id', analysisId).maybeSingle(); const d = (data as {draft?: AnalysisV2} | null)?.draft; return d?.version === 2 ? d : null; },
       async saveHomework(set) {
         const text = (set.items as {prompt: string; options?: string[]}[]).map((it, i) => `${i + 1}. ${it.prompt}${it.options?.length ? '\n   ' + it.options.join(' / ') : ''}`).join('\n\n');
         // no RETURNING (assignments policy); unique(analysis_id) makes a retry harmless
@@ -126,16 +146,24 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
       async finish(doc) {
         const t = new Date().toISOString();
         // v56: published at once — but never an empty or broken report
-        if (!test && !publishable(doc)) { await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', draft: doc, error: 'Het verslag bevatte te weinig inhoud om te publiceren (te weinig gesproken lesinhoud in de opname?).', updated_at: t}).eq('id', analysisId); return; }
+        const tx = keep.pending_transcript ? {transcript: keep.pending_transcript as string} : {};
+        if (!test && !publishable(doc)) {
+          // v72: a re-analysis that is too thin never replaces the existing report
+          if (rerun) { await db.from('lesson_analyses').update({stage: 'failed', stage_detail: {hidden: sd0.hidden}, error: 'De nieuwe analyse bevatte te weinig inhoud; het bestaande verslag is behouden.', updated_at: t}).eq('id', analysisId); return; }
+          await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', draft: doc, error: 'Het verslag bevatte te weinig inhoud om te publiceren (te weinig gesproken lesinhoud in de opname?).', updated_at: t}).eq('id', analysisId); return;
+        }
+        if (rerun) { await db.from('lesson_analyses').update({...tx, draft: doc, ...(test ? {} : {final: doc}), stage: 'done', stage_detail: {hidden: sd0.hidden, rerun_at: t}, error: null, updated_at: t}).eq('id', analysisId); return; }
         await db.from('lesson_analyses').update(test
-          ? {status: 'ready', draft: doc, stage: 'done', error: null, updated_at: t}
-          : {status: 'approved', draft: doc, final: doc, stage: 'done', error: null, published_at: t, approved_at: t, updated_at: t}).eq('id', analysisId);
+          ? {...tx, status: 'ready', draft: doc, stage: 'done', error: null, updated_at: t}
+          : {...tx, status: 'approved', draft: doc, final: doc, stage: 'done', error: null, published_at: t, approved_at: t, updated_at: t}).eq('id', analysisId);
       },
       async fail(stage, message, partial) {
         // v56: keep the number of automatic retries (the catch-up stops after 3), log the failed step
         const {data: cur} = await db.from('lesson_analyses').select('stage_detail').eq('id', analysisId).maybeSingle();
         const prev = ((cur as {stage_detail?: Record<string, unknown> | null} | null)?.stage_detail) || {};
-        await db.from('lesson_analyses').update({status: 'failed', stage: partial ? 'partial_failed' : 'failed', stage_detail: {auto_retries: prev.auto_retries || 0, failed_step: stage}, error: message.slice(0, 500), updated_at: new Date().toISOString()}).eq('id', analysisId);
+        await db.from('lesson_analyses').update(rerun
+          ? {stage: partial ? 'partial_failed' : 'failed', stage_detail: {...keep, failed_step: stage}, error: message.slice(0, 500), updated_at: new Date().toISOString()}
+          : {status: 'failed', stage: partial ? 'partial_failed' : 'failed', stage_detail: {auto_retries: prev.auto_retries || 0, failed_step: stage}, error: message.slice(0, 500), updated_at: new Date().toISOString()}).eq('id', analysisId);
       },
     };
     const res = await runPipeline({
@@ -145,15 +173,18 @@ export async function runAnalysisJob(db: SupabaseClient, analysisId: string, opt
         return {topic_id: g.goal_id, title: !t ? '' : (t + (g.sub?.length ? ` (${g.sub.slice(0, 3).join(', ')})` : '') + (g.outcome === 'covered' ? ' [covered per teacher]' : ' [planned]') + (g.note ? ` — teacher: ${g.note.slice(0, 160)}` : '')).slice(0, 300)}; }).filter(g => g.title),
       topics, history: hist, isTest: test, guide: LANG_GUIDE[subject] || '', knownWords,
       thinNote: studentWords < 60 && !notes && !board ? `Te weinig lesinhoud voor zinvol huiswerk (${studentWords} woorden van de leerling, geen notities of bord).` : undefined,
-      deadline: opts.started + 240_000,
+      deadline: opts.started + 240_000, previous: rerun ? errorsOf(a.final || a.draft) : undefined,
     }, ask, store);
-    if (studentSeconds !== null && res.doc) { const d = {...res.doc, student_speaking_seconds: studentSeconds}; await db.from('lesson_analyses').update(test ? {draft: d} : {draft: d, final: d}).eq('id', analysisId); }
+    if (studentSeconds !== null && res.doc && res.state === 'done') { const d = {...res.doc, student_speaking_seconds: studentSeconds}; await db.from('lesson_analyses').update(test || sd0.hidden ? {draft: d} : {draft: d, final: d}).eq('id', analysisId); }
     paused = res.state === 'paused';
     // v60: the student's AI memory learns from this report (no extra AI call; idempotent; never fails the analysis)
     if (res.state === 'done' && res.doc && !test && publishable(res.doc)) await applyMemory(db, student.id, analysisId, a.lesson_date, res.doc).catch(() => undefined);
     if (res.state === 'done' && res.doc && !test) await syncVocabulary(db, student, res.doc, {userId: opts.userId, ui: opts.ui, lessonDate: a.lesson_date, lessonId: a.lesson_id || null, known: knownWords}).catch(() => undefined); // never fails the analysis
   } catch (e) {
-    await db.from('lesson_analyses').update({status: 'failed', stage: 'failed', error: (e instanceof Error ? e.message : 'Onbekende fout').slice(0, 500)}).eq('id', analysisId);
+    // v72: never turn a published report into 'failed' because a re-analysis broke
+    const {data: cur} = await db.from('lesson_analyses').select('status').eq('id', analysisId).maybeSingle();
+    const st = (cur as {status?: string} | null)?.status;
+    await db.from('lesson_analyses').update(st === 'approved' || st === 'ready' ? {stage: 'failed', stage_detail: {}, error: (e instanceof Error ? e.message : 'Onbekende fout').slice(0, 500)} : {status: 'failed', stage: 'failed', error: (e instanceof Error ? e.message : 'Onbekende fout').slice(0, 500)}).eq('id', analysisId);
   } finally {
     await db.rpc('release_analysis', {p_id: analysisId});
   }

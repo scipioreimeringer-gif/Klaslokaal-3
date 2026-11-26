@@ -17,18 +17,37 @@ export function parseUtterances(text: string): Utterance[] {
     const line = raw.trim(); pos += raw.length + 1;
     if (!line || /^\[…/.test(line)) continue;
     const m = line.match(/^(?:\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*)?([\p{L} .'-]{2,30})\s*:\s*(.+)$/u);
-    let speaker: Speaker = 'unknown', body = line, start: number | null = null;
+    let speaker: Speaker = 'unknown', body = line, start: number | null = null, labelled = false;
     if (m) {
       const label = m[4].trim();
-      if (TEACHER.test(label) || STUDENT.test(label)) {
-        speaker = TEACHER.test(label) ? 'teacher' : 'student'; body = m[5].trim();
+      if (TEACHER.test(label) || STUDENT.test(label) || UNKNOWN.test(label)) {
+        speaker = TEACHER.test(label) ? 'teacher' : STUDENT.test(label) ? 'student' : 'unknown'; body = m[5].trim(); labelled = true;
         if (m[1]) start = m[3] ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : (+m[1]) * 60 + (+m[2]);
       }
     }
-    if (speaker === 'unknown' && out.length && !m) { out[out.length - 1].text += ' ' + body; continue; }
+    if (speaker === 'unknown' && out.length && !m && !labelled) { out[out.length - 1].text += ' ' + body; continue; }
     out.push({id: 'u' + (out.length + 1), speaker, text: body, start, pos: pos - raw.length - 1});
   }
-  return out;
+  return splitLong(out);
+}
+const UNKNOWN = /^(onbekend|unknown|spreker|speaker)$/i;
+/** v72: an utterance of more than `max` words (e.g. a mixed recording transcribed as one block) is split on sentence
+ *  boundaries, so every part of a long lesson fits in one bounded AI call and nothing is cut off. */
+export function splitLong(utts: Utterance[], max = 220): Utterance[] {
+  if (!utts.some(u => wordCount(u.text) > max)) return utts;
+  const out: Utterance[] = [];
+  for (const u of utts) {
+    if (wordCount(u.text) <= max) { out.push(u); continue; }
+    const parts: string[] = []; let cur = '';
+    for (const s of u.text.match(/[^.!?…]+[.!?…]*\s*/g) || [u.text]) {
+      if (cur && wordCount(cur) + wordCount(s) > max) { parts.push(cur.trim()); cur = ''; }
+      cur += s;
+      while (wordCount(cur) > max) { const w = cur.trim().split(/\s+/); parts.push(w.slice(0, max).join(' ')); cur = w.slice(max).join(' ') + ' '; }
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    for (const p of parts) out.push({...u, text: p});
+  }
+  return out.map((u, i) => ({...u, id: 'u' + (i + 1)}));
 }
 export const wordCount = (s: string) => (String(s).match(/[\p{L}\p{N}'’-]+/gu) || []).length;
 export const speakersKnown = (u: Utterance[]) => u.some(x => x.speaker === 'teacher') && u.some(x => x.speaker === 'student');
@@ -51,7 +70,9 @@ export function chunkText(chunk: Chunk, byId: Map<string, Utterance>) {
 }
 
 /* ---------------- verification & merging ---------------- */
-export type RawError = {utterance_id: string; original: string; corrected: string; category: string; topic_id: string | null; kind: 'error' | 'slip' | 'self_correction'; certainty: 'certain' | 'uncertain';
+/** v72 kinds: style = grammatically correct but could be more natural (never an error); transcript = probably a
+ *  transcription mistake (never registered); word choice stays an error type, regional/informal speech is not flagged. */
+export type RawError = {utterance_id: string; original: string; corrected: string; category: string; topic_id: string | null; kind: 'error' | 'slip' | 'self_correction' | 'style' | 'transcript'; certainty: 'certain' | 'uncertain';
   /* v46 phase 2 (optional so older stored parts keep working) */ type?: ErrorType; why?: string; word?: string; word_en?: string};
 
 /* v46: every error also gets ONE main category (fixed list) next to its finer grammar topic. */
@@ -121,7 +142,8 @@ export function verifyErrors(raw: RawError[], byId: Map<string, Utterance>, spea
     const dup = `${u.id}|${norm(e.original)}|${categoryKey(e.category).key}`;
     if (seen.has(dup)) continue; seen.add(dup);
     // v46: pronunciation can rarely be proven from a transcript → never 'certain'; unknown speaker → uncertain
-    const certainty: RawError['certainty'] = !speakersSeparated || u.speaker === 'unknown' || errorType(e.type, e.category) === 'pronunciation' ? 'uncertain' : e.certainty;
+    // v72: a line marked unclear by the transcriber is never a certain error
+    const certainty: RawError['certainty'] = !speakersSeparated || u.speaker === 'unknown' || /\[onduidelijk\]/.test(u.text) || errorType(e.type, e.category) === 'pronunciation' ? 'uncertain' : e.certainty;
     kept.push({...e, certainty, start: u.start});
   }
   return {kept, dropped};
@@ -162,8 +184,14 @@ export function trendFor(key: string, count: number, studentUtts: number, histor
 export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topics: Topic[]; studentLevel: string; todayTopicIds: string[]; history: HistoryItem[]; knownWords?: string[]}) {
   const byId = new Map(utts.map(u => [u.id, u]));
   const separated = speakersKnown(utts);
-  const all = results.flatMap(r => r.errors || []);
+  const every = results.flatMap(r => r.errors || []);
+  // v72: suspected transcription errors are never registered; style remarks are kept apart (not errors, not counted)
+  const transcriptDoubts = every.filter(e => e.kind === 'transcript').length;
+  const styleRaw = verifyErrors(every.filter(e => e.kind === 'style'), byId, separated).kept;
+  const all = every.filter(e => e.kind !== 'transcript' && e.kind !== 'style');
   const {kept, dropped} = verifyErrors(all, byId, separated);
+  const style = styleRaw.filter((e, i, a) => a.findIndex(x => norm(x.original) === norm(e.original)) === i).slice(0, 40)
+    .map(e => ({utterance_id: e.utterance_id, original: e.original.trim(), better: e.corrected.trim(), why: String(e.why || '').trim().slice(0, 200), start: e.start}));
   const topics = new Map(opts.topics.map(t => [t.id, t]));
   const today = new Set(opts.todayTopicIds);
   const coveredToday = new Set(results.flatMap(r => r.covered || []).map(c => c.topic_id).filter((x): x is string => !!x && topics.has(x)));
@@ -220,7 +248,7 @@ export function mergeChunks(results: RawChunk[], utts: Utterance[], opts: {topic
     start: e.start, certainty: e.certainty, kind: (e.kind === 'slip' ? 'slip' : 'error') as ErrorItem['kind'], repeats: 1, later: relOf.get(key) === 'later',
     word: e.word ? String(e.word).trim().slice(0, 120) || null : null, word_en: e.word_en ? String(e.word_en).trim().slice(0, 200) || null : null, status: 'pending' as const}; })
     .sort((a, b) => (a.start ?? 1e9) - (b.start ?? 1e9) || a.utterance_id.localeCompare(b.utterance_id, undefined, {numeric: true})));
-  return {categories, errors, covered: covered.slice(0, 12), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 30), dropped, separated, studentUtterances: studentUtts};
+  return {categories, errors, covered: covered.slice(0, 16), positives, vocabulary: [...words.values()].sort((a, b) => rank[b.status] - rank[a.status]).slice(0, 60), dropped, separated, studentUtterances: studentUtts, style, transcriptDoubts};
 }
 
 /** Categories that may get homework: only material that was taught (checklist status, today's goals, explained this lesson).
@@ -280,6 +308,15 @@ export function sameError(a: Pick<ErrorItem, 'original' | 'corrected' | 'categor
   if (a.category_key !== b.category_key) return false;
   if (norm(a.original) === norm(b.original)) return true;
   return overlap(a.original, b.original) >= 0.8 && overlap(a.corrected, b.corrected) >= 0.8;
+}
+/** v72: re-analysis keeps the teacher's decisions. A new error that the teacher already rejected stays rejected (so a
+ *  wrong AI observation does not come back); an approved or corrected one keeps the teacher's text and status. */
+export function carryDecisions(fresh: ErrorItem[], old: ErrorItem[]): ErrorItem[] {
+  const decided = (old || []).filter(o => o.status !== 'pending' || o.edited);
+  return fresh.map(e => {
+    const o = decided.find(x => sameError(x, e) || (x.edited && x.utterance_id === e.utterance_id && x.category_key === e.category_key));
+    return o ? {...e, status: o.status, ...(o.edited ? {original: o.original, corrected: o.corrected, why: o.why || e.why, edited: true} : {})} : e;
+  });
 }
 export function dedupeErrors(list: ErrorItem[]): ErrorItem[] {
   const groups: ErrorItem[][] = [];

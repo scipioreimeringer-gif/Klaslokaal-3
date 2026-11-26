@@ -35,10 +35,10 @@ test('older reports keep working: their examples count as approved errors; group
 });
 test('pipeline: all mistakes (max 60 per part) with type, reason, word; analysis of the whole transcript in parts', () => {
   const p = read('lib/analysis/pipeline.ts');
-  assert.match(p, /\.describe\('ALL real mistakes of the student in this part \(max 60\), each mistake once per line'\)/);
-  assert.match(p, /'Register EVERY demonstrable mistake of the student in this part \(not just examples\)/);
-  assert.match(p, /r\.errors\.slice\(0, 60\)/);
-  assert.match(p, /errors: merged\.errors,/);
+  assert.match(p, /\.describe\('ALL reliably recognisable mistakes of the student in this part \(max 60\), each mistake once per line; style remarks max 10'\)/); // v72 wording
+  assert.match(p, /'Register EVERY reliably recognisable, didactically relevant mistake of the student in this part \(not just a few striking ones\)/); // v72
+  assert.match(p, /r\.errors\.slice\(0, 120\)/); // v72: two halves of a split part
+  assert.match(p, /errors: ctx\.previous\?\.length \? carryDecisions\(merged\.errors, ctx\.previous\) : merged\.errors,/);
   assert.match(p, /'Pronunciation only when the transcript makes it unmistakable/);
   assert.match(p, /Do not flag correct, natural informal speech\./, 'informal speech is not an error (kept)');
 });

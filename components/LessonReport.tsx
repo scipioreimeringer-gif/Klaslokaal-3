@@ -55,6 +55,8 @@ export function LessonReport({doc,studentId,level,lessonLang,teacher=false,words
   <Section n={1} icon={XCircle} title={tt("Fouten en verbeteringen")} tone="coral">
    {/* v46 phase 2: every registered error, grouped per main category, details on request (teacher-removed errors hidden) */}
    <ErrorList doc={doc}/>
+   {/* v72: grammatically correct but could be more natural: shown apart, never as an error */}
+   {!!doc.style?.length&&<details className="lr-style"><summary>{tt("Natuurlijker formuleren ({0}) · geen fouten",doc.style.length)}</summary><ul>{doc.style.map((s,i)=><li key={i}><span className="muted">{s.original}</span> → <b>{s.better}</b>{s.why&&<small className="muted block">{s.why}</small>}</li>)}</ul></details>}
   </Section>
   <Section n={2} icon={ListTree} title={tt("Grammaticale aandachtspunten")} tone="blue">
    {groups.length?<ul className="lr-groups">{groups.map(g=><li key={g.group}><span>{tt(g.group)}</span>{g.count>0&&<b className="lr-count">{tt("{0}×",g.count)}</b>}<small className="muted">{g.categories.map(c=>c.label).join(' · ')}</small></li>)}</ul>:<p className="muted small">{tt("Geen grammaticale aandachtspunten in deze les.")}</p>}

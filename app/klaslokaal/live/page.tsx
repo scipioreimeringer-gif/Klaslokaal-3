@@ -33,7 +33,15 @@ const GAME_STAGE=`
 [data-mount] .gx-start,[data-mount] .gx-good,[data-mount] .gx-bad{min-height:clamp(42px,5.4cqi,54px);font-size:clamp(14.5px,1.7cqi,17px);padding:0 clamp(16px,2.4cqi,26px)}
 [data-mount] .gx-good.small{min-height:clamp(34px,4cqi,42px);font-size:clamp(13px,1.4cqi,15px)}
 [data-mount] .gx-round{width:clamp(40px,5cqi,52px);height:clamp(40px,5cqi,52px)}
-[data-mount] .gx-foot{margin-top:auto}`;
+[data-mount] .gx-foot{margin-top:auto}
+[data-mount]{overflow-x:hidden;min-width:0}
+[data-mount] .games-panel,[data-mount] .gx-top,[data-mount] .gx-card,[data-mount] .gx-flip{min-width:0;max-width:100%}
+[data-mount] .gx-word,[data-mount] .gx-guess strong,[data-mount] .gx-flip .face strong{overflow-wrap:anywhere;hyphens:auto;line-height:1.12}
+[data-mount] .gx-top{flex-wrap:wrap}
+[data-mount] .gx-play-actions{flex-wrap:wrap}
+[data-mount] .gx-card{border-radius:clamp(14px,1.8cqi,22px)}
+[data-mount] .gx-ring b{font-variant-numeric:tabular-nums}
+@container (max-width:460px){[data-mount] .gx-top{justify-content:center;text-align:center}[data-mount] .gx-play-actions>*{flex:1 1 100%}[data-mount] .gx-ring{width:72px;height:72px}[data-mount] .gx-word{font-size:clamp(20px,7cqi,30px)}}`;
 /** v41: @font-face rules are ignored inside a shadow root, so the app font (Plus Jakarta Sans, self-hosted by next/font) is also registered in the classroom document once. */
 function fontFaces(){let css='';for(const sh of Array.from(document.styleSheets)){try{css+=Array.from(sh.cssRules).filter(r=>r instanceof CSSFontFaceRule).map(r=>r.cssText).join('\n')}catch{/* cross-origin sheet */}}return css}
 const frameCall=(fn:string,...a:unknown[])=>{try{const w=(document.querySelector('iframe.live-frame') as HTMLIFrameElement|null)?.contentWindow as unknown as Record<string,(...x:unknown[])=>void>|null;w?.[fn]?.(...a)}catch{/* classroom not ready */}};

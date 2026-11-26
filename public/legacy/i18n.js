@@ -542,4 +542,14 @@ window.KLAS_I18N = {
 "Alle Canvas-pagina's verwerken":["Process all canvas pages","Processar todas as páginas","Procesar todas las páginas","Traiter toutes les pages","Alle Seiten verarbeiten"],
 "Woordenbank":["Word bank","Banco de palavras","Banco de palabras","Banque de mots","Wortschatz"],
 "Woordenlijst op een nieuwe pagina gezet":["Word list put on a new page","Lista colocada numa nova página","Lista puesta en una página nueva","Liste placée sur une nouvelle page","Wortliste auf eine neue Seite gesetzt"],
-"Geen woordenschat gevonden op deze pagina":["No vocabulary found on this page","Nenhum vocabulário nesta página","No se encontró vocabulario en esta página","Aucun vocabulaire sur cette page","Kein Wortschatz auf dieser Seite gefunden"]};
+"Geen woordenschat gevonden op deze pagina":["No vocabulary found on this page","Nenhum vocabulário nesta página","No se encontró vocabulario en esta página","Aucun vocabulaire sur cette page","Kein Wortschatz auf dieser Seite gefunden"],
+"Indeling herstellen":["Reset layout","Restaurar layout","Restablecer diseño","Rétablir la disposition","Anordnung zurücksetzen"],
+"Terug naar de automatische indeling (alleen voor jou)":["Back to the automatic layout (only for you)","Voltar ao layout automático (só para você)","Volver al diseño automático (solo para ti)","Revenir à la disposition automatique (pour vous seul)","Zurück zur automatischen Anordnung (nur für dich)"],
+"Maximaliseren":["Maximise","Maximizar","Maximizar","Agrandir","Maximieren"],
+"Terug naar de indeling":["Back to the layout","Voltar ao layout","Volver al diseño","Revenir à la disposition","Zurück zur Anordnung"],
+"Presentatie (slides) openen":["Open presentation (slides)","Abrir apresentação (slides)","Abrir presentación (diapositivas)","Ouvrir la présentation (diapos)","Präsentation (Folien) öffnen"],
+"Presentatie (slides) sluiten":["Close presentation (slides)","Fechar apresentação (slides)","Cerrar presentación (diapositivas)","Fermer la présentation (diapos)","Präsentation (Folien) schließen"],
+"Sleep om de breedte aan te passen":["Drag to change the width","Arraste para mudar a largura","Arrastra para cambiar el ancho","Faites glisser pour changer la largeur","Ziehen, um die Breite zu ändern"],
+"Sleep om de hoogte aan te passen":["Drag to change the height","Arraste para mudar a altura","Arrastra para cambiar la altura","Faites glisser pour changer la hauteur","Ziehen, um die Höhe zu ändern"],
+"Op een smal scherm staan de panelen onder elkaar.":["On a narrow screen the panels are stacked.","Em uma tela estreita os painéis ficam empilhados.","En una pantalla estrecha los paneles se apilan.","Sur un écran étroit, les panneaux sont empilés.","Auf einem schmalen Bildschirm stehen die Bereiche untereinander."],
+"Open nog een paneel om de indeling te veranderen.":["Open another panel to change the layout.","Abra outro painel para mudar o layout.","Abre otro panel para cambiar el diseño.","Ouvrez un autre panneau pour changer la disposition.","Öffne einen weiteren Bereich, um die Anordnung zu ändern."]};

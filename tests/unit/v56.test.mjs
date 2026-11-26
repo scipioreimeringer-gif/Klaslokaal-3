@@ -29,11 +29,11 @@ test('never an empty or broken report', () => {
   assert.equal(publishable(null), false); assert.equal(publishable({version: 2, report: {summary: ''}, errors: [], vocabulary: []}), false);
   assert.equal(publishable({version: 2, report: {summary: 'In deze les oefenden we de verleden tijd met gesprekken.'}}), true);
   assert.equal(publishable({version: 2, report: {summary: ''}, vocabulary: [{term: 'praia'}]}), true);
-  assert.match(read('lib/server/analysisRunner.ts'), /if \(!test && !publishable\(doc\)\) \{ await db\.from\('lesson_analyses'\)\.update\(\{status: 'failed'/);
+  assert.match(read('lib/server/analysisRunner.ts'), /if \(!test && !publishable\(doc\)\) \{[\s\S]{0,400}?await db\.from\('lesson_analyses'\)\.update\(\{status: 'failed'/ /* v72: a thin re-analysis keeps the old report */);
 });
 test('published at once (no approval); retries are counted and kept; triggered automatically', () => {
   const run = read('lib/server/analysisRunner.ts');
-  assert.match(run, /\{status: 'approved', draft: doc, final: doc, stage: 'done', error: null, published_at: t, approved_at: t, updated_at: t\}/);
+  assert.match(run, /\{\.\.\.tx, status: 'approved', draft: doc, final: doc, stage: 'done', error: null, published_at: t, approved_at: t, updated_at: t\}/);
   assert.match(run, /stage_detail: \{auto_retries: prev\.auto_retries \|\| 0, failed_step: stage\}/);
   assert.match(read('components/Nav.tsx'), /authFetch\(db,'\/api\/ai\/backfill'/, 'the teacher\'s TeachyRooms catches up by itself');
   assert.match(read('lib/classroomBridge.ts'), /await postJson\(db, '\/api\/ai\/analyze', \{recordingId: row\.data\.id\}\)/, 'started right after the upload');

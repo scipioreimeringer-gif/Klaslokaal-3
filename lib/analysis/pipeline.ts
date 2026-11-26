@@ -2,7 +2,7 @@
 // so the whole pipeline is testable without Supabase or OpenAI. One analysis = small bounded calls:
 //   chunk analyses (fast model, compact) → deterministic merge → one synthesis → one homework draft.
 import {z} from 'zod';
-import {chunkUtterances, chunkText, mergeChunks, homeworkCategories, guardSuggestions, legacyCategory, levelIndex, ERROR_TYPES,
+import {chunkUtterances, chunkText, mergeChunks, homeworkCategories, carryDecisions, guardSuggestions, legacyCategory, levelIndex, ERROR_TYPES,
   type Utterance, type RawChunk, type Topic, type HistoryItem, type Category, type Suggestion, type ErrorItem} from './core.ts';
 
 export const PIPELINE_VERSION = 2;
@@ -16,17 +16,17 @@ export const ChunkSchema = z.object({
     corrected: z.string().describe('the same phrase, minimally corrected'),
     category: z.string().describe('short grammar/vocabulary category name in Dutch, e.g. "Inversie", "Verleden tijd", "Lidwoorden", "Woordkeuze"'),
     topic: z.string().nullable().describe('topic alias like "T7" from the topic list if it fits, else null'),
-    kind: z.enum(['error', 'slip', 'self_correction']).describe('slip = one-off speech error; self_correction = student corrected it'),
+    kind: z.enum(['error', 'slip', 'self_correction', 'style', 'transcript']).describe('error = real mistake (grammar or wrong word); slip = one-off speech error; self_correction = student corrected it; style = grammatically correct but unnatural / could be phrased better (NOT an error); transcript = probably a transcription mistake, not the student'),
     certainty: z.enum(['certain', 'uncertain']),
     type: z.enum(ERROR_TYPES as [string, ...string[]]).describe('main category: grammar, conjugation (verb forms), word_order (word order/sentence structure), word_choice (wrong word), missing_word, article, preposition, pronunciation (only when the transcript makes it unmistakable), other'),
     why: z.string().describe('one short reason, max 15 words, in the explanation language'),
     word: z.string().describe('for word_choice/article/preposition/missing_word: the correct word or expression the student needed (with article for nouns), else empty'),
     word_en: z.string().describe('English meaning of \word\, else empty'),
-  })).describe('ALL real mistakes of the student in this part (max 60), each mistake once per line'),
+  })).describe('ALL reliably recognisable mistakes of the student in this part (max 60), each mistake once per line; style remarks max 10'),
   covered: z.array(z.object({topic: z.string().nullable(), label: z.string()})).describe('max 6: topics the teacher explained or practised in this part'),
   positives: z.array(z.object({utterance_id: z.string(), note: z.string()})).describe('max 3: strong or correct student utterances worth praising'),
   new_words: z.array(z.object({term: z.string().describe('exact spelling as used in the lesson'), translation: z.string(), status: z.enum(['introduced', 'practised', 'difficult']).describe('introduced = new word explained by the teacher; practised = a word used again; difficult = the student clearly struggled with it (asked, could not recall, used it wrongly)')}))
-    .describe('max 8: words/expressions that were introduced, practised again or were difficult for the student. A word written down is NOT proof that the student knows it.'),
+    .describe('max 12: words/expressions the teacher explained or introduced, the student asked about, used wrongly or struggled with, or that were practised again (lesson material only: NOT every word that was said). A word written down is NOT proof that the student knows it.'),
 });
 export const SynthesisSchema = z.object({
   report: z.object({
@@ -65,6 +65,9 @@ export type AnalysisV2 = {
   speakers_separated: boolean; student_utterances: number; chunks: number; dropped_unverified: number;
   source_quality: 'good' | 'partial' | 'poor'; quality_note: string; explanation_language: string;
   steps: {merged: boolean; synthesis: boolean; homework: boolean};
+  /** v72: correct-but-unnatural phrasings (never errors), suspected transcription mistakes left out, method/run info */
+  style?: {utterance_id: string; original: string; better: string; why: string; start: number | null}[]; transcript_doubts?: number;
+  method?: string; analysed_parts?: number;
   // legacy fields so older screens/games keep working
   summary: string; corrections: {original: string; corrected: string; explanation: string; category: ReturnType<typeof legacyCategory>; certainty: 'certain' | 'uncertain'}[];
   homework_suggestion: string; exercises: {type: string; prompt: string}[];
@@ -87,6 +90,7 @@ export type Context = {
   utterances: Utterance[]; lessonDate: string; targetLang: string; targetName: string; uiName: string; level: string;
   notes: string; board: string; lessonGoals: {topic_id: string | null; title: string}[]; topics: Topic[]; history: HistoryItem[];
   isTest: boolean; guide: string; thinNote?: string; knownWords?: string[]; chunkWords?: number; concurrency?: number; maxAttempts?: number; deadline?: number;
+  /** v72: errors of the previous analysis of this lesson (re-analysis keeps the teacher's decisions) */ previous?: ErrorItem[];
 };
 
 const now = () => Date.now();
@@ -111,7 +115,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
   if (!utts.length) { await store.fail('collect', 'Geen bruikbaar transcript gevonden.', false); return {state: 'failed'}; }
   const topics = promptTopics(ctx.topics, ctx.level); const {toAlias, toId} = aliases(topics);
   const topicList = topics.map(t => `${toAlias.get(t.id)} [${t.level}] ${t.title} — ${STATUS_NL[t.status]}`).join('\n');
-  const chunks = chunkUtterances(utts, ctx.chunkWords || 1400);
+  const chunks = chunkUtterances(utts, ctx.chunkWords || 900, 4); // v72: smaller parts, more context → complete and never cut off
   const explainIn = levelIndex(ctx.level) === 0 ? ctx.uiName : ctx.targetName; // A0: interface language, otherwise the target language
   let draft = await store.loadDraft();
 
@@ -125,8 +129,12 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
       `Student level: ${ctx.level}. Lines are numbered (u1, u2…) and labelled DOCENT (teacher), LEERLING (student) or ONBEKEND (speaker unknown).`,
       'errors: ONLY mistakes in LEERLING lines (ONBEKEND only if you are sure it is the student; then certainty "uncertain"). Never use DOCENT lines.',
       '"original" must be copied EXACTLY from that line. Do not invent quotes. Do not flag correct, natural informal speech.',
-      'kind: "slip" for an obvious one-off speech error, "self_correction" when the student immediately corrected it themselves, otherwise "error".',
-      'Register EVERY demonstrable mistake of the student in this part (not just examples), each mistake once per line; the same mistake in another line is registered again (that shows a pattern).',
+      'kind: "slip" for an obvious one-off speech error, "self_correction" when the student immediately corrected it themselves, "style" when the sentence is grammatically correct but unnatural or could be phrased better (a preference, NOT an error), "transcript" when the odd words are most likely a transcription mistake, otherwise "error".',
+      'Register EVERY reliably recognisable, didactically relevant mistake of the student in this part (not just a few striking ones), each mistake once per line; the same mistake in another line is registered again (that shows a pattern).',
+      'Check systematically: verb conjugation, tenses, participles, auxiliaries, word order and inversion, subordinate clauses, articles, prepositions, singular/plural, agreement, wrong word, missing word, unnatural phrasing (style), register.',
+      'Judge every line in the conversation context: a short or elliptic answer that is correct as a reply is NOT a mistake. Valid informal or regional speech is NOT a mistake. Never invent mistakes that are not in the transcript.',
+      'The teacher (DOCENT) often says wrong sentences ON PURPOSE as an example, or corrects the student: never register those as student mistakes. When the teacher corrects a student line, use that correction as extra evidence for "corrected". When the student repeats the teacher\'s correction correctly, that is a positive, not a mistake.',
+      'Lines starting with [onduidelijk] were hard to hear: at most certainty "uncertain".',
       `"why": one short reason (max 15 words) in ${explainIn}. Keep everything else compact. Lines marked as context must not be analysed.`,
       'Pronunciation only when the transcript makes it unmistakable (e.g. the transcriber clearly wrote another word); never guess from spelling.',
       `Topic list (use the alias in "topic" when a mistake or covered topic belongs to it):\n${topicList || '(none)'}`,
@@ -139,13 +147,21 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
         if (ctx.deadline && now() > ctx.deadline) return;
         const c = todo[i++];
         try {
-          const r = await ask('chunk', ChunkSchema, system, `Part ${c.index + 1} of ${chunks.length}:\n${chunkText(c, byId)}`, 3500);
+          // v72: an answer that is too long for one call is not lost: the part is analysed again in two halves
+          const once = (cc: typeof c) => ask('chunk', ChunkSchema, system, `Part ${c.index + 1} of ${chunks.length}:\n${chunkText(cc, byId)}`, 9000);
+          let r: z.infer<typeof ChunkSchema>;
+          try { r = await once(c); } catch (e) {
+            if (!/te lang|afgebroken|too long|length/i.test(e instanceof Error ? e.message : String(e)) || c.ids.length < 2) throw e;
+            const h = Math.ceil(c.ids.length / 2);
+            const a1 = await once({...c, ids: c.ids.slice(0, h)}), a2 = await once({...c, ids: c.ids.slice(h), contextIds: c.ids.slice(Math.max(0, h - 4), h)});
+            r = {errors: [...a1.errors, ...a2.errors], covered: [...a1.covered, ...a2.covered], positives: [...a1.positives, ...a2.positives], new_words: [...a1.new_words, ...a2.new_words]};
+          }
           const raw: RawChunk = {
-            errors: r.errors.slice(0, 60).map(e => ({utterance_id: e.utterance_id, original: e.original, corrected: e.corrected, category: e.category, topic_id: e.topic ? toId.get(e.topic) || null : null, kind: e.kind, certainty: e.certainty,
+            errors: r.errors.slice(0, 120).map(e => ({utterance_id: e.utterance_id, original: e.original, corrected: e.corrected, category: e.category, topic_id: e.topic ? toId.get(e.topic) || null : null, kind: e.kind, certainty: e.certainty,
               type: e.type as RawChunk['errors'][number]['type'], why: e.why, word: e.word, word_en: e.word_en}))
               .filter(e => c.ids.includes(e.utterance_id)), // never count context lines twice
             covered: r.covered.slice(0, 6).map(x => ({topic_id: x.topic ? toId.get(x.topic) || null : null, label: x.label})),
-            positives: r.positives.slice(0, 3).filter(p => c.ids.includes(p.utterance_id)), new_words: r.new_words.slice(0, 8),
+            positives: r.positives.slice(0, 6).filter(p => c.ids.includes(p.utterance_id)), new_words: r.new_words.slice(0, 16),
           };
           await store.savePart(c.index, 'done', raw, null);
         } catch (e) { await store.savePart(c.index, 'failed', null, e instanceof Error ? e.message : String(e)); }
@@ -163,12 +179,13 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
     await store.stage('merge', {total: chunks.length});
     const merged = mergeChunks(done.sort((a, b) => a.index - b.index).map(p => p.result!), utts, {topics: ctx.topics, studentLevel: ctx.level, todayTopicIds: ctx.lessonGoals.map(g => g.topic_id).filter(Boolean) as string[], history: ctx.history, knownWords: ctx.knownWords});
     draft = {
-      version: 2, report: null, categories: merged.categories, errors: merged.errors, later_note: '', covered: merged.covered,
+      version: 2, report: null, categories: merged.categories, errors: ctx.previous?.length ? carryDecisions(merged.errors, ctx.previous) : merged.errors, later_note: '', covered: merged.covered,
       positives: merged.positives.map(p => ({utterance_id: p.utterance_id, text: byId.get(p.utterance_id)?.text || '', note: p.note})),
       vocabulary: merged.vocabulary, checklist_suggestions: [], homework: null,
       speakers_separated: merged.separated, student_utterances: merged.studentUtterances, chunks: chunks.length, dropped_unverified: merged.dropped,
       source_quality: merged.separated ? 'good' : 'partial', quality_note: '', explanation_language: explainIn,
       steps: {merged: true, synthesis: false, homework: false}, summary: '', corrections: [], homework_suggestion: '', exercises: [],
+      style: merged.style, transcript_doubts: merged.transcriptDoubts, method: 'v72', analysed_parts: done.length,
     };
     await store.saveDraft(draft);
   }
@@ -177,7 +194,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
   /* 3. synthesis: short report + ONE explanation per category + checklist suggestions */
   if (!draft.steps.synthesis) {
     await store.stage('synthesis', {});
-    const cats = draft.categories.filter(c => c.count > 0).slice(0, 12);
+    const cats = draft.categories.filter(c => c.count > 0).slice(0, 16);
     const input = {
       level: ctx.level, lesson_date: ctx.lessonDate,
       categories: cats.map(c => ({key: c.key, label: c.label, count: c.count, relevance: c.relevance, recurring: c.recurring, trend: c.trend?.direction || null, self_corrections: c.self_corrections, examples: c.examples.map(e => `${e.original} → ${e.corrected}`)})),
@@ -199,7 +216,7 @@ export async function runPipeline(ctx: Context, ask: Ask, store: Store): Promise
         'suggestions: checklist changes (topic alias from the checklist, status covered / in_progress (= still practising) / mastered). Only with evidence from this lesson; "mastered" only when the student used it correctly several times (evidence_count = number of correct uses) and made no mistakes in it. Max 8.',
         'later_note: mention advanced mistakes (relevance "later") only as material for later, never as a weakness. Empty if none.',
         'source_quality: good when speakers were separated and the transcript is substantial; partial or poor otherwise, explained in quality_note.',
-      ].join('\n'), JSON.stringify(input), 4000);
+      ].join('\n'), JSON.stringify(input), 10000);
       const exp = new Map(s.explanations.map(e => [e.key, e]));
       draft.categories = draft.categories.map(c => ({...c, label: exp.get(c.key)?.label || c.label, explanation: exp.get(c.key)?.explanation || ''}));
       draft.report = {summary: s.report.summary, covered: s.report.covered.slice(0, 6), went_well: s.report.went_well.slice(0, 4), focus: s.report.focus.slice(0, 4), next_lesson: s.report.next_lesson};

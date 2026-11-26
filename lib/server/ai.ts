@@ -6,6 +6,7 @@ import 'server-only';
 import {createClient, type SupabaseClient, type User} from '@supabase/supabase-js';
 import type {z} from 'zod';
 import {AiError, chatJson, modelFast, modelStrong, pricePerMTok} from './openai';
+import {TRANSCRIBE_PROMPT, unclearMark} from '../transcript';
 
 export const MODEL_FAST = modelFast();
 export const MODEL_STRONG = modelStrong();
@@ -49,12 +50,17 @@ export async function transcribe(audio: Blob, filename: string, languageHint?: s
   form.append('model', process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1');
   form.append('response_format', 'verbose_json');
   if (languageHint && /^[a-z]{2}$/.test(languageHint)) form.append('language', languageHint);
+  // v72: same model; a style prompt asks for VERBATIM text (learner mistakes, hesitations and repetitions kept) instead of
+  // cleaned-up sentences. Overridable via OPENAI_TRANSCRIBE_PROMPT ('' switches it off).
+  const prompt = process.env.OPENAI_TRANSCRIBE_PROMPT ?? TRANSCRIBE_PROMPT;
+  if (prompt) form.append('prompt', prompt.slice(0, 800));
   const r = await fetch((process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '') + '/audio/transcriptions', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`}, body: form});
-  const j = await r.json().catch(() => ({})) as {text?: string; duration?: number; segments?: {start: number; end: number; text: string}[]; error?: {message?: string}};
+  const j = await r.json().catch(() => ({})) as {text?: string; duration?: number; segments?: {start: number; end: number; text: string; avg_logprob?: number; no_speech_prob?: number}[]; error?: {message?: string}};
   if (!r.ok) return none('Transcriptie mislukt: ' + (j.error?.message || r.status));
   const duration = Math.round(Number(j.duration) || 0);
   if (log) await logUsage(log, process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1', 0, 0, duration);
-  return {text: String(j.text || '').trim(), segments: (j.segments || []).map(s => ({start: Number(s.start) || 0, end: Number(s.end) || 0, text: String(s.text || '')})), duration};
+  // v72: low-confidence segments are marked, so the analysis never registers a certain error on them
+  return {text: String(j.text || '').trim(), segments: (j.segments || []).map(s => ({start: Number(s.start) || 0, end: Number(s.end) || 0, text: unclearMark(String(s.text || ''), s.avg_logprob, s.no_speech_prob)})), duration};
 }
 
 /* ---------------- usage log, cost estimate and fair-use limits ---------------- */

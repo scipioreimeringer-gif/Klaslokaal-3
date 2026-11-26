@@ -44,7 +44,7 @@ function fakeAsk({failChunks = new Set(), failSynthesis = 0, failHomework = 0, l
     log.push({step, maxTokens, chars: system.length + user.length});
     if (step === 'chunk') {
       const part = +user.match(/^Part (\d+)/)[1] - 1;
-      if (failChunks.has(part) && !state.chunkFails.get(part)) { state.chunkFails.set(part, 1); throw new Error('AI-antwoord was te lang en is afgebroken'); }
+      if (failChunks.has(part) && !state.chunkFails.get(part)) { state.chunkFails.set(part, 1); throw new Error('AI-fout: 502'); } // v72: a too-long answer is split and retried (tests/unit/v72); other failures → partial
       const alias = title => (system.match(new RegExp(`(T\\d+) \\[\\w+\\] ${title}`)) || [])[1] || null;
       const errors = [];
       for (const line of user.split('\n')) { // includes the context lines on purpose: the pipeline must ignore those
@@ -178,7 +178,7 @@ for (const minutes of [5, 15, 30, 50, 60]) {
     assert.ok(doc.dropped_unverified >= 1, 'teacher line / invented quotes dropped');
     const chunks = log.filter(l => l.step === 'chunk');
     assert.equal(chunks.length, doc.chunks); assert.ok(chunks.length >= Math.ceil(minutes * 130 / 1500), 'long lesson is split');
-    assert.ok(log.every(l => l.maxTokens <= 4000), 'every model answer is small and bounded');
+    assert.ok(log.every(l => l.maxTokens <= 10000), 'every model answer is bounded (v72: room for complete error lists, never cut off)');
     assert.ok(chunks.every(l => l.chars < 14000), 'each chunk prompt is bounded, regardless of lesson length');
     assert.equal(log.filter(l => l.step === 'synthesis').length, 1); assert.equal(log.filter(l => l.step === 'homework').length, 1);
     const hw = s.homework[0];

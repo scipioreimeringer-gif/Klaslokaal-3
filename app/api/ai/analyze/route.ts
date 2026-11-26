@@ -1,7 +1,7 @@
 import {authUser, enforceLimit, HttpError, jsonError, uiLanguage} from '../../../../lib/server/ai';
 import {studentAccess} from '../../../../lib/server/context';
 import {PIPELINE_VERSION} from '../../../../lib/server/analysisRunner';
-import {startForRecording, resumeAnalysis, startJob, type Job} from '../../../../lib/server/analysisStart';
+import {startForRecording, resumeAnalysis, rerunAnalysis, startJob, type Job} from '../../../../lib/server/analysisStart';
 
 // AI lesson analysis 2.0: transcription + chunked analysis run on the server after the response
 // (Vercel keeps the function alive via after()). State per step lives in lesson_analyses /
@@ -16,6 +16,8 @@ export async function POST(req: Request) {
     const ui = await uiLanguage(db, user.id, body.uiLang);
     const job: Job = {db, userId: user.id, ui, token, origin: new URL(req.url).origin};
     if (typeof body.resumeId === 'string') { const r = await resumeAnalysis(job, body.resumeId, body.retryFailed === true); return Response.json(r, {status: r.existing ? 200 : 202}); }
+    // v72: re-analyse an existing report (stored transcript, re-transcribe, or an imported transcript / audio)
+    if (typeof body.rerunId === 'string') { const r = await rerunAnalysis(job, body.rerunId, {retranscribe: body.retranscribe === true, transcript: typeof body.transcript === 'string' ? body.transcript : undefined, audio: body.audio as never}); return Response.json(r, {status: r.existing ? 200 : 202}); }
     if (body.test === true || typeof body.transcript === 'string') return await importTestTranscript(job, body);
     const out = await startForRecording(job, String(body.recordingId || ''));
     return Response.json(out, {status: out.existing ? 200 : 202});
