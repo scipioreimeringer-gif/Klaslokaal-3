@@ -15,6 +15,11 @@ import {subjectOf} from '../../lib/learning';
 import {languageName,pickRelation} from '../../lib/languages';
 import {asLvl,isLvl,LVLS,type Lvl} from '../../lib/practice';
 import {t} from '../../lib/i18n';
+import {useDashboard} from '../../components/DashData';
+import {ReadyForYou} from '../../components/ReadyForYou';
+import {DailyCard} from '../../components/DailyPractice';
+import {readyFor} from '../../lib/ready';
+import {useAuth} from '../../components/Auth';
 
 /** v54: practice in the ACTIVE learning language (same choice as "Mijn talen" in the sidebar) at the student's own
  *  level for that language — or, for now, another level (only on this page; the profile level stays the same). */
@@ -36,6 +41,9 @@ function Page(){
  const choose=(v:string)=>{const p=isLvl(v)?v:'mine';setPick(p);try{if(p==='mine')sessionStorage.removeItem(tmpKey);else sessionStorage.setItem(tmpKey,p)}catch{/* private mode */}};
  const level:Lvl=pick==='mine'?ownLevel:pick;
  const switchTo=(c:string)=>{prefs.setActive(c);if(wanted)router.replace('/oefenen')};
+ // v73: "Voor jou" (moved here from the dashboard): stored material of THIS relation only; opening the page generates nothing
+ const {user}=useAuth();const dash=useDashboard(user?{userId:user.id}:null);
+ const ready=dash.loaded&&rel?readyFor(dash).filter(i=>i.studentId===rel.id):null;
  return <>
   <div className="page-head"><div><p className="eyebrow-dark">{t("ZELFSTANDIG LEREN")}</p><h1>{t("Oefenen & spelletjes")}</h1><p className="muted">{t("Oefen met je eigen woordenlijst en maak extra oefeningen. Je resultaten worden bewaard en tellen mee in je voortgang.")}</p></div></div>
   {!loaded||!mine.loaded?<div className="loader small"/>:!card?<section className="card"><p>{t("Nog geen leerlingprofiel gekoppeld. Vraag je docent om je toe te voegen.")}</p></section>:<>
@@ -47,6 +55,8 @@ function Page(){
     {pick!=='mine'&&<small className="muted pr-tmp">{t('Tijdelijk oefenniveau; je profielniveau blijft {0}.',ownLevel)}</small>}
     <Link className="linklike pr-set" href="/account#talen"><Settings2 size={14}/> {t('Mijn niveaus aanpassen')}</Link>
    </section>
+   {rel&&<div className="oef-top"><DailyCard key={rel.id} studentId={rel.id} level={level} label={t('Dagelijkse oefening')+' · '+languageName(code)}/>
+    <ReadyForYou items={ready} relations={[{id:rel.id,label:[languageName(code),teacherName(rel.id)].filter(Boolean).join(' · '),lang:code,level,teacher:teacherName(rel.id)||undefined}]}/></div>}
    <section className="card"><h3><Gamepad2 size={17}/> {t("Spelletjes met je woordenlijst")} <span className="tag">{languageName(code)} · {level}</span></h3>
     <VocabGames key={code+'|'+level+'|'+(rel?.id||'self')} studentId={rel?.id||null} lang={code} level={level} start={spel}/></section>
    {/* v71: "Oefenen" from Mijn leerlijn opens this existing generator with that grammar topic as focus */}

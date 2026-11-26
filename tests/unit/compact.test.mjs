@@ -105,12 +105,16 @@ test('Voor jou klaar: the latest approved lesson report; empty when there is not
 
 test('wiring: dashboard section, student data via RLS only, compact report everywhere the student reads it', () => {
   const home = read('app/page.tsx');
-  assert.match(home, /<ReadyForYou items=\{d\.loaded\?readyFor\(d\):null\} relations=\{studentLinks\.map/);
-  assert.ok(home.indexOf('<ReadyForYou') < home.indexOf('className="statgrid"', home.indexOf('function StudentHome')), 'near the top of the student dashboard');
+  // v73: "Voor jou" moved from the dashboard to Oefenen (same data, only the active relation)
+  const oef = read('app/oefenen/page.tsx');
+  assert.match(oef, /const ready=dash\.loaded&&rel\?readyFor\(dash\)\.filter\(i=>i\.studentId===rel\.id\):null;/);
+  assert.match(oef, /<ReadyForYou items=\{ready\}/);
+  assert.ok(!home.includes('<ReadyForYou'), 'no longer on the dashboard');
   // phase 5: no extra queries — the dashboard's own (RLS-limited) data is reused
-  assert.match(home, /select\('id,student_id,title,published_at'\)/);
-  assert.match(home, /select\('student_id,status,due_at,translation,term'\)/, 'v43: + term for the real word count');
-  assert.match(home, /rpc\('student_lesson_summaries',\{sid:id\}\)\.then/, 'reports via the existing approved-only function, tagged per relation');
+  const dd = read('components/DashData.tsx'); // v73: the shared loader
+  assert.match(dd, /select\('id,student_id,title,published_at'\)/);
+  assert.match(dd, /select\('student_id,status,due_at,translation,term'\)/, 'v43: + term for the real word count');
+  assert.match(dd, /rpc\('student_lesson_summaries',\{sid:id\}\)\.then/, 'reports via the existing approved-only function, tagged per relation');
   const r = read('components/ReadyForYou.tsx');
   assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');
   assert.match(r, /\/oefenen\?student=\$\{rel\.id\}&spel=flashcards/);

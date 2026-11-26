@@ -67,7 +67,7 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
  const rel=next?relations.get(next.student_id):undefined;const lang=next?langOf(next,rel):'';
  return <section className="panel next-lesson" aria-label={t('Volgende les')}>
   {error&&<p className="notice">{error}</p>}
-  {!next?<div className="next-empty"><CalendarDays size={28}/><div><strong>{t('Geen lessen gepland')}</strong><p className="muted">{mode==='teacher'?t('Plan een les in de agenda; je leerling ziet hem dan meteen in de eigen tijdzone.'):t('Zodra je docent een les inplant, zie je die hier.')}</p></div>{mode==='teacher'&&<Link className="button" href="/agenda?nieuw=1"><CalendarPlus size={16}/> {t('Les inplannen')}</Link>}</div>:
+  {!next?<div className="next-empty"><CalendarDays size={28}/><div><strong>{t('Geen lessen gepland')}</strong><p className="muted">{mode==='teacher'?t('Plan een les in de agenda; je leerling ziet hem dan meteen in de eigen tijdzone.'):t('Zodra je docent een les inplant, zie je die hier.')}</p></div>{mode==='teacher'?<Link className="button" href="/agenda?nieuw=1"><CalendarPlus size={16}/> {t('Les inplannen')}</Link>:<Link className="button small" href="/agenda?boeken=1"><CalendarPlus size={15}/> {t('Les boeken')}</Link>}</div>:
   <div className="next-main">
    <div className="next-head"><p className="eyebrow-dark">{t('VOLGENDE LES')}</p><StatusChip state={lessonState(next,now)}/></div>
    <div className="next-body">
@@ -75,7 +75,8 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
     <div className="next-info">
      <div className="next-lang">{lang&&<Flag code={lang} size={20}/>} {lang?languageName(lang):''}{rel?.level?' · '+rel.level:''}</div>
      <Link className="next-when when-link" href={lessonHref(next)} title={t('Lesdetails openen')}><Clock size={15}/> {fmtWhen(next,tz)}</Link>
-     <div className="next-count">{countdown(next.starts_at,now)}</div>
+     <div className="next-count">{countdown(next.starts_at,now)} · {t('{0} min',Math.round((Date.parse(next.ends_at)-Date.parse(next.starts_at))/60000))}</div>
+     <PlannedTopics studentId={next.student_id} day={dayKey(next.starts_at,tz)}/>
     </div>
     <Link className="button next-open" href={classroomHref(next,mode)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
    </div>
@@ -120,7 +121,7 @@ function itemText(i:AgendaItem,rel:StudentRecord|undefined,teacherName:(sid:stri
 function useStoredTz(){const [tz,setTz]=useState(()=>{try{return localStorage.getItem('teachy-agenda-tz')||browserTimeZone()}catch{return browserTimeZone()}});
  return [tz,(z:string)=>{setTz(z);try{if(z===browserTimeZone())localStorage.removeItem('teachy-agenda-tz');else localStorage.setItem('teachy-agenda-tz',z)}catch{}}] as const}
 
-export function AgendaView({openNew,openId}:{openNew?:boolean;openId?:string|null}){
+export function AgendaView({openNew,openId,openBooking}:{openNew?:boolean;openId?:string|null;openBooking?:boolean}){
  const {user,canTeach,studentLinks}=useAuth();useSyncTimeZone();const now=useNow();const [tz,setTz]=useStoredTz();
  const [view,setView]=useState<View>(()=>{try{return (localStorage.getItem('teachy-agenda-view') as View)||'week'}catch{return 'week'}});
  const [filter,setFilterState]=useState<AgendaFilter>(()=>{try{return readFilter(localStorage.getItem('teachy-agenda-filter'),true)}catch{return 'all'}});
@@ -144,7 +145,7 @@ export function AgendaView({openNew,openId}:{openNew?:boolean;openId?:string|nul
  // v59: simple per role — filters only for someone who both teaches and learns; teachers: "+ Toevoegen" +
  // "Beschikbaarheid instellen"; learners: "Les boeken"; everything else (time zone, cancelled, Google) under "Meer opties"
  const filters=FILTERS.filter(f=>f!=='teach'||canTeach);
- const [add,setAdd]=useState(false);const [avail,setAvail]=useState(false);const [booking,setBooking]=useState(false);
+ const [add,setAdd]=useState(false);const [avail,setAvail]=useState(false);const [booking,setBooking]=useState(!!openBooking);
  const learnRels=[...relations.values()].filter(r=>learnerIds.has(r.id));
  return <>
   <div className="page-head"><div><p className="eyebrow-dark">{t('MIJN AGENDA')}</p><h1>{t('Agenda')}</h1></div>
@@ -428,4 +429,12 @@ function LessonForm({initial,day,relations,busy=[],onClose,onSaved}:{initial?:Le
   {msg&&<p className="notice" role="alert">{msg}</p>}
   <div className="row"><button className="button" disabled={saving||!student} onClick={()=>void save()}>{saving?t('Opslaan…'):initial?t('Wijziging opslaan'):weekly?t('{0} lessen inplannen',weeks):t('Les inplannen')}</button><button className="button secondary" onClick={onClose}>{t('Annuleren')}</button></div></>}
  </div></div>
+}
+
+/** v73: grammar topics planned for that lesson day (lesson_goals, same data as the teacher's topic picker); nothing when none. */
+function PlannedTopics({studentId,day}:{studentId:string;day:string}){
+ const [list,setList]=useState<string[]>([]);
+ useEffect(()=>{let off=false;void supabase()!.from('lesson_goals').select('custom_title,curriculum_goals(title)').eq('student_id',studentId).eq('lesson_date',day).limit(8)
+  .then(r=>{if(!off&&!r.error)setList(((r.data||[]) as unknown as {custom_title:string|null;curriculum_goals:{title:string}|null}[]).map(g=>g.custom_title||g.curriculum_goals?.title||'').filter(Boolean))});return()=>{off=true}},[studentId,day]);
+ return list.length?<div className="next-topics"><Sparkles size={13} aria-hidden/> {list.join(' · ')}</div>:null;
 }

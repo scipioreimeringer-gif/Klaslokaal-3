@@ -47,7 +47,9 @@ function Page(){
   <AvatarEditor/>
   {canTeach&&<TeachingLanguages/>}
   {mode==='student'&&<MyLevels/>}
-  {mode==='student'&&<section className="card"><h3>{t("Mijn talen")}</h3><p className="muted">{t("Je talen, docenten en voortgang staan op je dashboard.")}</p><Link className="button small" href="/">{t("Naar mijn talen")}</Link></section>}
+  {mode==='student'&&<section className="card"><h3>{t("Mijn talen")}</h3><p className="muted">{t("Wissel van leertaal onderaan het menu, bij Mijn talen. Je voortgang per taal staat bij Voortgang.")}</p><Link className="button small" href="/voortgang">{t("Naar Voortgang")}</Link></section>}
+  {/* v73: technical build information lives here instead of in the sidebar */}
+  <p className="build-meta" title={t("Welke versie draait hier (branch · commit)")}>{process.env.NEXT_PUBLIC_BUILD_ENV==='production'?t("Productie"):t("Preview")} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</p>
  </>
 }
 export default function Account(){return <Nav><Page/></Nav>}

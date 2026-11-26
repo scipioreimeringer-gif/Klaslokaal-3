@@ -9,7 +9,8 @@ const read = f => readFileSync(path.join(root, f), 'utf8');
 
 test('Mijn leerlijn in Voortgang uses the same LearningPath (no copy); statuses read-only for the student', () => {
   const sd = read('components/StudentData.tsx');
-  assert.match(sd, /tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><Target size=\{17\}\/> \{t\("Mijn leerlijn"\)\}<\/h3><LearningPath student=\{ws\} viewer="student"\/>/);
+  assert.match(sd, /tab==='voortgang'&&viewer==='student'&&<ProgressHub student=\{ws\}\/>/); // v73: Voortgang → Mijn leerlijn
+  assert.match(read('components/Progress.tsx'), /<LearningPath student=\{student\} viewer="student"\/>/);
   const lp = read('components/LearningPath.tsx');
   assert.match(lp, /\{teacher\?<select className=\{'cell gsel gs-'\+status\}/, 'only the teacher gets a status control');
   assert.ok(!/teacher&&p\?\.note/.test(lp) === false && !/\n\s*\{p\?\.note&&/.test(lp), 'private progress notes only for the teacher');

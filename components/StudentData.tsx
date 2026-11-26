@@ -8,7 +8,7 @@ import Homework from '../app/huiswerk-client';
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {TeacherAnalyses,StudentSummaries} from './Analysis';
 import {LessonCards,LessonDetail,useLessonCards} from './LessonCards';
-import {StudentProgress} from './StudentProgress';
+import {ProgressHub,StatsView,Werkpunten} from './Progress';
 import {TeacherDailyOverview} from './DailyPractice';
 import {SelfPractice,VocabGames,VocabManager} from './Learning';
 import {asLvl} from '../lib/practice';
@@ -144,14 +144,14 @@ export function PrivateNotes({studentId}:{studentId:string}){
  return <div className="private-notes"><div className="row between"><h3><Lock size={16}/> {t("Privénotities")}</h3><small className="muted" role="status">{status}</small></div><textarea className="field" disabled={!ready} value={notes} onChange={e=>setNotes(e.target.value)} placeholder={t("Observaties, aandachtspunten, plan voor de volgende les… De leerling kan dit nooit zien.")}/></div>
 }
 
-type Tab='overzicht'|'lessen'|'woorden'|'huiswerk'|'doelen'|'voortgang'|'oefenen'|'bord'|'opnames'|'prive'|'geheugen';
+type Tab='overzicht'|'lessen'|'woorden'|'huiswerk'|'doelen'|'voortgang'|'oefenen'|'bord'|'opnames'|'prive'|'geheugen'|'stats';
 type WsStudent={id:string;subject:string;level:string|null;lesson_language:string|null;curriculum_subject?:string|null};
 type TabDef=[Tab,string,typeof History];
 /** v44: five main tabs per role; everything else under "Meer" (no function removed). */
 export function workspaceTabs(viewer:'teacher'|'student'):{main:TabDef[];more:TabDef[]}{
  return viewer==='teacher'
   ?{main:[['overzicht','Home',House],['lessen','Lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['doelen','Leerlijn',Route]],
-    more:[['geheugen','AI-geheugen',Brain],['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
+    more:[['stats','Statistieken',TrendingUp],['geheugen','AI-geheugen',Brain],['bord','Bord',PenLine],['opnames','Opnames',Mic],['prive','Privé',Lock]]}
   :{main:[['overzicht','Home',House],['lessen','Mijn lessen',History],['woorden','Woorden',Languages],['huiswerk','Huiswerk',ClipboardList],['voortgang','Voortgang',TrendingUp]],
     more:[['oefenen','Oefenen',Gamepad2],['bord','Bord',PenLine],['opnames','Opnames',Mic]]};
 }
@@ -193,9 +193,10 @@ export function StudentWorkspace({studentId,viewer,intro,student,initialTab}:{st
    {viewer==='student'&&cards&&!cards.length&&<StudentSummaries studentId={studentId} lessonLang={lang}/>}</>}</section>}
   {tab==='woorden'&&<section className="card"><h3>{t("Woorden")}</h3><VocabManager studentId={studentId} viewer={viewer}/></section>}
   {tab==='doelen'&&viewer==='teacher'&&<section className="card"><h3><Target size={17}/> {t("Leertraject")}</h3><LearningPath student={ws} viewer={viewer}/></section>}
-  {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><TrendingUp size={17}/> {t("Voortgang")}</h3><StudentProgress studentId={studentId} progress={b.progress} lessons={mergeLessons(b.lessons,b.sessions)} lessonLang={lang}/></section>}
-  {/* v71: the same learning line as the teacher's (read-only status), with "Graag behandelen" and "Oefenen" */}
-  {tab==='voortgang'&&viewer==='student'&&<section className="card"><h3><Target size={17}/> {t("Mijn leerlijn")}</h3><LearningPath student={ws} viewer="student"/></section>}
+  {/* v73: the same Voortgang as the main page (Statistieken · Mijn leerlijn · Werkpunten) */}
+   {tab==='voortgang'&&viewer==='student'&&<ProgressHub student={ws}/>}
+   {/* v73: the teacher sees the SAME statistics (one calculation) plus the recurring points */}
+   {tab==='stats'&&viewer==='teacher'&&<><section className="card"><h3><TrendingUp size={17}/> {t("Statistieken")}</h3><StatsView ids={[studentId]}/></section><section className="card"><h3><Target size={17}/> {t("Werkpunten")}</h3><Werkpunten studentId={studentId}/></section></>}
   {tab==='oefenen'&&viewer==='student'&&<><section className="card"><h3><Gamepad2 size={17}/> {t("Oefenen & spelletjes")}</h3><VocabGames studentId={studentId} lang={lang} level={asLvl(ws.level)}/></section><section className="card"><h3><Sparkles size={17}/> {t("Maak mijn huiswerk")}</h3><SelfPractice studentId={studentId} level={ws.level}/></section></>}
   {tab==='huiswerk'&&<Homework studentId={studentId} teacher={viewer==='teacher'}/>}
   {tab==='bord'&&<div className="grid2"><section className="card"><h3>{t("Whiteboard")}</h3><BoardPreview board={b.state?.board||null}/></section><section className="card"><h3>{t("Canvas")}</h3><CanvasPreview state={b.state}/></section></div>}

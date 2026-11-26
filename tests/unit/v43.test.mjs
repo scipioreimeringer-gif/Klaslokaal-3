@@ -128,8 +128,9 @@ test('unlinking: teacher and student, checked on the server, nothing deleted', (
 });
 test('dashboard: counts from registered lessons, words from the real word list; compact empty charts', () => {
   const home = read('app/page.tsx');
-  assert.match(home, /lessons:mergeLessons\(\(l\.data\|\|\[\]\) as LessonLike\[\],sessions\)/);
-  assert.match(home, /const words=d\.vocab\.length\?distinctWords\(d\.vocab\)/);
+  // v73: the loader moved to components/DashData.tsx; the student's numbers come from components/Progress.tsx (word bank rows)
+  assert.match(read('components/DashData.tsx'), /lessons:mergeLessons\(\(l\.data\|\|\[\]\) as LessonLike\[\],sessions\)/);
+  assert.match(read('components/Progress.tsx'), /lessons:mergeLessons\(\(le\.data\|\|\[\]\) as LessonLike\[\]/);
   assert.match(read('lib/data.ts'), /progressOf\(mergeLessons\(L, sessions\)/);
   assert.match(read('components/Charts.tsx'), /\(empty\?' is-empty':''\)/);
 });

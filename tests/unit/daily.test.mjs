@@ -76,6 +76,7 @@ test('wiring: own data via RLS, mistakes not removed by the teacher, results sto
   assert.match(c, /Spraakherkenning is in deze browser niet beschikbaar: typ je antwoord\./, 'alternative without microphone');
   const r = read('app/api/practice/check/route.ts');
   assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\);/); assert.match(r, /never comment on pronunciation/);
-  assert.match(read('app/page.tsx'), /<DailyCard key=\{s\.id\} studentId=\{s\.id\}/);
+  assert.match(read('app/page.tsx'), /<DailyMini key=\{rel\.id\} studentId=\{rel\.id\}/); // v73: compact, active language only
+  assert.match(read('app/oefenen/page.tsx'), /<DailyCard key=\{rel\.id\} studentId=\{rel\.id\}/);
   assert.match(read('components/StudentData.tsx'), /<TeacherDailyOverview studentId=\{studentId\}\/>/);
 });

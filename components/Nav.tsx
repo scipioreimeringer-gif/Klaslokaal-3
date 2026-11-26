@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
-import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,GraduationCap,Languages,ShieldCheck,BookOpen,Menu,LogOut,Presentation,Home,Route,Gamepad2,ListTodo,Wallet} from 'lucide-react';
+import {LayoutDashboard,UsersRound,Video,CalendarDays,Sparkles,Library,GraduationCap,ShieldCheck,BookOpen,Menu,LogOut,Presentation,Home,Route,Gamepad2,ListTodo,Wallet,TrendingUp,ChevronDown,PanelLeftClose,PanelLeftOpen} from 'lucide-react';
 import {TaskBadge} from './Tasks';
 import {LanguagePicker} from './I18n';
 import {useAuth} from './Auth';
@@ -27,9 +27,19 @@ function Frame({children}:{children:React.ReactNode}){
  /** The menu button is the only toggle: desktop collapses fully (no reserved space), mobile opens/closes the drawer (also closes on outside click / Esc). */
  function toggleSide(){if(isMobile())setOpen(o=>!o);else persist(!collapsed)}
  useEffect(()=>{if(!open)return;const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[open]);
- const teacherLinks=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/taken',icon:ListTodo,label:tt('Taken')},{href:'/betalingen',icon:Wallet,label:tt('Betalingen')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}];
- const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/taken',icon:ListTodo,label:tt('Taken')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')}];
- const links=mode==='teacher'?teacherLinks:studentNav;
+ // v73: compact navigation. Teacher: daily work always visible, the rest in collapsible groups (the group of the active
+ // page opens by itself; own choices are remembered). Student: six main items (tasks live on the dashboard).
+ const work=[{href:'/',icon:LayoutDashboard,label:tt('Dashboard')},{href:'/leerlingen',icon:UsersRound,label:tt('Leerlingen')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')}];
+ const groups:{id:string;label:string;items:typeof work}[]=[
+  {id:'material',label:tt('Lesmateriaal'),items:[{href:'/leerlijnen',icon:Route,label:tt('Leerlijnen')},{href:'/tools',icon:Sparkles,label:tt('AI & tools')},{href:'/bibliotheek',icon:Library,label:tt('Bibliotheek')}]},
+  {id:'admin',label:tt('Administratie'),items:[{href:'/taken',icon:ListTodo,label:tt('Taken')},{href:'/betalingen',icon:Wallet,label:tt('Betalingen')}]},
+  ...(role==='admin'?[{id:'beheer',label:tt('Beheer'),items:[{href:'/beheer',icon:ShieldCheck,label:tt('Docenten beheren')}]}]:[])];
+ const studentNav=[{href:'/',icon:Home,label:tt('Overzicht')},{href:'/mijn-profiel',icon:BookOpen,label:tt('Mijn lessen')},{href:'/oefenen',icon:Gamepad2,label:tt('Oefenen')},{href:'/voortgang',icon:TrendingUp,label:tt('Voortgang')},{href:'/agenda',icon:CalendarDays,label:tt('Agenda')},{href:'/klaslokaal/live',icon:Video,label:tt('Klaslokaal')}];
+ const links=mode==='teacher'?work:studentNav;
+ const [gOpen,setGOpen]=useState<Record<string,boolean>>({});
+ useEffect(()=>{try{setGOpen(JSON.parse(localStorage.getItem('teachy-nav-groups')||'{}'))}catch{/* private mode */}},[]);
+ const flip=(id:string,cur:boolean)=>setGOpen(g=>{const n={...g,[id]:!cur};try{localStorage.setItem('teachy-nav-groups',JSON.stringify(n))}catch{/* private mode */}return n});
+ const item=({href,icon:Icon,label}:(typeof work)[number])=><Link className={active(href)?'active':''} href={href} key={href} title={collapsed?label:undefined} aria-label={label} onClick={()=>setOpen(false)}><Icon size={18}/><span className="nl">{label}</span>{href==='/taken'&&user&&<TaskBadge/>}</Link>;
  const both=canTeach&&studentLinks.length>0;
  const meta=(user?.user_metadata||{}) as {avatar_url?:string;picture?:string};const avatar=meta.avatar_url||meta.picture||'';
  const active=(href:string)=>href==='/'?path==='/':path.startsWith(href);
@@ -38,10 +48,12 @@ function Frame({children}:{children:React.ReactNode}){
   <aside className={'side'+(open?' open':'')}>
    <div className="side-head"><Link className="brand" href="/" onClick={()=>setOpen(false)}><span className="brandmark"><GraduationCap size={20}/></span><span>{tt("TeachyRooms")}</span></Link></div>
    <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Mijn leeromgeving')}</div>
-   <nav className="navlinks">{links.map(({href,icon:Icon,label})=><Link className={active(href)?'active':''} href={href} key={href} onClick={()=>setOpen(false)}><Icon size={18}/>{label}{href==='/taken'&&user&&<TaskBadge/>}</Link>)}
-    {mode==='teacher'&&role==='admin'&&<Link href="/beheer" className={active('/beheer')?'active':''} onClick={()=>setOpen(false)}><ShieldCheck size={18}/>{tt('Docenten beheren')}</Link>}</nav>
+   <nav className="navlinks">{links.map(item)}</nav>
+   {mode==='teacher'&&groups.map(g=>{const here=g.items.some(i=>active(i.href));const isOpen=collapsed||here||!!gOpen[g.id];
+    return <div className={'navgroup'+(isOpen?' open':'')} key={g.id}><button type="button" className="navgroup-head" aria-expanded={isOpen} onClick={()=>flip(g.id,isOpen)} title={collapsed?g.label:undefined}><span className="nl">{g.label}</span>{g.id==='admin'&&!isOpen&&user&&<TaskBadge/>}<ChevronDown size={14} className="chev" aria-hidden/></button>
+     {isOpen&&<nav className="navlinks">{g.items.map(item)}</nav>}</div>})}
    {mode!=='teacher'&&<Suspense fallback={null}><SideLanguages onNavigate={()=>setOpen(false)}/></Suspense>}
-   <div className="buildinfo" title={tt("Welke versie draait hier (branch · commit)")}>{process.env.NEXT_PUBLIC_BUILD_ENV==='production'?tt("Productie"):tt("Preview")} · {process.env.NEXT_PUBLIC_BUILD_REF} · {process.env.NEXT_PUBLIC_BUILD_SHA}</div>
+   <button type="button" className="side-fold" onClick={()=>persist(!collapsed)} title={collapsed?tt('Menu uitklappen'):tt('Menu inklappen tot iconen')} aria-label={collapsed?tt('Menu uitklappen'):tt('Menu inklappen tot iconen')}>{collapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>}<span className="nl">{tt('Inklappen')}</span></button>
    <div className="sidebottom"><Link className="sideaccount" href="/account" title={tt("Mijn profiel en profielfoto")} onClick={()=>setOpen(false)}><Avatar className="teacheravatar" userId={user?.id} name={user?.email||'?'} size={34} google={avatar}/><div className="sideuser"><strong>{mode==='teacher'?(role==='admin'?tt("Beheerder"):tt('Docent')):tt('Leerling')}</strong><small>{user?.email||''}</small></div></Link><button className="iconbtn" title={tt('Uitloggen')} aria-label={tt('Uitloggen')} onClick={()=>void supabase()?.auth.signOut()}><LogOut size={17}/></button></div>
   </aside>
   {open&&<div className="side-scrim" onClick={()=>setOpen(false)}/>}
