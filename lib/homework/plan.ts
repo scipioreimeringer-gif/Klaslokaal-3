@@ -110,5 +110,5 @@ export type GenItem = {type: string; prompt: string; options: string[]; answer: 
 export function validBlock(b: {items: GenItem[]; passage: string} | null | undefined, spec: Pick<Block, 'count' | 'type'>): boolean {
   if (!b || !Array.isArray(b.items) || b.items.length < Math.max(1, Math.ceil(spec.count * 0.6))) return false;
   if (spec.type === 'reading' && String(b.passage || '').trim().split(/\s+/).length < 40) return false;
-  return b.items.every(it => String(it.prompt || '').trim().length > 2 && String(it.answer || '').trim() !== '' && (it.type !== 'multiple_choice' || (it.options.length >= 2 && it.options.includes(it.answer))) && (it.type !== 'fill_in' || /_{2,}|…/.test(it.prompt)));
+  return b.items.every(it => String(it.prompt || '').trim().length > 2 && String(it.answer || '').trim() !== '' && (it.type !== 'multiple_choice' || (it.options.length === 4 && it.options.includes(it.answer))) && (it.type !== 'fill_in' || /_{2,}|…/.test(it.prompt)));
 }

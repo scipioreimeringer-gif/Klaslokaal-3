@@ -50,9 +50,11 @@ test('forbidden: answer in brackets, answer already visible, no gap, ambiguous m
   assert.equal(itemProblem(F('Ik woon in Utrecht.', 'woon')), 'geen invulplek');
   assert.equal(itemProblem(F('Ik woon in ___, Utrecht is mooi.', 'Utrecht')), 'antwoord staat al in de zin');
   const mc = (options, answer) => ({type: 'multiple_choice', prompt: 'Kies het juiste woord', options, answer});
-  assert.equal(itemProblem(mc(['de', 'het', 'de'], 'het')), 'dubbele opties');
-  assert.equal(itemProblem(mc(['de', 'het'], 'een')), 'antwoord niet precies één keer tussen de opties');
-  assert.equal(itemProblem(mc(['de', 'het'], 'het')), '');
+  assert.equal(itemProblem(mc(['de', 'het', 'de', 'een'], 'het')), 'dubbele opties');
+  assert.equal(itemProblem(mc(['de', 'het', 'een'], 'het')), 'niet precies vier opties'); // v77
+  assert.equal(itemProblem(mc(['de / het', 'een', 'die', 'dat'], 'een')), 'meerdere opties in één veld');
+  assert.equal(itemProblem(mc(['de', 'het', 'die', 'dat'], 'een')), 'antwoord niet precies één keer tussen de opties');
+  assert.equal(itemProblem(mc(['de', 'het', 'die', 'dat'], 'het')), '');
   const c = cleanItems([F('Ik ___ thuis.', 'ben'), F('ik ___ thuis.', 'ben'), F('Hij ___ (zijn) moe.', 'is')]);
   assert.equal(c.kept.length, 2); assert.equal(c.dropped[0].why, 'dubbel');
 });

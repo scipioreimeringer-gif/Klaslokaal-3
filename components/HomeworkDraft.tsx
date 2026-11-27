@@ -7,6 +7,8 @@ import {RefreshCw, Plus, Trash2} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {authedPost} from '../lib/learning';
 import {t} from '../lib/i18n';
+import {McEditor} from './McEditor';
+import {itemIssues} from '../lib/homeworkCheck';
 import type {ExerciseSet, ExerciseItem, ExerciseSection} from './Learning';
 
 type Props = {set: ExerciseSet; studentId: string; onChange: (s: ExerciseSet) => void};
@@ -42,7 +44,7 @@ export function HomeworkDraft({set, studentId, onChange}: Props) {
   }
   function add(k: number | null) {
     const like = set.items.filter(it => it.block === k).pop();
-    const it: ExerciseItem = {type: like?.type || 'fill_in', prompt: '', passage: '', options: like?.type === 'multiple_choice' ? ['', ''] : [], answer: '', accept: [], explanation: '', block: k ?? undefined, topic: like?.topic ?? null, open: like?.open};
+    const it: ExerciseItem = {type: like?.type || 'fill_in', prompt: '', passage: '', options: like?.type === 'multiple_choice' ? ['', '', '', ''] : [], answer: '', accept: [], explanation: '', block: k ?? undefined, topic: like?.topic ?? null, open: like?.open};
     const last = set.items.map(x => x.block).lastIndexOf(k ?? undefined);
     const items = [...set.items]; items.splice(last < 0 ? items.length : last + 1, 0, it); onChange({...set, items});
   }
@@ -66,8 +68,9 @@ export function HomeworkDraft({set, studentId, onChange}: Props) {
           <div className="ex-num">{n + 1}</div>
           <div className="grow">
             <textarea className="field" rows={2} value={it.prompt} placeholder={t('Vraag')} onChange={e => edit(i, {prompt: e.target.value})}/>
-            {it.type === 'multiple_choice' && <input className="field small" value={it.options.join(' | ')} title={t('Opties, gescheiden door |')} onChange={e => edit(i, {options: e.target.value.split('|').map(x => x.trim())})}/>}
-            <input className="field" value={it.answer} placeholder={t('Juist antwoord')} title={t('Juist antwoord')} onChange={e => edit(i, {answer: e.target.value})}/>
+            {it.type === 'multiple_choice' ? <McEditor options={it.options} answer={it.answer} onChange={p => edit(i, p)}/>
+              : <input className="field" value={it.answer} placeholder={t('Juist antwoord')} title={t('Juist antwoord')} onChange={e => edit(i, {answer: e.target.value})}/>}
+            {itemIssues(it).map(m => <small key={m} className="danger-text">{t(m)}</small>)}
             <details className="hw-draft-model"><summary>{t('Correctiemodel')}</summary>
               <input className="field small" value={it.accept.join(' | ')} placeholder={t('Ook goed (gescheiden door |)')} onChange={e => edit(i, {accept: e.target.value.split('|').map(x => x.trim()).filter(Boolean)})}/>
               <textarea className="field small" rows={2} value={it.explanation} placeholder={t('Uitleg / regel')} onChange={e => edit(i, {explanation: e.target.value})}/>

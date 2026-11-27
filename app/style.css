@@ -1588,3 +1588,12 @@ a.sd-card:hover{box-shadow:0 4px 14px rgba(21,37,51,.09)}
 .games-card .game-tile:nth-child(5){--tc:var(--tone-gold);--tb:var(--tone-gold-bg)}.games-card .game-tile:nth-child(6){--tc:var(--tone-blue);--tb:var(--tone-blue-bg)}
 .games-card .game-tile:nth-child(7){--tc:var(--tone-violet);--tb:var(--tone-violet-bg)}
 @media(prefers-reduced-motion:reduce){.route-bar>span,.fy-row,.games-card .game-tile{transition:none}.xp-earned{animation:none}}
+
+/* v77: multiple choice in homework — four separate fields + the correct one marked */
+.mc-edit{border:0;margin:0;padding:0;display:grid;gap:5px}
+.mc-opt{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:7px;padding:3px 6px;border-radius:9px}
+.mc-opt.right{background:var(--tone-green-bg,#e8f6ee)}
+.mc-opt input[type=radio]{width:17px;height:17px;accent-color:#2f9e5b}
+.mc-letter{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#eef4f3;font-size:12px;font-weight:800}
+.mc-opt.right .mc-letter{background:#2f9e5b;color:#fff}
+.danger-text{color:#b2412b}

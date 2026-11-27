@@ -1371,6 +1371,7 @@ function onMessage(m){
     case "recon": if(!isT){ recBadge(true); $("recOv").hidden = true; } break;
     case "recoff": if(!isT){ recBadge(false); $("recOv").hidden = true; } break;
     case "recstop": if(isT && REC.on){ recStop(); toast("Je leerling heeft de opname gestopt"); } break;
+    case "react": if(!isT && window.__reactRemote) window.__reactRemote(m); break; /* v77: only the student shows it; only arrives over the teacher connection */
   }
 }
 
@@ -4987,6 +4988,136 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
     "@media(max-width:420px){body.v74 .v53-views{grid-template-columns:1fr}}"
   ].join("\n");
   document.head.appendChild(css);
+})();
+/* =================================================================== v77: TEACHER REACTIONS
+   Only the teacher gets the reaction button (bottom bar). A reaction is a tiny event over the existing data channel
+   ({t:"react", e, txt, a, id}); the student's browser only accepts it from the teacher connection (onMessage below),
+   never sends one, and shows it for ~3 s without blocking anything (pointer-events none, no sound). Confetti and
+   fireworks are light CSS/canvas-free particles; reduced motion → a calm static badge. Favourites (max 6 shown),
+   extra emoji, own short texts and animations on/off are stored per teacher (klas-react-t; synced to the account). */
+(function(){
+  var B = document.body, RK = "klas-react-" + (isT ? "t" : "s");
+  var DEF = [["🎉","Goed gedaan!"],["🎆","Fantastisch!"],["✅","Correct!"],["⚠️","Let even op"],["‼️","Belangrijk"],["✋","Even wachten"],["👏","Compliment!"],["💡","Tip"],["🔄","Probeer opnieuw"],["👍","Goed begrepen"]];
+  var MORE = "😀 😄 😊 🙂 😉 😍 🤩 😎 🤔 😮 😅 😂 🙌 💪 🤝 👌 ✌️ 🙏 ⭐ 🌟 ✨ 🔥 💯 🏆 🥇 🎯 🚀 ❤️ 💚 💙 📚 ✏️ 📝 🗣️ 👂 👀 ⏳ ❓ ❗ 🆗 🎵 ☕ 🌈 🍀".split(" ");
+  function prefs(){ var p = store(RK); if(!p || !Array.isArray(p.fav)) p = {fav: DEF.slice(0, 6).map(function(x){ return {e:x[0], txt:x[1]}; }), anim:true}; return p; }
+  var lastShown = {};
+  /* ---- display (both sides: the teacher sees what was sent) ---- */
+  var layer = document.createElement("div"); layer.className = "rx-layer"; layer.setAttribute("aria-live", "polite"); document.body.appendChild(layer);
+  function reduced(){ try{ return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } }
+  function show(m){
+    if(!m || !m.e || typeof m.e !== "string" || m.e.length > 16) return;
+    var id = String(m.id || ""); if(id && lastShown[id]) return; if(id) lastShown[id] = Date.now();   /* no double animations */
+    if(layer.childElementCount > 6) layer.removeChild(layer.firstChild);                                 /* no pile-up */
+    var anim = m.a !== false && !reduced(), kind = m.e === "🎉" ? "confetti" : m.e === "🎆" ? "fireworks" : m.e === "✅" ? "check" : (m.e === "⚠️" || m.e === "‼️" || m.e === "✋") ? "warn" : "float";
+    var el = document.createElement("div"); el.className = "rx rx-" + kind + (anim ? "" : " rx-static");
+    var badge = document.createElement("div"); badge.className = "rx-badge";
+    var em = document.createElement("span"); em.className = "rx-emoji"; em.textContent = m.e; badge.appendChild(em);
+    var txt = String(m.txt || "").slice(0, 60); if(txt){ var s = document.createElement("span"); s.className = "rx-txt"; s.textContent = txt; badge.appendChild(s); }
+    el.appendChild(badge);
+    if(anim && (kind === "confetti" || kind === "fireworks")){
+      var n = kind === "confetti" ? 36 : 28, colors = ["#7c6ff0","#12a594","#f2b233","#e8664b","#3b82f6","#2f9e5b"];
+      for(var i = 0; i < n; i++){ var p = document.createElement("i"); p.className = "rx-p";
+        var ang = Math.random() * Math.PI * 2, dist = 90 + Math.random() * 170;
+        p.style.setProperty("--x", (kind === "confetti" ? (Math.random() * 100) + "vw" : "50vw")); p.style.setProperty("--dx", Math.round(Math.cos(ang) * dist) + "px"); p.style.setProperty("--dy", Math.round(Math.sin(ang) * dist) + "px");
+        p.style.background = colors[i % colors.length]; p.style.animationDelay = (Math.random() * (kind === "confetti" ? .5 : .25)) + "s"; el.appendChild(p); }
+    }
+    if(anim && kind === "float"){ el.style.setProperty("--fx", (20 + Math.random() * 60) + "vw"); }
+    layer.appendChild(el);
+    setTimeout(function(){ el.classList.add("rx-out"); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400); }, 2800);
+  }
+  window.__reactRemote = function(m){ if(!isT) show(m); };   /* only students show received reactions (sender = teacher connection) */
+
+  if(!isT) return;   /* students: no button, nothing to send */
+  /* ---- teacher: button + menu ---- */
+  var dock = document.querySelector(".dock"), grps = dock ? dock.querySelectorAll(".grp") : [], rgt = grps[2] || grps[grps.length - 1];
+  if(!rgt) return;
+  var btn = document.createElement("button"); btn.type = "button"; btn.className = "db rx-btn"; btn.id = "rxBtn"; btn.title = "Reactie sturen naar je leerling"; btn.setAttribute("aria-label", "Reactie sturen"); btn.setAttribute("aria-haspopup", "menu"); btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = '<span aria-hidden="true" style="font-size:18px;line-height:1">😊</span>';
+  rgt.insertBefore(btn, rgt.firstChild);
+  var pop = document.createElement("div"); pop.className = "rx-pop"; pop.hidden = true; pop.setAttribute("role", "menu"); document.body.appendChild(pop);
+  pop.addEventListener("click", function(e){ e.stopPropagation(); }); /* clicks inside (also on re-rendered buttons) never close the menu */
+  var lastSend = 0;
+  function sendReact(e, txt){
+    var now = Date.now(); if(now - lastSend < 700) return; lastSend = now;   /* anti-spam */
+    var p = prefs(), m = {t:"react", e:e, txt:String(txt || "").slice(0, 60), a:p.anim !== false, id:now.toString(36) + Math.random().toString(36).slice(2, 6)};
+    if(online && online()) send(m); show(m); close();
+  }
+  function place(){ var r = btn.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(window.innerWidth - 340, r.left - 140)) + "px"; pop.style.bottom = (window.innerHeight - r.top + 8) + "px"; }
+  function close(){ pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  var mode = "main";
+  function render(){
+    var p = prefs(); pop.innerHTML = "";
+    if(mode === "main"){
+      var row = document.createElement("div"); row.className = "rx-favs";
+      p.fav.slice(0, 6).forEach(function(f){ var b = document.createElement("button"); b.type = "button"; b.className = "rx-fav"; b.title = f.txt || f.e; b.setAttribute("aria-label", (f.txt || "") + " " + f.e); b.innerHTML = '<span class="e"></span><small></small>'; b.querySelector(".e").textContent = f.e; b.querySelector("small").textContent = f.txt || ""; b.addEventListener("click", function(){ sendReact(f.e, f.txt); }); row.appendChild(b); });
+      pop.appendChild(row);
+      var foot = document.createElement("div"); foot.className = "rx-foot";
+      foot.innerHTML = '<button type="button" data-m="more">Andere emoji</button><button type="button" data-m="edit">Aanpassen</button><label class="rx-anim"><input type="checkbox"> Animaties</label>';
+      foot.querySelector("input").checked = p.anim !== false;
+      foot.querySelector("input").addEventListener("change", function(ev){ var q = prefs(); q.anim = ev.target.checked; store(RK, q); });
+      foot.querySelectorAll("[data-m]").forEach(function(b){ b.addEventListener("click", function(){ mode = b.getAttribute("data-m"); render(); }); });
+      pop.appendChild(foot);
+    } else if(mode === "more"){
+      var g = document.createElement("div"); g.className = "rx-grid";
+      DEF.map(function(x){ return x[0]; }).concat(MORE).forEach(function(e){ var b = document.createElement("button"); b.type = "button"; b.textContent = e; b.title = "Sturen"; b.addEventListener("click", function(){ var d = DEF.filter(function(x){ return x[0] === e; })[0]; sendReact(e, d ? d[1] : ""); }); g.appendChild(b); });
+      pop.appendChild(g); pop.appendChild(back());
+    } else {
+      var list = document.createElement("div"); list.className = "rx-edit";
+      p.fav.forEach(function(f, i){
+        var r = document.createElement("div"); r.className = "rx-erow";
+        r.innerHTML = '<span class="e"></span><input class="rx-in" maxlength="40"><button type="button" data-a="up" title="Omhoog">↑</button><button type="button" data-a="down" title="Omlaag">↓</button><button type="button" data-a="del" title="Verwijderen">✕</button>';
+        r.querySelector(".e").textContent = f.e; var inp = r.querySelector("input"); inp.value = f.txt || ""; inp.placeholder = "Korte tekst (optioneel)";
+        inp.addEventListener("change", function(){ var q = prefs(); q.fav[i].txt = inp.value.slice(0, 40); store(RK, q); });
+        r.querySelectorAll("[data-a]").forEach(function(b){ b.addEventListener("click", function(){ var q = prefs(), a = b.getAttribute("data-a"), j = a === "up" ? i - 1 : i + 1;
+          if(a === "del") q.fav.splice(i, 1); else if(j >= 0 && j < q.fav.length){ var x = q.fav[i]; q.fav[i] = q.fav[j]; q.fav[j] = x; }
+          store(RK, q); render(); }); });
+        list.appendChild(r);
+      });
+      var add = document.createElement("div"); add.className = "rx-grid small";
+      DEF.map(function(x){ return x[0]; }).concat(MORE).forEach(function(e){ var b = document.createElement("button"); b.type = "button"; b.textContent = e; b.title = "Toevoegen aan favorieten"; b.addEventListener("click", function(){ var q = prefs(); if(q.fav.some(function(f){ return f.e === e; })) return; var d = DEF.filter(function(x){ return x[0] === e; })[0]; q.fav.push({e:e, txt:d ? d[1] : ""}); store(RK, q); render(); }); add.appendChild(b); });
+      var h = document.createElement("p"); h.className = "rx-h"; h.textContent = "Favorieten (de eerste zes staan direct in het menu)";
+      pop.appendChild(h); pop.appendChild(list);
+      var h2 = document.createElement("p"); h2.className = "rx-h"; h2.textContent = "Toevoegen"; pop.appendChild(h2); pop.appendChild(add); pop.appendChild(back());
+    }
+  }
+  function back(){ var b = document.createElement("button"); b.type = "button"; b.className = "rx-back"; b.textContent = "← Terug"; b.addEventListener("click", function(){ mode = "main"; render(); }); return b; }
+  btn.addEventListener("click", function(e){ e.stopPropagation(); if(pop.hidden){ mode = "main"; render(); place(); pop.hidden = false; btn.setAttribute("aria-expanded", "true"); } else close(); });
+  document.addEventListener("click", function(e){ if(!pop.hidden && !pop.contains(e.target) && e.target !== btn) close(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape" && !pop.hidden) close(); });
+
+  var st = document.createElement("style"); st.setAttribute("data-v77", "");
+  st.textContent = [
+    ".rx-layer{position:fixed;inset:0;pointer-events:none;z-index:9000;overflow:hidden}",
+    ".rx{position:absolute;inset:0;pointer-events:none}",
+    ".rx-badge{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.6);display:flex;flex-direction:column;align-items:center;gap:6px;opacity:0;animation:rxIn .35s ease forwards}",
+    ".rx-emoji{font-size:84px;line-height:1;filter:drop-shadow(0 6px 14px rgba(0,0,0,.18))}",
+    ".rx-txt{font:800 18px/1.2 system-ui,sans-serif;color:#13303c;background:rgba(255,255,255,.94);padding:6px 14px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.12)}",
+    ".rx-check .rx-emoji{font-size:96px}.rx-check .rx-badge{animation:rxIn .35s ease forwards,rxPulse .9s ease .35s 1}",
+    ".rx-warn .rx-badge{top:16%}.rx-warn .rx-emoji{font-size:54px}.rx-warn .rx-txt{background:#fff7e6;color:#8a5a00;border:1px solid #f2c46b}",
+    ".rx-float .rx-badge{left:var(--fx,50%);top:auto;bottom:12%;animation:rxFloat 2.8s ease-out forwards}",
+    ".rx-p{position:absolute;width:9px;height:13px;border-radius:2px;left:var(--x);top:-20px;animation:rxFall 2.6s cubic-bezier(.3,.6,.6,1) forwards}",
+    ".rx-fireworks .rx-p{left:50%;top:38%;width:7px;height:7px;border-radius:50%;animation:rxBurst 1.4s ease-out forwards}",
+    ".rx-out{transition:opacity .4s ease;opacity:0}",
+    ".rx-static .rx-badge{animation:none;opacity:1;transform:translate(-50%,-50%)}.rx-static.rx-float .rx-badge{transform:translateX(-50%)}",
+    "@keyframes rxIn{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}",
+    "@keyframes rxPulse{50%{transform:translate(-50%,-50%) scale(1.12)}}",
+    "@keyframes rxFloat{0%{opacity:0;transform:translate(-50%,30px) scale(.8)}15%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-55vh) scale(1.05)}}",
+    "@keyframes rxFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(540deg);opacity:.9}}",
+    "@keyframes rxBurst{0%{transform:translate(0,0) scale(.4);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:0}}",
+    "@media(prefers-reduced-motion:reduce){.rx *,.rx{animation:none!important}.rx-p{display:none}.rx-badge{opacity:1;transform:translate(-50%,-50%)}}",
+    ".rx-btn{font-size:18px}",
+    ".rx-pop{position:fixed;z-index:9100;width:330px;max-width:calc(100vw - 16px);background:#fff;border:1px solid var(--line,#dfe7e5);border-radius:14px;box-shadow:0 18px 50px rgba(6,47,58,.2);padding:10px;display:grid;gap:8px;font:14px system-ui,sans-serif}",
+    ".rx-favs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}",
+    ".rx-fav{display:grid;justify-items:center;gap:2px;padding:8px 4px;border:1px solid var(--line,#dfe7e5);border-radius:10px;background:#fff;cursor:pointer}.rx-fav:hover{background:#f1efff}",
+    ".rx-fav .e{font-size:24px;line-height:1}.rx-fav small{font-size:11px;color:#56707a;text-align:center;line-height:1.2;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+    ".rx-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.rx-foot button,.rx-back{border:0;background:#eef4f3;border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}",
+    ".rx-anim{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:12.5px}",
+    ".rx-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:200px;overflow:auto}.rx-grid button{border:0;background:none;font-size:21px;padding:4px;border-radius:7px;cursor:pointer}.rx-grid button:hover{background:#f1efff}.rx-grid.small button{font-size:18px}",
+    ".rx-edit{display:grid;gap:4px;max-height:210px;overflow:auto}.rx-erow{display:grid;grid-template-columns:26px 1fr auto auto auto;align-items:center;gap:4px}.rx-erow .e{font-size:20px}",
+    ".rx-in{border:1px solid var(--line,#dfe7e5);border-radius:7px;padding:5px 7px;font:inherit;font-size:12.5px;min-width:0}.rx-erow button{border:0;background:#eef4f3;border-radius:6px;width:26px;height:26px;cursor:pointer}",
+    ".rx-h{margin:0;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#56707a}"
+  ].join("\n");
+  document.head.appendChild(st);
 })();
 })();
 </script>

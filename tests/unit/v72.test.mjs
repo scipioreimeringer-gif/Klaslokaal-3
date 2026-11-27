@@ -121,7 +121,7 @@ test('audio import helpers: WAV header, direct upload types', () => {
 test('classroom: one "Scherm delen" button, flexible local panels, nothing about layout is sent', () => {
   const h = read('public/legacy/index.html');
   const i = h.indexOf('v72: FLEXIBLE PANELS'); assert.ok(i > 0);
-  const blk = h.slice(i, h.indexOf('</script>', i));
+  const blk = h.slice(i, h.indexOf('v74: COMPACT CAMERA', i)); // only the v72 block itself
   assert.match(blk, /querySelector\('\.dock \[data-open="scr"\]'\); if\(slBtn\) slBtn\.hidden = true;/, 'Slides button removed from the bottom bar');
   assert.match(h, /<span class="lbl">Scherm delen<\/span>/); assert.match(h, /on \? "Stop delen" : "Scherm delen";/);
   assert.match(blk, /Presentatie \(slides\) openen/, 'slides stay reachable outside the bar');

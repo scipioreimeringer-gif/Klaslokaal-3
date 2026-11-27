@@ -14,7 +14,7 @@ export const maxDuration = 60;
 const Item = z.object({
   type: z.enum(['multiple_choice', 'fill_in', 'translate', 'conjugate', 'correct_error', 'make_sentence', 'write', 'reading']),
   prompt: z.string().describe('The question (fill_in: with ___ for the gap)'),
-  options: z.array(z.string()).describe('multiple_choice options, else []'),
+  options: z.array(z.string()).describe('multiple_choice: exactly 4 separate options (one per string), else []'),
   answer: z.string().describe('Correct answer; for open items a model answer'),
   accept: z.array(z.string()).describe('Other correct answers/formulations'),
   explanation: z.string().describe('One short sentence: the rule, in the interface language'),

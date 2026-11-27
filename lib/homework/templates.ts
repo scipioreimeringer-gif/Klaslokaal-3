@@ -37,7 +37,7 @@ export const QUALITY_RULES = [
   'Every item practises the block\'s learning goal in a natural, everyday situation (no random or odd sentences, no random lists of words from the word list).',
   'The expected answer must follow unambiguously from the item; give enough context (time words, subject, situation) for the tense/construction.',
   'Never put the answer (or the requested conjugated form) in the prompt or in brackets; for verbs only the infinitive may be in brackets.',
-  'multiple_choice: exactly one correct option, all options plausible and different.',
+  'multiple_choice: EXACTLY FOUR options (separate strings, never several in one string), exactly one correct, all plausible, the same kind of word/form and different.',
   'Match the CEFR level: not too easy, not beyond the level.',
   'Open items: list several correct formulations in accept.',
   'Learner words are optional: use one ONLY where it fits the sentence naturally; never force words into a sentence; skip slang, vulgar or very informal words.',
@@ -68,6 +68,8 @@ export function itemProblem(it: {type: string; prompt: string; options: string[]
   }
   if (it.type === 'multiple_choice') {
     const o = it.options.map(low);
+    if (o.length !== 4 || o.some(x => !x)) return 'niet precies vier opties'; // v77: four separate answer fields
+    if (o.some(x => / \/ | \| /.test(x))) return 'meerdere opties in één veld';
     if (new Set(o).size !== o.length) return 'dubbele opties';
     if (o.filter(x => x === low(a)).length !== 1) return 'antwoord niet precies één keer tussen de opties';
   }

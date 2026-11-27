@@ -7,6 +7,8 @@ import {supabase} from '../lib/supabase';
 import {authFetch} from '../lib/authFetch';
 import {ExerciseForm,ExercisePlayer,type ExerciseSet,type ExerciseItem} from '../components/Learning';
 import {HomeworkDraft} from '../components/HomeworkDraft';
+import {McEditor} from '../components/McEditor';
+import {fourOptions,setIssues as setIssues_} from '../lib/homeworkCheck';
 import {t, locale} from '../lib/i18n';
 import {hwKind,hwStatusOf,hwProgress,dueIn,type HwKind,type HwStatus} from '../lib/homework';
 import {BookA,Languages,PenLine,BookOpen,ClipboardList,CalendarClock} from 'lucide-react';
@@ -20,15 +22,21 @@ const hwStatus=(a:{published_at:string|null;origin?:string})=>a.published_at?t('
 function DraftEditor({a,onSaved,onPublish}:{a:{id:string;title:string;exercises:ExerciseSet};onSaved:(m:string)=>void;onPublish:()=>void}){
  const [set,setSet]=useState<ExerciseSet>({...a.exercises,title:a.title});const [busy,setBusy]=useState(false);const [dirty,setDirty]=useState(false);
  const up=(i:number,p:Partial<ExerciseItem>)=>{setDirty(true);setSet(s=>({...s,items:s.items.map((x,j)=>j===i?{...x,...p}:x)}))};
- async function save(){setBusy(true);const {error}=await supabase()!.from('assignments').update({title:set.title.slice(0,200)||t('Huiswerk'),exercises:set,instructions:asText(set)}).eq('id',a.id);setBusy(false);if(!error)setDirty(false);onSaved(error?error.message:t('Huiswerkconcept opgeslagen.'))}
- async function approve(){if(dirty)await save();onPublish()}
+ // v77: saving returns whether it worked; publishing happens ONLY after a successful save of a valid set (input is kept on errors)
+ const [issues,setIssues]=useState<{index:number;issues:string[]}[]>([]);
+ async function save():Promise<boolean>{setBusy(true);const clean={...set,items:set.items.map(it=>it.type==='multiple_choice'?{...it,options:fourOptions(it.options).map(x=>x.trim()),answer:it.answer.trim()}:it)};
+  const {error}=await supabase()!.from('assignments').update({title:clean.title.slice(0,200)||t('Huiswerk'),exercises:clean,instructions:asText(clean)}).eq('id',a.id);setBusy(false);if(!error)setDirty(false);
+  onSaved(error?t('Opslaan mislukt: {0}. Je wijzigingen staan nog hier; probeer het opnieuw.',error.message):t('Huiswerkconcept opgeslagen.'));return !error}
+ async function approve(){const bad=setIssues_(set.items);setIssues(bad);if(bad.length){onSaved(t('Controleer eerst {0} vraag/vragen hieronder.',bad.length));return}
+  if(dirty&&!(await save()))return;onPublish()}
  return <div className="ai-draft">
   <input className="field" value={set.title} onChange={e=>{setDirty(true);setSet({...set,title:e.target.value})}} aria-label={t('Titel')}/>
   {set.items.map((it,i)=><div key={i} className="ex-item"><div className="ex-num">{i+1}</div><div className="grow" style={{display:'grid',gap:6}}>
-   <select className="field" value={it.type} onChange={e=>up(i,{type:e.target.value as ExerciseItem['type']})} aria-label={t('Soort oefening')}>{ITEM_TYPES.map(k=><option key={k} value={k}>{k}</option>)}</select>
+   <select className="field" value={it.type} onChange={e=>{const ty=e.target.value as ExerciseItem['type'];up(i,{type:ty,...(ty==='multiple_choice'?{options:fourOptions(it.options)}:{})})}} aria-label={t('Soort oefening')}>{ITEM_TYPES.map(k=><option key={k} value={k}>{k}</option>)}</select>
    <textarea className="field" rows={2} value={it.prompt} onChange={e=>up(i,{prompt:e.target.value})} aria-label={t('Opdracht')}/>
-   {it.type==='multiple_choice'&&<input className="field" value={it.options.join(' / ')} placeholder={t('Keuzes, gescheiden door /')} onChange={e=>up(i,{options:e.target.value.split('/').map(x=>x.trim()).filter(Boolean)})}/>}
-   <input className="field" value={it.answer} placeholder={t('Juist antwoord')} onChange={e=>up(i,{answer:e.target.value})}/>
+   {it.type==='multiple_choice'?<McEditor options={it.options} answer={it.answer} onChange={p=>up(i,p)}/>
+    :<input className="field" value={it.answer} placeholder={t('Juist antwoord')} onChange={e=>up(i,{answer:e.target.value})}/>}
+   {issues.find(x=>x.index===i)?.issues.map(m=><small key={m} className="danger-text">{t(m)}</small>)}
    <input className="field" value={it.explanation} placeholder={t('Uitleg of beoordelingsrichtlijn')} onChange={e=>up(i,{explanation:e.target.value})}/>
   </div><button className="iconbtn danger" title={t('Verwijderen')} onClick={()=>{setDirty(true);setSet(s=>({...s,items:s.items.filter((_,j)=>j!==i)}))}}>{t('×')}</button></div>)}
   <button className="button small secondary" onClick={()=>{setDirty(true);setSet(s=>({...s,items:[...s.items,{type:'fill_in',prompt:'',passage:'',options:[],answer:'',accept:[],explanation:''}]}))}}>{t('+ Oefening toevoegen')}</button>
@@ -56,7 +64,7 @@ export default function Homework({studentId,teacher}:{studentId:string;teacher:b
  const {user}=useAuth();const [assignments,setAssignments]=useState<Assignment[]>([]);const [submissions,setSubmissions]=useState<Submission[]>([]);const [title,setTitle]=useState('');const [instructions,setInstructions]=useState('');const [answers,setAnswers]=useState<Record<string,string>>({});const [files,setFiles]=useState<Record<string,File|null>>({});const [drafts,setDrafts]=useState<Record<string,string>>({});const [reviews,setReviews]=useState<Record<string,string>>({});const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [aiSet,setAiSet]=useState<ExerciseSet|null>(null);const [playing,setPlaying]=useState<string|null>(null);
  async function load(){const db=supabase();if(!db||!user)return;let a=await db.from('assignments').select('id,student_id,title,instructions,published_at,exercises,origin,due_at').eq('student_id',studentId).order('created_at',{ascending:false});if(a.error&&/due_at/.test(a.error.message))a=await db.from('assignments').select('id,student_id,title,instructions,published_at,exercises,origin').eq('student_id',studentId).order('created_at',{ascending:false}) as typeof a;/* v44: deadline optional until v44.sql */if(a.error&&/exercises|origin|column/i.test(a.error.message))a=await db.from('assignments').select('id,student_id,title,instructions,published_at').eq('student_id',studentId).order('created_at',{ascending:false}) as typeof a;if(a.error){setMessage(a.error.message);return}setAssignments(a.data||[]);const ids=(a.data||[]).map(x=>x.id);if(!ids.length){setSubmissions([]);return}const s=await db.from('homework_submissions').select('id,assignment_id,answer,file_path,file_name,submitted_at,teacher_feedback,feedback_published_at').in('assignment_id',ids).order('submitted_at',{ascending:false});if(s.error)setMessage(s.error.message);else setSubmissions(s.data||[])}
  useEffect(()=>{void load()},[studentId,user?.id]);
- async function saveAi(){if(!aiSet)return;setBusy(true);const text=asText(aiSet);
+ async function saveAi(){if(!aiSet)return;setBusy(true);const text=asText(aiSet); // v77: a failed save keeps the draft on screen (aiSet is only cleared on success)
   const {error}=await supabase()!.from('assignments').insert({student_id:studentId,title:aiSet.title.slice(0,200),instructions:text,exercises:aiSet,origin:'ai'});setBusy(false);
   setMessage(error?error.message:t("AI-huiswerk als concept opgeslagen. Controleer en publiceer het om het zichtbaar te maken."));if(!error){setAiSet(null);await load()}}
  async function submitInteractive(a:Assignment,score:number,total:number,given:string[]){if(!user)return;const answer=`Interactief gemaakt: ${score}/${total} automatisch goed.\n\n`+(a.exercises?.items||[]).map((it,i)=>`${i+1}. ${it.prompt}\n   Antwoord: ${given[i]||'—'}`).join('\n');

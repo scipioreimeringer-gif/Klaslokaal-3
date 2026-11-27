@@ -57,7 +57,7 @@ test('video settings: per role keys, synced per account (never teacher ↔ stude
   assert.match(html, /KEY = "klas-pip-auto-" \+ \(isT \? "t" : "s"\)/); assert.match(html, /store\("klas-self-" \+ \(isT \? "t" : "s"\), selfView\)/);
   const blk = html.slice(html.indexOf('v74: COMPACT CAMERA'));
   assert.match(blk, /grid-template-columns:1fr 1fr/); assert.match(blk, /if\(cb && !autoOk\)\{ cb\.checked = false; cb\.disabled = true; \}/, 'unsupported browsers: no fake "on"');
-  assert.ok(!/send\(/.test(blk.slice(0, blk.indexOf('</script>'))), 'settings are never sent to the other participant');
+  assert.ok(!/send\(/.test(blk.slice(0, blk.indexOf('v77: TEACHER REACTIONS'))), 'settings are never sent to the other participant');
   const live = read('app/klaslokaal/live/page.tsx');
   assert.match(live, /const prefsReady=useClassroomPrefs\(\);/); assert.match(live, /\{prefsReady&&<iframe/);
 });
