@@ -65,6 +65,18 @@ export function NextLessonPanel({mode,compact=false}:{mode:'teacher'|'student';c
  if(!ready)return <section className="panel next-lesson"><p className="muted">{t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.')}</p></section>;
  if(!loaded)return <section className="panel next-lesson"><div className="loader small"/></section>;
  const rel=next?relations.get(next.student_id):undefined;const lang=next?langOf(next,rel):'';
+ // v76: compact card for the student dashboard — photo + full name on top, one line with language/date/time, countdown,
+ // planned topics, the classroom button at the bottom (later lessons live in the agenda)
+ if(compact)return <section className="panel next-lesson compact nl2" aria-label={t('Volgende les')}>
+  {!next?<div className="nl2-empty"><CalendarDays size={22}/><div><b>{t('Geen lessen gepland')}</b><p className="muted small">{mode==='teacher'?t('Plan een les in de agenda.'):t('Plan zelf een les of wacht op je docent.')}</p></div>
+   {mode==='student'&&<Link className="button small" href="/agenda?boeken=1"><CalendarPlus size={15}/> {t('Les boeken')}</Link>}</div>
+  :<><div className="nl2-top"><span className="eyebrow-dark">{t('VOLGENDE LES')}</span><StatusChip state={lessonState(next,now)}/></div>
+   <Link className="nl2-who who-link" href={profileHref(next,mode)}><Who l={next} rel={rel} mode={mode} teacherName={teacherName} size={44}/></Link>
+   <Link className="nl2-when" href={lessonHref(next)}>{lang&&<Flag code={lang} size={16}/>}<span>{lang?languageName(lang):''}{rel?.level?' · '+rel.level:''} · {fmtWhen(next,tz)}</span></Link>
+   <div className="nl2-count"><Clock size={14}/> {countdown(next.starts_at,now)}</div>
+   <PlannedTopics studentId={next.student_id} day={dayKey(next.starts_at,tz)}/>
+   <Link className="button nl2-open" href={classroomHref(next,mode)}><Video size={16}/> {t('Klaslokaal openen')}</Link></>}
+ </section>;
  return <section className={'panel next-lesson'+(compact?' compact':'')} aria-label={t('Volgende les')}>
   {error&&<p className="notice">{error}</p>}
   {!next?<div className="next-empty"><CalendarDays size={28}/><div><strong>{t('Geen lessen gepland')}</strong><p className="muted">{mode==='teacher'?t('Plan een les in de agenda; je leerling ziet hem dan meteen in de eigen tijdzone.'):t('Zodra je docent een les inplant, zie je die hier.')}</p></div>{mode==='teacher'?<Link className="button" href="/agenda?nieuw=1"><CalendarPlus size={16}/> {t('Les inplannen')}</Link>:<Link className="button small" href="/agenda?boeken=1"><CalendarPlus size={15}/> {t('Les boeken')}</Link>}</div>:

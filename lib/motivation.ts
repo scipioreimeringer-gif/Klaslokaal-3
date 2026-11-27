@@ -4,7 +4,7 @@
 // language, and it never changes the CEFR level or any mastery status. No public ranking anywhere.
 export const XP = {daily: 20, game: 10, homework: 30, lesson: 50, weekGoal: 50} as const;
 /** Anti-repeat: at most this many game rounds count per day; a round counts only with at least MIN_ROUND answers. */
-export const GAME_CAP_PER_DAY = 6, MIN_ROUND = 4;
+export const GAME_CAP_PER_DAY = 6, MIN_ROUND = 3; // v76: the short rounds of the daily route (3 items) count too
 
 /** The student's local calendar day of a timestamp (the browser's time zone = the student's own). */
 export const localDay = (iso: string, tz?: string) => new Date(iso).toLocaleDateString('en-CA', tz ? {timeZone: tz} : undefined);

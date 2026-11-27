@@ -9,7 +9,7 @@ const pg = new PGlite({extensions: {pgcrypto}, parsers: {1082: v => v, 1184: v =
 await pg.exec(SUPABASE_EMULATION);
 for (const f of MIGRATIONS) await pg.exec(sql(f));
 for (const f of ['v26.sql', 'v27.sql', 'v28.sql', 'v29.sql', 'v30.sql', 'v31.sql', 'v32.sql', 'v33.sql', 'v34.sql', 'v64.sql', 'v68.sql']) await pg.exec(sql(f));
-await pg.exec(sql('v75.sql')); await pg.exec(sql('v75.sql'));
+await pg.exec(sql('v75.sql')); await pg.exec(sql('v75.sql')); await pg.exec(sql('v76.sql')); await pg.exec(sql('v76.sql'));
 ok(true, 'v75 runs twice (idempotent)');
 const T = '00000000-0000-0000-0000-0000000000d1', T2 = '00000000-0000-0000-0000-0000000000d2', U = '00000000-0000-0000-0000-0000000000d3', U2 = '00000000-0000-0000-0000-0000000000d4';
 await pg.exec(`insert into auth.users(id,email,email_confirmed_at) values ('${T}','t@x.nl',now()),('${T2}','t2@x.nl',now()),('${U}','u@x.nl',now()),('${U2}','u2@x.nl',now());
@@ -32,6 +32,7 @@ ok(await tries(U, `insert into public.daily_runs(student_id,day,questions) value
 ok(await tries(U, `insert into public.daily_runs(student_id,day,questions) values ($1,'2026-11-26','[]')`, [s1]) === -1, 'one run per relation and day');
 ok(await tries(T, `insert into public.daily_runs(student_id,day,questions) values ($1,'2026-11-27','[]')`, [s1]) === -1, 'the teacher does not do the student\'s daily challenge');
 ok(await tries(U, `update public.daily_runs set answers='[{"ok":true}]', finished_at=now() where student_id=$1`, [s1]) === 1, 'answers saved, finished once');
+ok(await tries(U, `update public.daily_runs set route='{"cur":2,"pos":1}' where student_id=$1`, [s1]) === 1, 'v76: the route (round + position) is saved by the student');
 ok((await q(T, `select * from public.daily_runs where student_id=$1`, [s1])).rows.length === 1, 'the teacher can read the results');
 ok((await q(U2, `select * from public.daily_runs where student_id=$1`, [s1])).rows.length === 0, 'another student cannot');
 ok(await tries(U2, `update public.daily_runs set answers='[]' where student_id=$1`, [s1]) === 0, 'another student cannot change them');

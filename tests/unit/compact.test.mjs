@@ -107,8 +107,9 @@ test('wiring: dashboard section, student data via RLS only, compact report every
   const home = read('app/page.tsx');
   // v73: "Voor jou" moved from the dashboard to Oefenen (same data, only the active relation)
   const oef = read('app/oefenen/page.tsx');
-  assert.match(oef, /const ready=dash\.loaded&&rel\?readyFor\(dash\)\.filter\(i=>i\.studentId===rel\.id\):null;/);
-  assert.match(oef, /<ReadyForYou items=\{ready\}/);
+  // v76: "Voor jou klaar" = compact rows from real data (learning line, last report, words due) + mixed practice
+  assert.match(oef, /<ForYouCard key=\{'fy'\+rel\.id\} studentId=\{rel\.id\}/);
+  assert.ok(!/askFast|authedPost|\/api\/ai/.test(read('components/ForYou.tsx')), 'no AI call for recommendations');
   assert.ok(!home.includes('<ReadyForYou'), 'no longer on the dashboard');
   // phase 5: no extra queries — the dashboard's own (RLS-limited) data is reused
   const dd = read('components/DashData.tsx'); // v73: the shared loader
@@ -118,7 +119,7 @@ test('wiring: dashboard section, student data via RLS only, compact report every
   const r = read('components/ReadyForYou.tsx');
   assert.ok(!/supabase|\.from\(|\.rpc\(|authedPost|\/api\/ai/.test(r), 'the section itself queries nothing and calls no AI');
   assert.match(r, /\/oefenen\?student=\$\{rel\.id\}&spel=flashcards/);
-  assert.match(read('components/Learning.tsx'), /if\(start==='flashcards'&&sets&&sets\.words\.cards\.length>=2&&!autoStarted\.current\)/);
+  assert.match(read('components/Learning.tsx'), /if\(start&&\(GAME_KINDS as string\[\]\)\.includes\(start\)&&sets&&sets\.words\.cards\.length>=2&&!autoStarted\.current\)/ /* v76: any game */);
   assert.match(read('components/Analysis.tsx'), /<CompactAnalysis doc=\{shownDoc/, 'Mijn lessen → lesverslagen: compact, full version behind "Meer details"');
   assert.match(read('components/CompactAnalysis.tsx'), /<details className="compact-more"><summary>\{detailsLabel\|\|tt\("Meer details"\)\}/);
   assert.match(read('components/AnalysisV2.tsx'), /Zo ziet de leerling het/, 'teacher can preview the short version');

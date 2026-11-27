@@ -127,7 +127,7 @@ export function VocabManager({studentId,viewer}:{studentId:string;viewer:'teache
    relation), per game, with language and level in the details. Nothing can start with an empty or broken question. */
 type GameKind='flashcards'|'quiz'|'typing'|'match'|'sentence'|'conjugate'|'errors';
 const GAME_KINDS:GameKind[]=['flashcards','quiz','typing','match','sentence','conjugate','errors'];
-type Ctx={studentId:string|null;lang:string;level:Lvl;/* v67: explanation language of the feedback */ex:string};
+export type Ctx={studentId:string|null;lang:string;level:Lvl;/* v67: explanation language of the feedback */ex:string;/* v76: daily route — called once per answered item */onStep?:(ok:boolean)=>void};
 async function saveGameSession(ctx:Ctx,kind:string,score:number,total:number,started:number,details:Record<string,unknown>,assignmentId?:string|null){
  if(!ctx.studentId)return; // self-study without a teacher: nothing to store results with (no student record)
  const db=supabase()!;const {data:{user}}=await db.auth.getUser();if(!user)return;
@@ -136,17 +136,19 @@ async function saveGameSession(ctx:Ctx,kind:string,score:number,total:number,sta
 const record=(id:string,ok:boolean)=>supabase()!.rpc('record_vocab_practice',{item:id,correct:ok});
 /** spaced repetition for one answer: own word → word list; grammar / own mistake → practice_items (gr: / err:) */
 function recordItem(ctx:Ctx,x:{vocabId?:string;itemKey?:string;label?:string},ok:boolean){
+ ctx.onStep?.(ok);
  if(!ctx.studentId)return;
  if(x.vocabId){void record(x.vocabId,ok);return}
  if(x.itemKey&&/^(gr|err):/.test(x.itemKey))void supabase()!.rpc('record_practice_item',{p_student:ctx.studentId,p_key:x.itemKey.slice(0,200),p_kind:x.itemKey.startsWith('err:')?'error':'grammar',p_label:(x.label||'').slice(0,120),p_correct:ok});
 }
 const BankTag=({on}:{on:boolean})=>on?<span className="tag pr-bank" title={tt('Niet uit je eigen woordenlijst')}>{tt('uit de oefenbank')}</span>:null;
 
-export function VocabGames({studentId,lang,level,start}:{studentId:string|null;lang:string;level:Lvl;start?:string|null}){
- const [ex,setEx]=useExplainLang(lang);const [focusKeys,setFocusKeys]=useState<string[]>([]);
- const ctx:Ctx={studentId,lang,level,ex};
+/** v76: the ONE source of all game decks (own words first, learning-line grammar, own kept mistakes) — used by the game
+ *  grid, the daily route and the mixed practice, so there is never a second version of a game. */
+export function useGameSets(studentId:string|null,lang:string,level:Lvl,seed:number){
+ const [focusKeys,setFocusKeys]=useState<string[]>([]);
  const [own,setOwn]=useState<OwnWord[]|null>(null);const [bank,setBank]=useState<BankItem[]>([]);const [errs,setErrs]=useState<{key:string;original:string;corrected:string;why?:string}[]>([]);
- const [sessions,setSessions]=useState<SessionRow[]>([]);const [game,setGame]=useState<GameKind|null>(null);const [seed,setSeed]=useState(()=>Date.now()%2147483647);const [result,setResult]=useState('');const [due,setDue]=useState(0);
+ const [sessions,setSessions]=useState<SessionRow[]>([]);const [due,setDue]=useState(0);
  const load=useCallback(async()=>{const db=supabase()!;
   setBank(await loadBank(lang));
   if(!studentId){setOwn([]);setErrs([]);setSessions([]);return}
@@ -166,8 +168,18 @@ export function VocabGames({studentId,lang,level,start}:{studentId:string|null;l
   const pairs={...pairsRaw,cards:matchDeck(pairsRaw.cards,MATCH[level],seed+1)};
   return {words,pairs,quizPool:[...own.map(w=>({key:'v:'+w.id,term:w.term,meaning:w.translation,pos:w.pos||undefined,source:'own' as const})),...wordDeck([],bank,level,60,seed+2).cards],gquiz:grammarQuiz(lang,level,Math.round(n*0.4),seed,focusKeys),
    sentence:sentenceSet(own,lang,level,10,seed),conjugate:(()=>{const mine=ownConjugations(own as Parameters<typeof ownConjugations>[0],lang,level,4,seed);return [...mine,...conjugationSet(lang,level,10-mine.length,seed)]})(),errors:correctionSet(errs,lang,level,8,seed)}},[own,bank,errs,lang,level,seed,focusKeys]);
+ return {sets,own,errs,sessions,due,load};
+}
+export type GameSets=NonNullable<ReturnType<typeof useGameSets>['sets']>;
+
+export function VocabGames({studentId,lang,level,start}:{studentId:string|null;lang:string;level:Lvl;start?:string|null}){
+ const [ex,setEx]=useExplainLang(lang);
+ const ctx:Ctx={studentId,lang,level,ex};
+ const [game,setGame]=useState<GameKind|null>(null);const [seed,setSeed]=useState(()=>Date.now()%2147483647);const [result,setResult]=useState('');
+ const {sets,own,errs,sessions,due,load}=useGameSets(studentId,lang,level,seed);
  const autoStarted=useRef(false);
- useEffect(()=>{if(start==='flashcards'&&sets&&sets.words.cards.length>=2&&!autoStarted.current){autoStarted.current=true;setGame('flashcards')}},[start,sets]);
+ // v76: a recommendation can open any game directly (?spel=flashcards|quiz|typing|match|sentence|conjugate|errors)
+ useEffect(()=>{if(start&&(GAME_KINDS as string[]).includes(start)&&sets&&sets.words.cards.length>=2&&!autoStarted.current){autoStarted.current=true;setGame(start as GameKind)}},[start,sets]);
  if(!sets)return <div className="loader small"/>;
  const prog=progressOf(sessions,lang) as Record<string,{sessions:number;answered:number;correct:number;last:string;pct:number|null;often:string[]}>;
  const done=(label:string)=>{setResult(label);setGame(null);setSeed(x=>(x*48271+11)%2147483647);void load()};
@@ -209,7 +221,7 @@ function GameShell({title,i,n,onQuit,children,intro}:{title:string;i:number;n:nu
 }
 
 /* v42: both directions — lesson language → meaning and meaning → lesson language; from B1 the harder direction by default */
-function Flashcards({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
+export function Flashcards({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
  const [i,setI]=useState(0);const [flip,setFlip]=useState(false);
  const [rev,setRevRaw]=useState(()=>{try{const v=localStorage.getItem('teachy-flash-dir');return v?v==='from-en':levelNum(ctx.level)>=3}catch{return false}});
  const setRev=(r:boolean)=>{setRevRaw(r);setFlip(false);try{localStorage.setItem('teachy-flash-dir',r?'from-en':'to-en')}catch{}};const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);
@@ -228,7 +240,7 @@ function Flashcards({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>vo
 }
 
 type QuizQ={key:string;card?:Card;q:string;ask:string;options:string[];right:string;notes?:Note[];source:'own'|'bank';itemKey?:string;label?:string};
-function Quiz({deck,pool,extra,ctx,onDone}:{deck:Card[];pool:Card[];extra:GItem[];ctx:Ctx;onDone:(s:string)=>void}){
+export function Quiz({deck,pool,extra,ctx,onDone}:{deck:Card[];pool:Card[];extra:GItem[];ctx:Ctx;onDone:(s:string)=>void}){
  // v67: four options per question (validated); vocabulary and grammar mixed; an invalid question is left out
  const qs=useMemo<QuizQ[]>(()=>shuffle([...deck.map((c,k)=>({key:c.key,card:c,q:c.term,ask:tt('Wat betekent dit?'),options:quizOptions(c,pool,ctx.level,k*31+c.term.length+deck.length),right:quizAnswer(c),source:c.source})),
   ...extra.map(g=>({key:g.key,q:g.prompt,ask:tt(g.sub)+(g.hint?' '+g.hint:''),options:g.options||[],right:g.answers[0],notes:g.notes,source:'bank' as const,itemKey:g.key,label:g.label}))].filter(x=>x.options.length===4&&x.options.filter(o=>o===x.right).length===1),rng(deck.length*13+extra.length)),[deck,pool,extra,ctx.level]);
@@ -252,7 +264,7 @@ function Feedback({ok,accent,right,notes,ex}:{ok:boolean;accent?:boolean;right:s
  </div>
 }
 
-function Typing({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
+export function Typing({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
  const [i,setI]=useState(0);const [val,setVal]=useState('');const [res,setRes]=useState<null|'correct'|'accent'|'wrong'>(null);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);const inp=useRef<HTMLInputElement>(null);
  const v=deck[i];const L=levelNum(ctx.level);
  async function submit(e:React.FormEvent){e.preventDefault();if(res){setRes(null);setVal('');if(i+1>=deck.length){await saveGameSession(ctx,'typing',score.current,deck.length,started.current,{wrong:wrong.current});onDone(tt('Vertaalspel: {0} van {1} goed',score.current,deck.length))}else{setI(i+1);setTimeout(()=>inp.current?.focus(),0)}return}
@@ -264,7 +276,7 @@ function Typing({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void})
  </GameShell>
 }
 
-function TypeGame({title,intro,kind,items,ctx,onDone,long,conj}:{title:string;intro:string;kind:string;items:TItem[];ctx:Ctx;onDone:(s:string)=>void;long?:boolean;conj?:boolean}){
+export function TypeGame({title,intro,kind,items,ctx,onDone,long,conj}:{title:string;intro:string;kind:string;items:TItem[];ctx:Ctx;onDone:(s:string)=>void;long?:boolean;conj?:boolean}){
  const [i,setI]=useState(0);const [val,setVal]=useState('');const [res,setRes]=useState<null|'correct'|'accent'|'wrong'>(null);const score=useRef(0);const started=useRef(Date.now());const wrong=useRef<string[]>([]);const inp=useRef<HTMLInputElement&HTMLTextAreaElement>(null);
  const it=items[i];
  const norm=(s:string)=>long?s.replace(/[.,!?;:"“”'’¿¡]/g,'').replace(/\s+/g,' ').trim():s;
@@ -281,7 +293,7 @@ function TypeGame({title,intro,kind,items,ctx,onDone,long,conj}:{title:string;in
  </GameShell>
 }
 
-function Match({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
+export function Match({deck,ctx,onDone}:{deck:Card[];ctx:Ctx;onDone:(s:string)=>void}){
  const right=useMemo(()=>shuffle(deck.map(d=>d.meaning),rng(deck.length*97+deck[0].term.length)).filter((x,i,a)=>a.indexOf(x)===i),[deck]);
  const [sel,setSel]=useState<string|null>(null);const [matched,setMatched]=useState<string[]>([]);const [flash,setFlash]=useState('');const mistakes=useRef(0);const started=useRef(Date.now());const wrongs=useRef<string[]>([]);
  function pickRight(t:string){if(!sel)return;const v=deck.find(d=>d.key===sel)!;const ok=v.meaning===t;recordItem(ctx,v,ok);if(ok){const m=[...matched,v.key];setMatched(m);setSel(null);if(m.length===deck.length){void saveGameSession(ctx,'match',Math.max(0,deck.length-mistakes.current),deck.length,started.current,{mistakes:mistakes.current,wrong:wrongs.current}).then(()=>onDone(tt('Woorden koppelen klaar met {0} fout(en)',mistakes.current)))}}else{mistakes.current++;wrongs.current.push(v.term);setFlash(t);setTimeout(()=>setFlash(''),500)}}

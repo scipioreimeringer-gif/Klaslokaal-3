@@ -3,7 +3,7 @@
 // from stored activities (lib/motivation, never twice), experience levels separate from CEFR. Details live in Voortgang.
 import {useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
-import {Flame,Zap,Sparkles,Play,CheckCircle2,Target,Languages,Route,Trophy,BookOpenCheck,Clock3,GraduationCap,ClipboardList,Dumbbell,Star} from 'lucide-react';
+import {Flame,Zap,Target,Languages,Route,Trophy,BookOpenCheck,Clock3,GraduationCap,ClipboardList,Dumbbell,Star} from 'lucide-react';
 import {t,locale} from '../lib/i18n';
 import {supabase} from '../lib/supabase';
 import {Flag} from './Flag';
@@ -11,6 +11,7 @@ import {languageName} from '../lib/languages';
 import {useStats} from './Progress';
 import {motivationOf,useWeekGoal} from './Motivation';
 import {useDaily} from './DailyPractice';
+import {RouteCard} from './DailyRoute';
 import {levelOf,type Milestone} from '../lib/motivation';
 import {vocabStats,wordGrowth} from '../lib/progressStats';
 import {LineChart,CHART} from './Charts';
@@ -33,7 +34,7 @@ export function StudentDash({studentId,lang,level,first}:Props){
    </div>
   </header>
   <div className="sd-top">
-   <DailyChallenge studentId={studentId} level={level} lang={lang}/>
+   <RouteCard studentId={studentId} level={level} lang={lang}/>
    <NextLessonSlot/>
   </div>
   <section className="sd-card sd-journey tone-violet">
@@ -63,18 +64,6 @@ export function StudentDash({studentId,lang,level,first}:Props){
 function Ach({m}:{m:Milestone}){const I=m.icon==='lesson'?BookOpenCheck:m.icon==='homework'?ClipboardList:m.icon==='words'?Languages:m.icon==='grammar'?GraduationCap:m.icon==='time'?Clock3:Target;
  return <li><span className={'ach-ic ic-'+m.icon}><I size={15}/></span><span><b>{t(m.label)}</b>{m.date&&<small className="muted block">{new Date(m.date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'})}</small>}</span></li>}
 
-/** The most attractive card: today's personal challenge, or a compact success once done. */
-function DailyChallenge({studentId,level,lang}:{studentId:string;level?:string|null;lang:string}){
- const {d}=useDaily(studentId,level,lang);
- if(!d)return <section className="sd-card sd-daily"><div className="loader small"/></section>;
- if(!d.hasMaterial)return <section className="sd-card sd-daily"><Sparkles size={20}/><p>{t('Na je eerste lessen verschijnt hier je dagelijkse uitdaging.')}</p></section>;
- const href='/oefenen/dagelijks?student='+encodeURIComponent(studentId);
- if(d.doneToday)return <section className="sd-card sd-daily done"><CheckCircle2 size={26}/><div><b>{t('Dagelijkse uitdaging gehaald!')}</b><p>{t('{0} van {1} goed',d.doneToday.score,d.doneToday.total)} · ⚡ {t('+{0} XP',20)} · <Flame size={13}/> {t('{0} dagen op rij',d.streak)}</p><Link className="button small light" href="/oefenen">{t('Verder oefenen')}</Link></div></section>;
- return <section className="sd-card sd-daily"><div className="sd-daily-top"><span className="sd-daily-ic"><Sparkles size={22}/></span><div><span className="eyebrow">{t('DAGELIJKSE UITDAGING')}</span><h2>{t('Tien persoonlijke vragen')}</h2></div></div>
-  <p>{t('Grammatica uit jouw leerlijn, jouw woorden en de regels achter fouten uit je lessen.')}</p>
-  <div className="sd-daily-facts"><span><Clock3 size={14}/> {t('± {0} min',6)}</span><span><Zap size={14}/> {t('+{0} XP',20)}</span>{d.streak>0&&<span><Flame size={14}/> {t('{0} dagen op rij',d.streak)}</span>}</div>
-  <Link className="button light big" href={href+'&start=1'}><Play size={16}/> {t('Nu beginnen')}</Link></section>
-}
 import {NextLessonPanel} from './Agenda';
 function NextLessonSlot(){return <NextLessonPanel mode="student" compact/>}
 
@@ -88,16 +77,22 @@ function WordsCard({studentId,vocab}:{studentId:string;vocab:Parameters<typeof v
 }
 
 /** Summary of the personal learning line (same data as the teacher's), max. two concrete recommendations. */
-function GrammarCard({studentId,lang,level}:{studentId:string;lang:string;level:string}){
- const [x,setX]=useState<{mastered:number;dev:number;extra:number;atLevel:number;doneAtLevel:number;recs:{id:string;title:string;reason:string}[]}|null>(null);
+export type LineSummary={mastered:number;dev:number;extra:number;atLevel:number;doneAtLevel:number;recs:{id:string;title:string;reason:string}[]};
+/** The personal learning line in short (same data as the teacher's): counts and the top recommendations. No AI. */
+export function useLineSummary(studentId:string,lang:string,level:string,n=2){
+ const [x,setX]=useState<LineSummary|null>(null);
  useEffect(()=>{if(!lang)return;let off=false;const db=supabase()!;
   void Promise.all([db.from('curriculum_goals').select('id,level,title,code,sort').eq('subject',lang),db.from('student_goal_progress').select('goal_id,status,updated_at,lesson_date,hidden,title_override').eq('student_id',studentId)]).then(([g,p])=>{
    if(off)return;const prog=new Map(((p.data||[]) as {goal_id:string;status:string;updated_at:string|null;lesson_date:string|null;hidden:boolean|null;title_override:string|null}[]).map(r=>[r.goal_id,r]));
    const goals=visibleGoals((g.data||[]) as {id:string;level:string;title:string;code:string|null;sort:number}[],lang).map(r=>({...r,status:prog.get(r.id)?.status||'not_started',updated_at:prog.get(r.id)?.updated_at,lesson_date:prog.get(r.id)?.lesson_date,hidden:!!prog.get(r.id)?.hidden,title:prog.get(r.id)?.title_override||r.title})).filter(r=>!r.hidden);
    const L=level.toUpperCase();const at=goals.filter(r=>r.level===L);
-   const recs=recommendTopics(goals,{level:L},2).map(r=>{const gg=goals.find(z=>z.id===r.id)!;return {id:r.id,title:gg.title,reason:r.reason}});
+   const recs=recommendTopics(goals,{level:L},n).map(r=>{const gg=goals.find(z=>z.id===r.id)!;return {id:r.id,title:gg.title,reason:r.reason}});
    setX({mastered:goals.filter(r=>r.status==='mastered').length,dev:goals.filter(r=>r.status==='in_progress'||r.status==='covered').length,extra:goals.filter(r=>r.status==='review').length,atLevel:at.length,doneAtLevel:at.filter(r=>r.status==='mastered').length,recs})});
-  return()=>{off=true}},[studentId,lang,level]);
+  return()=>{off=true}},[studentId,lang,level,n]);
+ return x;
+}
+function GrammarCard({studentId,lang,level}:{studentId:string;lang:string;level:string}){
+ const x=useLineSummary(studentId,lang,level,2);
  if(!x)return <section className="sd-card tone-violet"><div className="loader small"/></section>;
  return <section className="sd-card tone-violet sd-gram"><h3><Route size={16}/> {t('Grammatica')}</h3>
   <div className="wk-nums"><span><b>{x.mastered}</b><small>{t('beheerst')}</small></span><span><b>{x.dev}</b><small>{t('in ontwikkeling')}</small></span><span><b>{x.extra}</b><small>{t('extra oefenen')}</small></span></div>

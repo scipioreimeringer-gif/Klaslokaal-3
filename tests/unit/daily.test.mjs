@@ -77,7 +77,7 @@ test('wiring: own data via RLS, mistakes not removed by the teacher, results sto
   const r = read('app/api/practice/check/route.ts');
   assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\);/); assert.match(r, /never comment on pronunciation/);
   assert.match(read('app/page.tsx'), /<StudentDash key=\{rel\.id\} studentId=\{rel\.id\}/); // v75: the daily challenge card in the new dashboard, active language only
-  assert.match(read('components/StudentDash.tsx'), /<DailyChallenge studentId=\{studentId\}/);
-  assert.match(read('app/oefenen/page.tsx'), /<DailyCard key=\{rel\.id\} studentId=\{rel\.id\}/);
+  assert.match(read('components/StudentDash.tsx'), /<RouteCard studentId=\{studentId\}/); // v76: one route card on Overzicht and Oefenen
+  assert.match(read('app/oefenen/page.tsx'), /<RouteCard key=\{rel\.id\} studentId=\{rel\.id\}/);
   assert.match(read('components/StudentData.tsx'), /<TeacherDailyOverview studentId=\{studentId\}\/>/);
 });

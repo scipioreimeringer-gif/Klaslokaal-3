@@ -73,7 +73,7 @@ test('generation: only on the student\'s click, one batch, compact context, vali
 test('dashboard: header pills, challenge + compact next lesson, journey with XP levels separate from CEFR, no scrollspy', () => {
   assert.deepEqual(levelOf(0), {level: 1, into: 0, need: 100, toNext: 100}); assert.equal(levelOf(250).level, 3); assert.equal(XP_PER_LEVEL, 100);
   const sd = read('components/StudentDash.tsx');
-  for (const s of ['sd-head', '<DailyChallenge', '<NextLessonPanel mode="student" compact/>', 'sd-journey', 'XP-levels staan los van je taalniveau', '<WordsCard', '<GrammarCard', 'ms.slice(0,3)']) assert.ok(sd.includes(s), s);
+  for (const s of ['sd-head', '<RouteCard', '<NextLessonPanel mode="student" compact/>', 'sd-journey', 'XP-levels staan los van je taalniveau', '<WordsCard', '<GrammarCard', 'ms.slice(0,3)']) assert.ok(sd.includes(s), s);
   assert.match(read('components/Agenda.tsx'), /\{!compact&&next&&after\.length>0&&/, 'following lessons stay in the agenda');
   assert.match(read('components/Overview.tsx'), /if\(!open\.length\)return null;/, 'tasks card only with open tasks');
   assert.ok(!/SectionLinks/.test(read('components/Nav.tsx')));

@@ -83,7 +83,8 @@ type SR = {start(): void; stop(): void; abort(): void; lang: string; interimResu
 function speechApi(): (new () => SR) | null { const w = window as unknown as {SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR}; return w.SpeechRecognition || w.webkitSpeechRecognition || null; }
 
 /** The practice itself: one question at a time, progress bar, feedback after every answer, summary at the end. */
-export function DailyPlayer({studentId, level, lang, userId, autoStart = false}: {studentId: string; level?: string | null; lang: string; userId: string; autoStart?: boolean}) {
+export function DailyPlayer({studentId, level, lang, userId, autoStart = false, onRoundDone}: {studentId: string; level?: string | null; lang: string; userId: string; autoStart?: boolean;
+  /** v76: inside the daily route — report the result instead of showing the end screen */ onRoundDone?: (score: number, total: number, firstDaily: boolean, topics: string[]) => void}) {
   const {d, reload} = useDaily(studentId, level, lang);
   const [ex, setEx] = useExplainLang(lang, studentId); // v67/v75: explanation language of the feedback (per student and language)
   const day = today(), key = 'teachy-daily-' + studentId + '-' + day;
@@ -173,6 +174,7 @@ export function DailyPlayer({studentId, level, lang, userId, autoStart = false}:
     <div className="dp-facts"><span>{t('{0} vragen', 10)}</span><span><Clock3 size={13} aria-hidden/> {t('± {0} min', 6)}</span><span>⚡ {t('+{0} XP', 20)}</span></div>
     <div className="row"><ExplainLangSelect value={ex} onChange={setEx}/><button className="button" disabled={starting} onClick={() => void start()}><Play size={15}/> {starting ? t('Vragen klaarzetten…') : t('Nu beginnen')}</button></div>
   </div>;
+  if (finished && onRoundDone && !extra) return <RoundDone d={d} res={allRes} done={onRoundDone}/>;
   if (finished) {
     const s = summaryOf(allRes); const first = !extra && !d.doneToday;
     const practised = [...new Set(qs.filter(x => x.source !== 'word' && x.label).map(x => x.label))].slice(0, 6);
@@ -222,6 +224,13 @@ export function DailyPlayer({studentId, level, lang, userId, autoStart = false}:
       </div>}
     </div>
   </div>;
+}
+
+/** v76: the daily challenge inside the route: report once, then the route shows its own interstitial. */
+function RoundDone({d, res, done}: {d: DailyData; res: {q: Question; ok: boolean}[]; done: (score: number, total: number, first: boolean, topics: string[]) => void}) {
+  const sent = useRef(false); const first = useRef(!d.doneToday);
+  useEffect(() => { if (sent.current) return; sent.current = true; const s = summaryOf(res); done(s.correct, s.correct + s.wrong, first.current, [...new Set(res.filter(x => x.q.source !== 'word' && x.q.label).map(x => x.q.label))]); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return <div className="loader small"/>;
 }
 
 /** Teacher: per student, only stored facts — does the student practise, how much, which words and grammar stay hard. */
