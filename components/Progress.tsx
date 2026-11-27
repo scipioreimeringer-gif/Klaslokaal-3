@@ -12,15 +12,20 @@ import {lessonStats,practiceStats,streaks,vocabStats,homeworkStats,grammarStats,
 import {BarChart,CHART,ChartCard,LineChart,StatTile} from './Charts';
 import {LearningPath} from './LearningPath';
 import {errorsOf} from '../lib/analysis/core';
+import {practiceDays} from '../lib/motivation';
+import {MilestoneList} from './Motivation';
+import {subjectOf} from '../lib/learning';
 
-type Raw={lessons:ReturnType<typeof mergeLessons>;practice:PracticeRow[];vocab:VocabRow[];assignments:{id:string;published_at:string|null}[];submitted:string[];reviewed:number;
+type Raw={lessons:ReturnType<typeof mergeLessons>;practice:PracticeRow[];vocab:VocabRow[];assignments:{id:string;published_at:string|null}[];submitted:string[];reviewed:number;submittedAt:string[];
  progress:{status:string;updated_at?:string|null}[];focus:{key:string;status:string}[]};
 const today=()=>new Date().toLocaleDateString('en-CA');
+/** v74: one load per relation set for a minute — the dashboard sections and Voortgang share it (no duplicate queries). */
+const CACHE=new Map<string,{at:number;d:Raw}>();
 
 /** All stored data needed for the statistics of these relations, loaded once (few columns, no AI). */
 export function useStats(ids:string[]){
- const [d,setD]=useState<Raw|null>(null);const [err,setErr]=useState('');const key=ids.join(',');
- useEffect(()=>{if(!ids.length){setD(null);return}let off=false;const db=supabase()!;void(async()=>{
+ const key=ids.join(',');const hit=CACHE.get(key);const [d,setD]=useState<Raw|null>(hit&&Date.now()-hit.at<60e3?hit.d:null);const [err,setErr]=useState('');
+ useEffect(()=>{if(!ids.length){setD(null);return}const c=CACHE.get(key);if(c&&Date.now()-c.at<60e3){setD(c.d);return}let off=false;const db=supabase()!;void(async()=>{
   const [le,se,pr,vo,as,gp,...fo]=await Promise.all([
    db.from('lesson_entries').select('student_id,lesson_date').in('student_id',ids).limit(5000),
    db.from('lesson_sessions').select('id,student_id,lesson_date,started_at,ended_at,joint_seconds,registered_at,lesson_id,recording_id,language').in('student_id',ids).limit(5000),
@@ -30,18 +35,19 @@ export function useStats(ids:string[]){
    db.from('student_goal_progress').select('status,updated_at,hidden').in('student_id',ids),
    ...ids.map(id=>db.rpc('memory_focus',{sid:id}).then(r=>r.error?[]:(r.data||[]) as {key:string;status:string}[]))]);
   const pub=((as.data||[]) as {id:string;published_at:string|null}[]).filter(a=>a.published_at).map(a=>a.id);
-  const sub=pub.length?await db.from('homework_submissions').select('assignment_id,feedback_published_at').in('assignment_id',pub).limit(5000):{data:[]};
+  const sub=pub.length?await db.from('homework_submissions').select('assignment_id,feedback_published_at,submitted_at').in('assignment_id',pub).limit(5000):{data:[]};
   if(off)return;
   const e=[le,se,pr,vo,as].find(x=>x.error&&!/does not exist|schema cache/.test(x.error.message));if(e?.error)setErr(e.error.message);
-  const subs=(sub.data||[]) as {assignment_id:string;feedback_published_at:string|null}[];
-  setD({lessons:mergeLessons((le.data||[]) as LessonLike[],se.error?null:(se.data||[]) as SessionLike[]),practice:(pr.data||[]) as PracticeRow[],vocab:(vo.data||[]) as VocabRow[],
-   assignments:(as.data||[]) as Raw['assignments'],submitted:subs.map(s=>s.assignment_id),reviewed:subs.filter(s=>s.feedback_published_at).length,
-   progress:((gp.data||[]) as {status:string;updated_at?:string|null;hidden?:boolean}[]).filter(p=>!p.hidden),focus:(fo as {key:string;status:string}[][]).flat()});
+  const subs=(sub.data||[]) as {assignment_id:string;feedback_published_at:string|null;submitted_at?:string}[];
+  const raw:Raw={lessons:mergeLessons((le.data||[]) as LessonLike[],se.error?null:(se.data||[]) as SessionLike[]),practice:(pr.data||[]) as PracticeRow[],vocab:(vo.data||[]) as VocabRow[],
+   assignments:(as.data||[]) as Raw['assignments'],submitted:subs.map(s=>s.assignment_id),reviewed:subs.filter(s=>s.feedback_published_at).length,submittedAt:subs.map(s=>s.submitted_at||'').filter(Boolean),
+   progress:((gp.data||[]) as {status:string;updated_at?:string|null;hidden?:boolean}[]).filter(p=>!p.hidden),focus:(fo as {key:string;status:string}[][]).flat()};
+  CACHE.set(key,{at:Date.now(),d:raw});setD(raw);
  })();return()=>{off=true}},[key]);// eslint-disable-line react-hooks/exhaustive-deps
  return {d,err};
 }
 export function summarize(d:Raw,p:Period){
- const days=d.practice.map(r=>r.details?.day||r.created_at.slice(0,10));
+ const days=practiceDays(d.practice); // v74: one definition of a practice day (local time zone) for every streak
  return {les:lessonStats(d.lessons as never,p),pr:practiceStats(d.practice,p),st:streaks(days,today()),voc:vocabStats(d.vocab,p),hw:homeworkStats(d.assignments,d.submitted),gr:grammarStats(d.progress,d.focus)};
 }
 
@@ -140,6 +146,6 @@ export function ProgressHub({student,initial}:{student:React.ComponentProps<type
  const TABS:[HubTab,string,typeof TrendingUp][]=[['stats','Statistieken',TrendingUp],['leerlijn','Mijn leerlijn',Route],['werkpunten','Werkpunten',Target]];
  return <div className="progress-hub">
   <nav className="tabs hub-tabs" role="tablist">{TABS.map(([k,l,I])=><button key={k} role="tab" aria-selected={tab===k} className={tab===k?'active':''} onClick={()=>setTab(k)}><I size={15}/> {t(l)}</button>)}</nav>
-  <section className="card">{tab==='stats'?<StatsView ids={[student.id]}/>:tab==='leerlijn'?<LearningPath student={student} viewer="student"/>:<Werkpunten studentId={student.id}/>}</section>
+  <section className="card">{tab==='stats'?<><MilestoneList studentId={student.id} lang={subjectOf(student as never)}/><StatsView ids={[student.id]}/></>:tab==='leerlijn'?<LearningPath student={student} viewer="student"/>:<Werkpunten studentId={student.id}/>}</section>
  </div>
 }

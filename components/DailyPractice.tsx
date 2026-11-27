@@ -12,6 +12,8 @@ import {authedPost} from '../lib/learning';
 import {useExplainLang, ExplainLangSelect, NoteList} from './ExplainLang';
 import {focusKeysOf} from '../lib/curriculum/focus';
 import {errorsOf} from '../lib/analysis/core';
+import {practiceDays} from '../lib/motivation';
+import {streaks} from '../lib/progressStats';
 import {buildDaily,checkAnswer,streakOf,summaryOf,type DailySet,type HwItem,type ItemState,type Mistake,type Question,type Word} from '../lib/daily';
 
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -23,7 +25,7 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
   const [d, setD] = useState<DailyData | null>(null);
   const load = useCallback(async () => {
     const db = supabase()!, day = today();
-    const [v, s, a, st, ps, mf, fk] = await Promise.all([
+    const [v, s, a, st, ps, mf, fk, allP] = await Promise.all([
       db.from('vocab_items').select('id,term,translation,example,pos,status,due_at,difficult,wrong_count,streak,last_practiced_at,lesson_date').eq('student_id', studentId),
       db.rpc('student_lesson_summaries', {sid: studentId}),
       db.from('assignments').select('id,title,exercises,published_at').eq('student_id', studentId).not('published_at', 'is', null),
@@ -31,6 +33,9 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
       db.from('practice_sessions').select('created_at,score,total,details').eq('student_id', studentId).eq('kind', 'daily').order('created_at', {ascending: false}).limit(120),
       db.rpc('memory_focus', {sid: studentId}),
       focusKeysOf(db, studentId),
+      // v74: the streak counts EVERY practice day (daily practice and games), in the student's own time zone — the same
+      // definition as Voortgang and the dashboard (lib/motivation practiceDays + lib/progressStats streaks)
+      db.from('practice_sessions').select('created_at,total,kind,details').eq('student_id', studentId).order('created_at', {ascending: false}).limit(1500),
     ]);
     // v60: AI memory — mistakes of points that need practice across lessons come first; mastered points less often
     const focus = new Map(((mf.error ? [] : mf.data || []) as {key: string; status: string}[]).map(f => [f.key, f.status]));
@@ -47,7 +52,8 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
     const sessions = (ps.error ? [] : ps.data || []) as Session[];
     const days = sessions.map(x => x.details?.day || x.created_at.slice(0, 10));
     const set = buildDaily({studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[], topics: fk.known, focusTopics: fk.focus});
-    setD({set, sessions, streak: streakOf(days, day), doneToday: sessions.find(x => (x.details?.day || x.created_at.slice(0, 10)) === day) || null,
+    const allDays = practiceDays(((allP.error ? [] : allP.data || []) as {created_at: string; total: number; kind: string; details: {day?: string} | null}[]));
+    setD({set, sessions, streak: streaks(allDays.length ? allDays : days, day).current, doneToday: sessions.find(x => (x.details?.day || x.created_at.slice(0, 10)) === day) || null,
       hasMaterial: !set.empty, migration: !st.error && !ps.error});
   }, [studentId, level, lang]);
   useEffect(() => { void load(); }, [load]);
@@ -197,7 +203,7 @@ export function TeacherDailyOverview({studentId}: {studentId: string}) {
   if (!d.sessions.length && !d.items.length) return <p className="muted small">{t('Je leerling heeft de dagelijkse oefening nog niet gedaan.')}</p>;
   return <div className="dp-teacher">
     <div className="dp-days" aria-label={t('Oefendagen, laatste 14 dagen')}>{last14.map(x => <span key={x} className={days.includes(x) ? 'on' : ''} title={new Date(x + 'T12:00:00').toLocaleDateString(locale(), {day: 'numeric', month: 'short'})}/>)}</div>
-    <div className="dp-facts"><span><Flame size={13} aria-hidden/> {t('{0} dagen op rij', streakOf(days, day))}</span><span>{t('{0} oefeningen voltooid', d.sessions.length)}</span>{tot > 0 && <span>{t('{0}% goed', Math.round(ok / tot * 100))}</span>}</div>
+    <div className="dp-facts"><span><Flame size={13} aria-hidden/> {t('{0} dagen op rij met de dagelijkse oefening', streakOf(days, day))}</span><span>{t('{0} oefeningen voltooid', d.sessions.length)}</span>{tot > 0 && <span>{t('{0}% goed', Math.round(ok / tot * 100))}</span>}</div>
     {!!trend.length && <p className="muted small">{t('Per week:')} {trend.map(([wk, w]) => `${new Date(wk + 'T12:00:00').toLocaleDateString(locale(), {day: 'numeric', month: 'short'})} ${Math.round(w.ok / Math.max(1, w.tot) * 100)}%`).join(' · ')}</p>}
     {!!d.words.length && <div className="dp-list"><h4>{t('Woorden die moeilijk blijven')}</h4><ul className="chips">{d.words.map(w => <li key={w.term}><b>{w.term}</b> <small className="muted">{w.wrong_count}✗ {w.correct_count}✓</small></li>)}</ul></div>}
     {!!grammar.length && <div className="dp-list"><h4>{t('Terugkerende grammaticale fouten')}</h4><ul className="chips">{grammar.map(([l, n]) => <li key={l}>{l} <small className="muted">{n}✗</small></li>)}</ul></div>}

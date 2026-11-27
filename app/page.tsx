@@ -13,14 +13,15 @@ import {activeStudents,groupCount,homeworkProgress,isEmptySeries,lessonsPerMonth
 import {purgeExpired} from '../lib/learning';
 import {StatusChip} from '../components/Analysis';
 import {NextLessonPanel} from '../components/Agenda';
-import {FinanceCard,StudentPayments} from '../components/Payments';
+import {StudentPayments} from '../components/Payments';
+import {TeacherFigures,StudentHighlights} from '../components/TeacherOverview';
 import {Avatar} from '../components/Avatar';
 import {Flag} from '../components/Flag';
 import {useDashboard} from '../components/DashData';
 import {useMyLanguageCards} from '../components/Languages';
 import {useLearnerPrefs} from '../components/LearnerPrefs';
 import {TasksMini,DailyMini,TopicRequestsMini} from '../components/Overview';
-import {ProgressSummary} from '../components/Progress';
+import {StudentMotivation} from '../components/Motivation';
 import {subjectOf as langOf} from '../lib/learning';
 import {languageName,pickRelation} from '../lib/languages';
 import {type AnalysisStatus} from '../lib/analysisTypes';
@@ -66,6 +67,7 @@ function TeacherHome(){
    <div className="row"><Link className="button" href="/klaslokaal/live"><Video size={16}/> {t("Les starten")}</Link><Link className="button secondary" href="/leerlingen?nieuw=1"><Plus size={16}/> {t("Leerling toevoegen")}</Link></div></div>
   <PendingLinks/>
   {role==='admin'&&<div className="hint">{t("Je bent beheerder. Docentaanvragen beoordeel je via")} <Link href="/beheer">{t("Docenten beheren")}</Link>.</div>}
+  {students&&<TeacherFigures ids={active.map(s=>s.id)}/>}
   <NextLessonPanel mode="teacher"/>
   <div className="home-grid">
    <TasksMini role="teacher" max={5} title={t('Openstaande taken')}/>
@@ -73,7 +75,7 @@ function TeacherHome(){
     <TopicRequestsMini names={names}/>
     {review.length>0&&<section className="card mini-tasks"><div className="mini-head"><h3><Sparkles size={16}/> {t("AI-lesverslagen")}</h3></div><ul className="mini-list">{review.map(a=><li key={a.id}>
      <Link className="mini-main" href={'/leerlingen?student='+a.student_id+'&tab=analyses'}><b>{names.get(a.student_id)}</b><small className="muted">{t("Les van")} {new Date(a.lesson_date+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'long'})}</small></Link>{a.is_test&&<span className="test-badge">{'TEST'}</span>}<StatusChip status={a.status as AnalysisStatus}/></li>)}</ul></section>}
-    <FinanceCard/>
+    <StudentHighlights names={names}/>
    </div>
   </div>
   <section className="panel"><div className="panelheader"><div><h2>{t("Leerlingen")}</h2></div><Link className="textlink" href="/leerlingen">{t("Alles beheren")} <ChevronRight size={15}/></Link></div>
@@ -97,11 +99,13 @@ function StudentHome(){
   <div className="page-head"><div><p className="eyebrow-dark">{t("MIJN LEEROMGEVING")}</p><h1>{first?t("Hoi {0} 👋",first):t("Welkom terug 👋")}</h1>
    {code&&<p className="muted"><Flag code={code} size={16}/> {t("Je leert nu {0}",languageName(code))}{rel?.level?' · '+rel.level:''}</p>}</div></div>
   <PendingLinks/>
-  <NextLessonPanel mode="student"/>
-  {rel&&<DailyMini key={rel.id} studentId={rel.id} level={rel.level||null} lang={langOf(rel)}/>}
-  <TasksMini role="student" max={4}/>
-  <StudentPayments/>
-  {rel&&<ProgressSummary ids={[rel.id]}/>}
+  {/* v74: four sections (Vandaag · Mijn doelen · Mijn voortgang · Mijn activiteit); the sidebar follows them (scrollspy) */}
+  <section className="dash-sec" id="vandaag" aria-labelledby="h-vandaag"><h2 id="h-vandaag" className="sec-h">{t("Vandaag")}</h2>
+   <NextLessonPanel mode="student"/>
+   {rel&&<DailyMini key={rel.id} studentId={rel.id} level={rel.level||null} lang={langOf(rel)}/>}
+   <TasksMini role="student" max={4}/>
+   <StudentPayments/></section>
+  {rel&&<StudentMotivation key={rel.id} studentId={rel.id} lang={langOf(rel)} level={rel.level||null}/>}
   {studentLinks.length===0&&mine.loaded&&<div className="emptystate"><BookOpen size={30}/><strong>{t("Nog geen leerlingprofiel gekoppeld")}</strong><p>{t("Vraag je docent om je toe te voegen met het e-mailadres van dit account. De uitnodiging verschijnt dan hierboven.")}</p></div>}
   {studentLinks.length>0&&<details className="fold-stats"><summary><UsersRound size={16}/> {t("Mijn docenten")} <span className="chip-count">{studentLinks.length}</span></summary>{unlinkMsg&&<p className="muted" role="status">{unlinkMsg}</p>}
    <div className="studentrows">{studentLinks.map(s=>{const rec=cards.flatMap(c=>c.relations).find(x=>x.id===s.id);const lang=rec?langOf(rec):'';return <div className="studentrow" key={s.id}><Avatar userId={rec?.teacher_id} name={s.teacher_name||'D'} size={36}/><Link className="studentrow-main" href={'/mijn-profiel?'+(lang?'taal='+lang+'&':'')+'student='+s.id}><strong>{s.teacher_name||t("Docent")}</strong><small>{lang&&<Flag code={lang} size={16}/>} {lang?languageName(lang):(s.subject||t("Les"))}{rec?.level?' · '+rec.level:''}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> {t("Naar de les")}</Link>

@@ -60,9 +60,12 @@ async function loadData(uid:string):Promise<Data>{const db=supabase()!;const stu
  return {lessons,packages,students,records}}
 
 /** Teacher dashboard: compact finance card (only when billing is on). */
-export function FinanceCard(){const {user}=useAuth();const {on}=useBillingEnabled();const [d,setD]=useState<Data|null>(null);
+/** v74: this month's registered figures (per currency; nothing estimated) — shared by the card and the dashboard tiles. */
+export function useFinanceSummary(){const {user}=useAuth();const {on}=useBillingEnabled();const [d,setD]=useState<Data|null>(null);
  useEffect(()=>{if(on&&user)void loadData(user.id).then(setD)},[on,user?.id]);// eslint-disable-line react-hooks/exhaustive-deps
- if(!on||!d)return null;const month=new Date().toISOString().slice(0,7);const s=summary(d.lessons,d.packages,month);const loc=locale();
+ return on&&d?summary(d.lessons,d.packages,new Date().toISOString().slice(0,7)):null}
+export function FinanceCard(){const s=useFinanceSummary();
+ if(!s)return null;const loc=locale();
  return <section className="card finance-card"><div className="row between"><h3><Wallet size={16}/> {t('Betalingen deze maand')}</h3><Link className="textlink" href="/betalingen">{t('Alles bekijken')} →</Link></div>
   <dl className="fin-grid"><div><dt>{t('Ontvangen')}</dt><dd>{fmtMoney(s.received,loc)}</dd></div><div><dt>{t('Openstaand')}</dt><dd>{fmtMoney(s.outstanding,loc)}</dd></div>
    <div><dt>{t('Gegeven lessen')}</dt><dd>{s.lessonsGiven} <small className="muted">({t('waarde')} {fmtMoney(s.givenValue,loc)})</small></dd></div><div><dt>{t('Vooruitbetaald')}</dt><dd>{t('{0} lessen',s.prepaidLeft)}</dd></div></dl></section>}

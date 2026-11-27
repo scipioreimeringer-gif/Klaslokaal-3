@@ -1309,7 +1309,7 @@ function lssTick(){
   }
   lssBeat(false);
 }
-var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = store("klas-self") !== false, retryT = null, myName = "";
+var queue = [], sending = false, joinedAt = 0, mic = true, cam = true, selfView = (function(){ var v = store("klas-self-" + (isT ? "t" : "s")); return v === null ? store("klas-self") : v; })() !== false, /* v74: per role (synced to the account) */ retryT = null, myName = "";
 var SB_ROOM = SB ? (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "").slice(0, 40) : "";
 var ROOM = (SB && SB_ROOM) ? SB_ROOM : isT ? (store("klas-kamer") || (function(){ var r = Math.random().toString(36).slice(2, 8); store("klas-kamer", r); return r; })()) : (params.get("kamer") || "").replace(/[^a-z0-9]/gi, "");
 var TEACHER_ID = "learnwithscip-klas-" + ROOM;
@@ -1798,7 +1798,7 @@ $("copyLink").addEventListener("click", function(){
 $("micBtn").addEventListener("click", function(){ if(!local) return; mic = !mic; local.getAudioTracks().forEach(function(t){ t.enabled = mic; }); this.classList.toggle("off", !mic); });
 $("camBtn").addEventListener("click", function(){ if(!local) return; cam = !cam; local.getVideoTracks().forEach(function(t){ t.enabled = cam; }); this.classList.toggle("off", !cam); });
 $("selfBtn").addEventListener("click", function(){
-  selfView = !selfView; store("klas-self", selfView); this.setAttribute("aria-pressed", selfView ? "true" : "false");
+  selfView = !selfView; store("klas-self-" + (isT ? "t" : "s"), selfView); this.setAttribute("aria-pressed", selfView ? "true" : "false");
   $("selfV").hidden = !selfView || !local;
 });
 setInterval(function(){
@@ -4503,8 +4503,8 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
      the tab is left (the browser decides whether that is allowed). */
   var host = (function(){ try{ return window.parent && window.parent !== window && window.parent.document ? window.parent : window; }catch(e){ return window; } })();
   var dpip = (function(){ try{ return host.documentPictureInPicture || null; }catch(e){ return null; } })();
-  var pipWin = null, autoOpened = false, KEY = "klas-pip-auto";
-  function autoOn(){ var v = store(KEY); return v !== false; }
+  var pipWin = null, autoOpened = false, KEY = "klas-pip-auto-" + (isT ? "t" : "s"); /* v74: per role, synced to the account */
+  function autoOn(){ var v = store(KEY); if(v === null) v = store("klas-pip-auto"); return v !== false; }
   function sources(){
     var list = [];
     Array.prototype.forEach.call($("remotes").querySelectorAll("video"), function(v){ if(v.srcObject) list.push({s:v.srcObject, name:(document.querySelector(".vname-r") || {}).textContent || (isT ? "Leerling" : "Docent"), self:false}); });
@@ -4930,6 +4930,63 @@ $("scrStart").addEventListener("click", function(){ if(!screenStream) startShare
   ].join("\n");
   document.head.appendChild(st);
   apply();
+})();
+/* =================================================================== v74: COMPACT CAMERA SETTINGS + HONEST PiP STATUS
+   The same settings panel (same controls, same storage), but compact: layout options in two columns with an icon and a
+   short label (the longer explanation is the tooltip), Heel beeld / Vullen as a segmented control, small switches, less
+   padding, and a short "Opgeslagen" confirmation. The settings are saved per role and (via the app) per account.
+   Automatic Picture-in-Picture is only offered as "on" where the browser really supports it (Chrome/Edge: Document
+   Picture-in-Picture + Media Session); elsewhere the switch is disabled and the manual button remains. */
+(function(){
+  var box = document.querySelector(".v53-cam"); if(!box) return;
+  document.body.classList.add("v74");
+  box.querySelectorAll(".v53-views button, .v53-seg button").forEach(function(b){ var s = b.querySelector("small"); if(s && !b.title) b.title = s.textContent; });
+  var note = box.querySelector(".v53-note"); if(note){ box.title = ""; note.hidden = true; }
+  var h = box.querySelector(".v53-h");
+  var ok = document.createElement("span"); ok.className = "v74-saved"; ok.setAttribute("role", "status"); ok.textContent = "✓ Opgeslagen";
+  if(h){ h.appendChild(ok); h.title = "Alleen voor jou. De andere deelnemer kiest een eigen indeling."; }
+  var okT = 0;
+  function saved(){ ok.classList.add("on"); clearTimeout(okT); okT = setTimeout(function(){ ok.classList.remove("on"); }, 1400); }
+  box.addEventListener("click", function(e){ if(e.target.closest("button[data-view],button[data-fit],#v69Pip") ) setTimeout(saved, 30); });
+  box.addEventListener("change", function(e){ if(e.target.matches("input[type=checkbox]")) setTimeout(saved, 30); });
+  /* automatic floating window: real support check */
+  var host = (function(){ try{ return window.parent && window.parent !== window && window.parent.document ? window.parent : window; }catch(e){ return window; } })();
+  var autoOk = false; try{ autoOk = !!host.documentPictureInPicture && !!(host.navigator.mediaSession && host.navigator.mediaSession.setActionHandler); }catch(e){}
+  var cb = $("pipAuto"), pipSec = box.querySelector(".v69-pip");
+  if(pipSec){
+    var st = document.createElement("p"); st.className = "v74-pipnote";
+    if(cb && !autoOk){ cb.checked = false; cb.disabled = true; }
+    st.textContent = autoOk ? "Automatisch: werkt in Chrome en Edge zodra je camera of microfoon aan staat; de browser kan het per site blokkeren." : "Automatisch openen kan deze browser niet. Gebruik de knop hierboven.";
+    pipSec.appendChild(st);
+    var pb = $("v69Pip"); if(pb){ pb.title = "Toont beide camera’s in een klein venster boven andere tabbladen"; }
+  }
+  var css = document.createElement("style"); css.setAttribute("data-v74", "");
+  css.textContent = [
+    "body.v74 .v53-cam{width:min(372px,calc(100vw - 16px));padding:10px 12px;max-height:calc(100vh - 24px);overflow:auto;gap:6px}",
+    "body.v74 .v53-cam .v53-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 4px;font-size:.92rem}",
+    "body.v74 .v53-cam .v53-sec{margin:0;padding:6px 0 0;border:0}",
+    "body.v74 .v53-cam .v53-sec h3{margin:0 0 5px;font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}",
+    "body.v74 .v53-views{display:grid!important;grid-template-columns:1fr 1fr;gap:5px}",
+    "body.v74 .v53-views button{display:flex;align-items:center;gap:7px;padding:6px 8px!important;min-height:0;border-radius:9px;text-align:left}",
+    "body.v74 .v53-views button .ic{flex:none;display:grid;place-items:center;width:26px;height:22px}",
+    "body.v74 .v53-views button small,body.v74 .v53-seg button small{display:none!important}",
+    "body.v74 .v53-views button b{font-size:.8rem;line-height:1.15;font-weight:650}",
+    "body.v74 .v53-seg{display:grid!important;grid-template-columns:1fr 1fr;gap:0;padding:3px;border-radius:10px;background:var(--soft,#eef4f3)}",
+    "body.v74 .v53-seg button{padding:6px 8px!important;border:0!important;border-radius:8px;background:transparent;min-height:0}",
+    "body.v74 .v53-seg button[aria-checked=true],body.v74 .v53-seg button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}",
+    "body.v74 .v53-seg button b{font-size:.8rem}",
+    "body.v74 .v53-sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 2px!important;margin:4px 0 0;font-size:.82rem;min-height:0}",
+    "body.v74 .v53-sw input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:32px;height:18px;border-radius:999px;background:#c9d6d4;position:relative;cursor:pointer;transition:background .15s;margin:0}",
+    "body.v74 .v53-sw input[type=checkbox]::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}",
+    "body.v74 .v53-sw input[type=checkbox]:checked{background:#12a594}body.v74 .v53-sw input[type=checkbox]:checked::after{transform:translateX(14px)}",
+    "body.v74 .v53-sw input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}",
+    "body.v74 .v69-pipbtn{min-height:30px;margin:0 0 2px;font-size:.8rem}",
+    ".v74-pipnote{margin:4px 2px 0;font-size:.72rem;line-height:1.35;color:var(--muted)}",
+    ".v74-saved{font-size:.72rem;font-weight:700;color:#0f7a6c;opacity:0;transition:opacity .2s}.v74-saved.on{opacity:1}",
+    "@media(prefers-reduced-motion:reduce){.v74-saved,body.v74 .v53-sw input::after{transition:none}}",
+    "@media(max-width:420px){body.v74 .v53-views{grid-template-columns:1fr}}"
+  ].join("\n");
+  document.head.appendChild(css);
 })();
 })();
 </script>

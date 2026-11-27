@@ -24,7 +24,7 @@ test('one central rule: nothing open → big cameras side by side; material open
 test('camera bar: settings, own picture, close; closing never touches call or recording', () => {
   assert.match(v69, /#camPin,body\.v69 #camFull,body\.v69 #vSize,body\.v69 #vMin,body\.v69 #pipBtn\{display:none!important\}/);
   // own picture: only the local preview element is hidden; the outgoing tracks are untouched
-  assert.match(html, /selfView = !selfView; store\("klas-self", selfView\);[\s\S]{0,120}\$\("selfV"\)\.hidden = !selfView \|\| !local;/);
+  assert.match(html, /selfView = !selfView; store\("klas-self-" \+ \(isT \? "t" : "s"\), selfView\);[\s\S]{0,120}\$\("selfV"\)\.hidden = !selfView \|\| !local;/);
   assert.match(v69, /window\.__camShow = function\(v\)\{ if\(window\.__camSetMode\)\{ window\.__camSetMode\(v \? want\(\) : "hidden", "v69"\)/);
   assert.ok(!/getTracks\(\)\.forEach\(function\(t\)\{ t\.stop\(\)/.test(v69.replace(/screen sharing[\s\S]*?slides toolbar/, '')), 'no track is stopped by the layout');
   assert.ok(!/peer\.(call|destroy)|new Peer\(|getUserMedia/.test(v69), 'WebRTC untouched');

@@ -1,4 +1,5 @@
 'use client';
+import {useClassroomPrefs} from '../../../components/ClassroomPrefs';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Suspense,useEffect,useRef,useState} from 'react';
@@ -83,7 +84,8 @@ function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:
  const {user,canTeach,mode}=useAuth();const router=useRouter();const [room,setRoom]=useState<Room|null>(null);const [error,setError]=useState('');const [ready,setReady]=useState(false);const [privOpen,setPrivOpen]=useState(false);
  const [lessonRef,setLessonRef]=useState<{id:string;day:string}|null>(null);
  const [assistOpen,setAssistOpen]=useState(false);const [gamesOpen,setGamesOpen]=useState(false);const [gamesHost,setGamesHost]=useState<Element|null>(null);const [frameLoads,setFrameLoads]=useState(0);
- useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
+ const prefsReady=useClassroomPrefs(); // v74: personal video settings per account and role
+  useEffect(()=>{if(!user)return;let cancelled=false;setRoom(null);setReady(false);setError('');void(async()=>{
   const db=supabase()!;const r=await db.from('students').select('id,teacher_id,user_id,name,email,subject,notes,goals,homework,history,level,lesson_language,about,room_code').eq('id',studentId).maybeSingle();
   if(cancelled)return;
   if(r.error){setError(isMissingMigration(r.error)?t(MIGRATION_HINT):r.error.message);return}
@@ -129,7 +131,7 @@ function LiveRoom({studentId,lessonParam,asParam}:{studentId:string;lessonParam:
   :`/legacy/index.html?sb=1&b=${build}&rol=leerling&kamer=${encodeURIComponent(s.room_code!)}&naam=${encodeURIComponent(myName)}${relay}`;
  return <main className="live-page bar-hidden">
   <div className="live-body">
-   <iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame" onLoad={()=>setFrameLoads(n=>n+1)}/>
+   {prefsReady&&<iframe key={s.id+room.as} title={t("Klaslokaal ")+s.name} src={src} allow="camera; microphone; display-capture; fullscreen; autoplay" className="live-frame" onLoad={()=>setFrameLoads(n=>n+1)}/>}
    {/* v68: the lesson topics (add, remove, mark as covered, observation) in the teacher's existing side panel */}
    {privOpen&&room.as==='teacher'&&<aside className="live-private"><button className="iconbtn" aria-label={t("Sluiten")} onClick={()=>setPrivOpen(false)}><X size={16}/></button><LessonTopics studentId={s.id} lessonId={lessonRef?.id||null} lessonDate={lessonRef?.day||new Date().toLocaleDateString('en-CA')}/><PrivateNotes studentId={s.id}/></aside>}
    {assistOpen&&<div className="live-assistant"><AssistantPanel studentId={s.id} onClose={()=>setAssistOpen(false)}/></div>}
