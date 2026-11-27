@@ -29,7 +29,7 @@ test('A1 gets simple exercises: recognition, present tense, no free writing, not
 test('A2 gets more grammar and active production (≈40% grammar, corrections, production, ≈15% words)', () => {
   const m = mixFor('A2', 10, {grammar: 100, mistakes: 10, words: 20, produce: 3});
   assert.deepEqual(m, {g: 4, c: 3, p: 2, v: 1});
-  assert.deepEqual(mixFor('A1', 10, {grammar: 100, mistakes: 10, words: 20, produce: 3}), {g: 3, c: 2, p: 1, v: 4});
+  assert.deepEqual(mixFor('A1', 10, {grammar: 100, mistakes: 10, words: 20, produce: 3}), {g: 4, c: 2, p: 1, v: 3}); // v75: grammar first, fewer bare translations
   let grammar = 0, produce = 0, words = 0, total = 0;
   for (const s of days('A2', 'pt')) { total += s.questions.length; grammar += s.questions.filter(q => q.source === 'grammar' && q.kind !== 'answer').length;
     produce += s.questions.filter(q => ['write', 'answer', 'speak'].includes(q.kind)).length; words += s.questions.filter(q => q.source === 'word' && q.kind !== 'write').length; }
@@ -102,7 +102,7 @@ test('daily practice uses deduplicated, approved report errors; one AI call per 
   assert.match(c, /errorsOf\(r\.final as never\)\.filter\(e => e\.status !== 'rejected'/);
   assert.match(c, /p_kind: qq\.source === 'mistake' \? 'error' : qq\.source === 'grammar' \? 'grammar' : 'homework'/, 'grammar items use the existing spaced repetition');
   assert.match(c, /\{!!q\.notes\?\.length && <NoteList className="dp-notes"/, 'feedback explains why (v67: in the explanation language)');
-  assert.equal((c.match(/authedPost</g) || []).length, 1, 'still one feedback call');
+  assert.equal((c.match(/authedPost</g) || []).length, 2, 'one feedback call + v75: one prepare call on start');
   const r = read('app/api/practice/check/route.ts'); assert.match(r, /The learner answers this question/); assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\);/);
   assert.match(read('supabase/v48.sql'), /item_key ~ '\^\(err\|hw\|gr\):/, 'gr: keys already allowed: no migration needed');
 });

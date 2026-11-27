@@ -18,7 +18,7 @@ export function TasksMini({role,max=4,title}:{role:TaskRole;max?:number;title?:s
  if(!state)return <section className="card mini-tasks"><div className="loader small"/></section>;
  const now=Date.now(),tz=browserTimeZone();const mine=state.tasks.filter(x=>x.role===role);
  const open=mine.filter(x=>!x.done);const done=mine.filter(x=>x.done).slice(0,8);
- if(!open.length&&!done.length)return null;
+ if(!open.length)return null; // v75: only when there is something to do
  const shown=more?open:open.slice(0,max);
  async function finish(x:Task){const db=supabase()!;setMsg('');
   const {error}=x.source==='manual'?await db.from('tasks').update({done_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',x.id!)

@@ -71,12 +71,13 @@ test('wiring: own data via RLS, mistakes not removed by the teacher, results sto
   assert.match(c, /db\.rpc\('record_vocab_practice', \{item: qq\.ref, correct: ok\}\)/);
   assert.match(c, /db\.rpc\('record_practice_item', \{p_student: studentId, p_key: qq\.ref/);
   assert.match(c, /kind: 'daily', score: s\.correct, total: s\.correct \+ s\.wrong/);
-  assert.equal((c.match(/authedPost/g) || []).length, 2, 'import + the one feedback call');
+  assert.equal((c.match(/authedPost/g) || []).length, 3, 'import + the one feedback call + v75: the one prepare call when the student starts');
   assert.match(c, /if \(!d\.hasMaterial\) return <div className="lc-empty">/);
   assert.match(c, /Spraakherkenning is in deze browser niet beschikbaar: typ je antwoord\./, 'alternative without microphone');
   const r = read('app/api/practice/check/route.ts');
   assert.match(r, /await enforceLimit\(db, user\.id, 'exercises'\);/); assert.match(r, /never comment on pronunciation/);
-  assert.match(read('app/page.tsx'), /<DailyMini key=\{rel\.id\} studentId=\{rel\.id\}/); // v73: compact, active language only
+  assert.match(read('app/page.tsx'), /<StudentDash key=\{rel\.id\} studentId=\{rel\.id\}/); // v75: the daily challenge card in the new dashboard, active language only
+  assert.match(read('components/StudentDash.tsx'), /<DailyChallenge studentId=\{studentId\}/);
   assert.match(read('app/oefenen/page.tsx'), /<DailyCard key=\{rel\.id\} studentId=\{rel\.id\}/);
   assert.match(read('components/StudentData.tsx'), /<TeacherDailyOverview studentId=\{studentId\}\/>/);
 });

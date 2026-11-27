@@ -67,3 +67,7 @@ export function milestones(m: MilestoneInput): Milestone[] {
   let sum = 0; for (const x of [...m.lessonMinutes].sort((a, b) => a.date.localeCompare(b.date))) { sum += x.minutes; if (sum >= 300) { push('hours5', 'Vijf uur les gevolgd', 'time', x.date.slice(0, 10)); break; } }
   return out.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
+
+/* v75: experience levels — completely separate from CEFR and grammar mastery; one central setting */
+export const XP_PER_LEVEL = 100;
+export function levelOf(xp: number) { const x = Math.max(0, Math.floor(xp)); return {level: Math.floor(x / XP_PER_LEVEL) + 1, into: x % XP_PER_LEVEL, need: XP_PER_LEVEL, toNext: XP_PER_LEVEL - (x % XP_PER_LEVEL)}; }

@@ -55,11 +55,11 @@ export function homeworkStats(assignments: {id: string; published_at: string | n
   return {assigned: pub.length, done: finished, open: pub.length - finished};
 }
 
-/** Official statuses are the teacher's; "extra practice" only from the student's AI memory points marked for review. */
-export function grammarStats(progress: {status: string}[], focus: {status: string}[] = []) {
-  return {covered: progress.filter(x => x.status === 'covered' || x.status === 'in_progress' || x.status === 'mastered').length,
-    mastered: progress.filter(x => x.status === 'mastered').length, developing: progress.filter(x => x.status === 'in_progress').length,
-    extra: focus.filter(f => f.status === 'review').length};
+/** Official statuses are the teacher's (v64: In ontwikkeling · Extra oefenen · Beheerst; older "covered" = in development). */
+export function grammarStats(progress: {status: string}[], _focus: {status: string}[] = []) {
+  return {covered: progress.filter(x => x.status === 'covered' || x.status === 'in_progress' || x.status === 'review' || x.status === 'mastered').length,
+    mastered: progress.filter(x => x.status === 'mastered').length, developing: progress.filter(x => x.status === 'in_progress' || x.status === 'covered').length,
+    extra: progress.filter(x => x.status === 'review').length};
 }
 
 /* ---------------- series for the charts ---------------- */

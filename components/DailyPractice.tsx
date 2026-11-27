@@ -11,6 +11,7 @@ import {t,locale} from '../lib/i18n';
 import {authedPost} from '../lib/learning';
 import {useExplainLang, ExplainLangSelect, NoteList} from './ExplainLang';
 import {focusKeysOf} from '../lib/curriculum/focus';
+import {toQuestion,type BankRow} from '../lib/dailyAi';
 import {errorsOf} from '../lib/analysis/core';
 import {practiceDays} from '../lib/motivation';
 import {streaks} from '../lib/progressStats';
@@ -18,7 +19,8 @@ import {buildDaily,checkAnswer,streakOf,summaryOf,type DailySet,type HwItem,type
 
 const today = () => new Date().toLocaleDateString('en-CA');
 type Session = {created_at: string; score: number; total: number; details: {day?: string; words?: string[]; grammar?: string[]} | null};
-export type DailyData = {set: DailySet; sessions: Session[]; streak: number; doneToday: Session | null; hasMaterial: boolean; migration: boolean};
+export type DailyData = {set: DailySet; sessions: Session[]; streak: number; doneToday: Session | null; hasMaterial: boolean; migration: boolean;
+  /** v75: build today's set with the personal bank questions (same inputs as set) */ withAi: (ai: {topic: Question[]; error: Question[]; review: Question[]}) => DailySet};
 
 /** Loads only this student's material (RLS) and builds today's set. */
 export function useDaily(studentId: string, level?: string | null, lang?: string) {
@@ -51,10 +53,11 @@ export function useDaily(studentId: string, level?: string | null, lang?: string
     const words = (v.data || []) as Word[];
     const sessions = (ps.error ? [] : ps.data || []) as Session[];
     const days = sessions.map(x => x.details?.day || x.created_at.slice(0, 10));
-    const set = buildDaily({studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[], topics: fk.known, focusTopics: fk.focus});
+    const inp = {studentId, day, level, lang, words, mistakes, homework, state: (st.error ? [] : st.data || []) as ItemState[], topics: fk.known, focusTopics: fk.focus};
+    const set = buildDaily(inp);
     const allDays = practiceDays(((allP.error ? [] : allP.data || []) as {created_at: string; total: number; kind: string; details: {day?: string} | null}[]));
     setD({set, sessions, streak: streaks(allDays.length ? allDays : days, day).current, doneToday: sessions.find(x => (x.details?.day || x.created_at.slice(0, 10)) === day) || null,
-      hasMaterial: !set.empty, migration: !st.error && !ps.error});
+      hasMaterial: !set.empty, migration: !st.error && !ps.error, withAi: ai => buildDaily({...inp, ai})});
   }, [studentId, level, lang]);
   useEffect(() => { void load(); }, [load]);
   return {d, reload: load};
@@ -80,20 +83,44 @@ type SR = {start(): void; stop(): void; abort(): void; lang: string; interimResu
 function speechApi(): (new () => SR) | null { const w = window as unknown as {SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR}; return w.SpeechRecognition || w.webkitSpeechRecognition || null; }
 
 /** The practice itself: one question at a time, progress bar, feedback after every answer, summary at the end. */
-export function DailyPlayer({studentId, level, lang, userId}: {studentId: string; level?: string | null; lang: string; userId: string}) {
+export function DailyPlayer({studentId, level, lang, userId, autoStart = false}: {studentId: string; level?: string | null; lang: string; userId: string; autoStart?: boolean}) {
   const {d, reload} = useDaily(studentId, level, lang);
-  const [ex, setEx] = useExplainLang(lang); // v67: explanation language of the feedback
-  const key = 'teachy-daily-' + studentId + '-' + today();
+  const [ex, setEx] = useExplainLang(lang, studentId); // v67/v75: explanation language of the feedback (per student and language)
+  const day = today(), key = 'teachy-daily-' + studentId + '-' + day;
+  // v75: the set of the day is FROZEN once started (daily_runs, or this device when v75.sql is missing): a refresh, a new
+  // login or another device continues with exactly the same questions; the day is registered once
+  const [run, setRun] = useState<{questions: Question[]; answers: boolean[]; finished: boolean; server: boolean} | null | undefined>(undefined);
+  const [extra, setExtra] = useState<Question[] | null>(null); // extra practice after the day (no daily reward)
   const [i, setI] = useState(0); const [res, setRes] = useState<{q: Question; ok: boolean}[]>([]);
   const [given, setGiven] = useState(''); const [fb, setFb] = useState<{state: 'correct' | 'accent' | 'wrong'; text?: string; corrected?: string} | null>(null);
   const [flipped, setFlipped] = useState(false); const [busy, setBusy] = useState(false); const [listening, setListening] = useState(false); const [saved, setSaved] = useState(false);
+  const [starting, setStarting] = useState(false); const [note, setNote] = useState('');
   const rec = useRef<SR | null>(null);
-  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(key) || 'null'); if (s && Array.isArray(s.ok)) { setI(s.ok.length); setRes([]); restored.current = s.ok; } } catch { /* fresh */ } }, [key]);
-  const restored = useRef<boolean[] | null>(null);
-  const qs = d?.set.questions || [];
-  // restore after a refresh: same set (deterministic per day), continue where the student stopped
-  const allRes = useMemo(() => restored.current && qs.length ? [...restored.current.map((ok, n) => ({q: qs[n], ok})).filter(x => x.q), ...res] : res, [qs, res]);
+  useEffect(() => { let off = false;
+    void supabase()!.from('daily_runs').select('questions,answers,finished_at').eq('student_id', studentId).eq('day', day).maybeSingle().then(r => {
+      if (off) return;
+      if (!r.error && r.data) { const x = r.data as {questions: Question[]; answers: {ok: boolean}[]; finished_at: string | null}; setRun({questions: x.questions, answers: (x.answers || []).map(a => !!a.ok), finished: !!x.finished_at, server: true}); setI((x.answers || []).length); return; }
+      try { const s = JSON.parse(localStorage.getItem(key) || 'null'); if (s && Array.isArray(s.questions)) { setRun({questions: s.questions, answers: s.ok || [], finished: false, server: false}); setI((s.ok || []).length); return; } } catch { /* fresh */ }
+      setRun(null); });
+    return () => { off = true; }; }, [studentId, day, key]);
+  const qs = extra || run?.questions || [];
+  const allRes = useMemo(() => extra ? res : (run?.answers || []).map((ok, n) => ({q: qs[n], ok})).filter(x => x.q), [run, res, qs, extra]);
   const q = qs[i];
+  async function start() {
+    if (!d) return; setStarting(true); setNote('');
+    let ai = {topic: [] as Question[], error: [] as Question[], review: [] as Question[]};
+    try { const r = await authedPost<{questions: BankRow[]}>(supabase()!, '/api/daily/prepare', {studentId, explain: ex, day});
+      const list = r.questions.map((x, n) => toQuestion(x, n)); r.questions.forEach((x, n) => ai[x.source].push(list[n])); }
+    catch (e) { setNote(e instanceof Error ? e.message : String(e)); /* the built-in material still makes a full day */ }
+    const set = d.withAi(ai);
+    const row = {student_id: studentId, day, questions: set.questions, answers: []};
+    const w = await supabase()!.from('daily_runs').insert(row);
+    try { localStorage.setItem(key, JSON.stringify({questions: set.questions, ok: []})); } catch { /* private mode */ }
+    setRun({questions: set.questions, answers: [], finished: false, server: !w.error}); setI(0); setRes([]); setStarting(false);
+  }
+  // the dashboard's "Nu beginnen" is the student's own click: start right away (only when today's set does not exist yet)
+  const auto = useRef(false);
+  useEffect(() => { if (autoStart && run === null && d?.hasMaterial && !auto.current) { auto.current = true; void start(); } }, [autoStart, run, d]); // eslint-disable-line react-hooks/exhaustive-deps
   async function record(qq: Question, ok: boolean) {
     const db = supabase()!;
     if (qq.source === 'word') await db.rpc('record_vocab_practice', {item: qq.ref, correct: ok});
@@ -103,13 +130,15 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
     if (!q || fb) return;
     setFb(info || {state: ok ? 'correct' : 'wrong'});
     const next = [...res, {q, ok}]; setRes(next);
-    try { localStorage.setItem(key, JSON.stringify({ok: [...(restored.current || []), ...next.map(x => x.ok)]})); } catch { /* private mode */ }
+    if (!extra && run) {
+      const answers = [...run.answers.slice(0, i), ok];
+      try { localStorage.setItem(key, JSON.stringify({questions: run.questions, ok: answers})); } catch { /* private mode */ }
+      if (run.server) void supabase()!.from('daily_runs').update({answers: answers.map((a, n) => ({ok: a, ref: run.questions[n]?.ref, bank: run.questions[n]?.bank || null})), updated_at: new Date().toISOString()}).eq('student_id', studentId).eq('day', day);
+      setRun({...run, answers});
+    }
     void record(q, ok);
   }
-  function check(text = given) {
-    if (!q) return; const r = checkAnswer(q, text);
-    answer(r !== 'wrong', {state: r});
-  }
+  function check(text = given) { if (!q) return; const r = checkAnswer(q, text); answer(r !== 'wrong', {state: r}); }
   async function aiCheck(text: string) {
     if (!q || !text.trim()) return; setBusy(true);
     try { const r = await authedPost<{ok: boolean; corrected: string; feedback: string}>(supabase()!, '/api/practice/check', q.kind === 'answer' ? {studentId, question: q.prompt, grammar: q.topic, sentence: text} : {studentId, word: q.answers[0], grammar: q.topic, sentence: text});
@@ -120,41 +149,56 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
   function listen() {
     const Api = speechApi(); if (!Api) return;
     const r = new Api(); rec.current = r; r.lang = lang === 'pt' ? 'pt-BR' : lang === 'nl' ? 'nl-NL' : lang; r.interimResults = false;
-    r.onresult = e => { const txt = e.results[0][0].transcript; setGiven(txt); if (q?.kind === 'speak') check(txt); else void aiCheck(txt); }; // write / answer
+    r.onresult = e => { const txt = e.results[0][0].transcript; setGiven(txt); if (q?.kind === 'speak') check(txt); else void aiCheck(txt); };
     r.onerror = () => setListening(false); r.onend = () => setListening(false);
     setListening(true); r.start();
   }
   function next() { setI(n => n + 1); setGiven(''); setFb(null); setFlipped(false); }
-  const finished = !!d && i >= qs.length && qs.length > 0;
+  const finished = !!d && qs.length > 0 && i >= qs.length;
   useEffect(() => {
-    if (!finished || saved || !d) return; setSaved(true);
+    if (!finished || saved || !d || extra || !run) return; setSaved(true);
     const s = summaryOf(allRes);
-    void supabase()!.from('practice_sessions').insert({student_id: studentId, user_id: userId, kind: 'daily', score: s.correct, total: s.correct + s.wrong, details: {day: today(), words: s.words, grammar: s.grammar}}).then(() => reload());
-  }, [finished, saved, d, allRes, studentId, userId, reload]);
+    // registered ONCE per day: a second "daily" session for the same day is never written (XP and streak stay honest)
+    if (!d.doneToday && !run.finished) void supabase()!.from('practice_sessions').insert({student_id: studentId, user_id: userId, kind: 'daily', score: s.correct, total: s.correct + s.wrong, details: {day, words: s.words, grammar: s.grammar}}).then(() => reload());
+    if (run.server) void supabase()!.from('daily_runs').update({finished_at: new Date().toISOString()}).eq('student_id', studentId).eq('day', day);
+  }, [finished, saved, d, allRes, studentId, userId, reload, extra, run, day]);
 
-  if (!d) return <div className="loader small"/>;
+  if (!d || run === undefined) return <div className="loader small"/>;
   if (!d.migration) return <p className="notice">{t('De dagelijkse oefening is nog niet ingesteld: voer supabase/v48.sql uit.')}</p>;
   if (!d.hasMaterial) return <div className="lc-empty"><Sparkles size={22} aria-hidden/><div><strong>{t('Nog niets om te oefenen')}</strong><p className="muted">{t('Nog geen lesmateriaal om te oefenen. Na je eerste lessen verschijnen hier je eigen woorden en verbeterpunten.')}</p></div></div>;
+  if (!run && !extra) return <div className="dp-intro">
+    <span className="dp-intro-ic" aria-hidden><Sparkles size={26}/></span>
+    <h2>{t('Dagelijkse uitdaging')}</h2>
+    <p className="muted">{t('Tien persoonlijke vragen: grammatica uit jouw leerlijn, jouw eigen woorden en de regels achter fouten uit je lessen.')}</p>
+    <div className="dp-facts"><span>{t('{0} vragen', 10)}</span><span><Clock3 size={13} aria-hidden/> {t('± {0} min', 6)}</span><span>⚡ {t('+{0} XP', 20)}</span></div>
+    <div className="row"><ExplainLangSelect value={ex} onChange={setEx}/><button className="button" disabled={starting} onClick={() => void start()}><Play size={15}/> {starting ? t('Vragen klaarzetten…') : t('Nu beginnen')}</button></div>
+  </div>;
   if (finished) {
-    const s = summaryOf(allRes);
+    const s = summaryOf(allRes); const first = !extra && !d.doneToday;
+    const practised = [...new Set(qs.filter(x => x.source !== 'word' && x.label).map(x => x.label))].slice(0, 6);
+    const wrongQs = allRes.filter(x => !x.ok).map(x => x.q);
     return <div className="dp-end">
       <PartyPopper size={34} className="dp-party" aria-hidden/>
       <h2>{s.wrong === 0 ? t('Alles goed — knap gedaan!') : s.correct >= s.wrong ? t('Goed bezig! Je oefening van vandaag zit erop.') : t('Goed dat je hebt geoefend — morgen komen deze punten terug.')}</h2>
-      <div className="dp-score"><span className="ok"><CheckCircle2 size={16}/> {t('{0} goed', s.correct)}</span><span className="bad"><XCircle size={16}/> {t('{0} fout', s.wrong)}</span><span><Flame size={16}/> {t('{0} dagen op rij', d.streak)}</span></div>
-      {!!s.words.length && <div className="dp-list"><h4>{t('Woorden die extra aandacht nodig hebben')}</h4><ul className="chips">{s.words.map(w => <li key={w}><b>{w}</b></li>)}</ul></div>}
+      <div className="dp-score"><span className="ok"><CheckCircle2 size={16}/> {t('{0} van {1} goed', s.correct, s.correct + s.wrong)}</span>{first && <span className="xp">⚡ {t('+{0} XP', 20)}</span>}<span><Flame size={16}/> {t('{0} dagen op rij', d.streak)}</span></div>
+      {!!practised.length && <div className="dp-list"><h4>{t('Geoefende grammatica')}</h4><ul className="chips">{practised.map(w => <li key={w}>{w}</li>)}</ul></div>}
       {!!s.grammar.length && <div className="dp-list"><h4>{t('Nog oefenen')}</h4><ul className="chips">{s.grammar.map(w => <li key={w}>{w}</li>)}</ul></div>}
-      <Link className="button secondary" href="/">{t('Terug naar het dashboard')}</Link>
+      {!!s.words.length && <div className="dp-list"><h4>{t('Woorden die extra aandacht nodig hebben')}</h4><ul className="chips">{s.words.map(w => <li key={w}><b>{w}</b></li>)}</ul></div>}
+      <div className="row">{wrongQs.length > 0 && <button className="button" onClick={() => { setExtra(wrongQs.map((x, n) => ({...x, id: 'x' + n}))); setI(0); setRes([]); setFb(null); setGiven(''); }}><RotateCcw size={15}/> {t('Fouten opnieuw oefenen')}</button>}
+        <Link className="button secondary" href="/">{t('Terug naar Overzicht')}</Link><Link className="linklike" href="/oefenen">{t('Verder oefenen')}</Link></div>
     </div>;
   }
   if (!q) return null;
   const SpeechOk = typeof window !== 'undefined' && !!speechApi();
   const pct = Math.round(i / qs.length * 100);
   return <div className="dp-player">
+    {note && <p className="muted small">{note}</p>}
     <div className="dp-top"><div className="dp-bar big" role="progressbar" aria-valuemin={0} aria-valuemax={qs.length} aria-valuenow={i} aria-label={t('Vraag {0} van {1}', i + 1, qs.length)}><span style={{width: pct + '%'}}/></div><small className="muted">{i + 1}/{qs.length}</small><ExplainLangSelect value={ex} onChange={setEx}/></div>
     <div className={'dp-q k-' + q.kind} key={q.id}>
+      {q.label && q.source !== 'word' && <span className="dp-topic">{q.label}</span>}
       {q.sub && <p className="dp-sub">{t(q.sub)}</p>}
       {q.prompt && <p className={'dp-prompt' + (q.kind === 'correct' || q.kind === 'speak' ? ' wrong' : q.kind === 'answer' ? ' ask' : '')}>{q.prompt}</p>}
-      {q.hint && <p className="dp-hint">{q.kind === 'fill' && q.source === 'mistake' ? <><s>{q.hint}</s></> : q.hint}</p>}
+      {q.hint && <p className="dp-hint">{q.kind === 'fill' && q.source === 'mistake' && !q.bank ? <><s>{q.hint}</s></> : q.hint}</p>}
       {q.kind === 'mc' && <div className="dp-options">{(q.options || []).map(o => { const right = q.answers.includes(o); const cls = fb ? (right ? ' right' : given === o ? ' wrongpick' : '') : '';
         return <button key={o} type="button" className={'dp-opt' + cls} disabled={!!fb} onClick={() => { setGiven(o); answer(right); }}>{o}</button>; })}</div>}
       {q.kind === 'flash' && (!flipped ? <button type="button" className="button dp-flip" onClick={() => setFlipped(true)}><Eye size={15}/> {t('Toon antwoord')}</button>
@@ -173,11 +217,10 @@ export function DailyPlayer({studentId, level, lang, userId}: {studentId: string
         {fb.state !== 'correct' && q.kind !== 'flash' && q.kind !== 'answer' && <p className="dp-right">{t('Goed is:')} <b>{fb.corrected || q.answers[0]}</b></p>}
         {q.kind === 'answer' && fb.corrected && <p className="dp-right">{t('Beter:')} <b>{fb.corrected}</b></p>}
         {!!q.notes?.length && <NoteList className="dp-notes" notes={fb.state === 'correct' ? q.notes.slice(0, 1) : q.notes} ex={ex}/>}
-        {q.explain && fb.state !== 'correct' && <p className="muted small">{q.explain}</p>}
+        {q.explain && (fb.state !== 'correct' || !!q.bank) && <p className="muted small">{q.explain}</p>}
         <button type="button" className="button" autoFocus onClick={next}>{i + 1 < qs.length ? <>{t('Doorgaan')} <ArrowRight size={15}/></> : t('Afronden')}</button>
       </div>}
     </div>
-    {i > 0 && <button type="button" className="linklike dp-restart" onClick={() => { try { localStorage.removeItem(key); } catch { /* */ } restored.current = null; setI(0); setRes([]); setFb(null); setGiven(''); }}><RotateCcw size={13}/> {t('Opnieuw beginnen')}</button>}
   </div>;
 }
 

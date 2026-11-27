@@ -20,8 +20,8 @@ import {Flag} from '../components/Flag';
 import {useDashboard} from '../components/DashData';
 import {useMyLanguageCards} from '../components/Languages';
 import {useLearnerPrefs} from '../components/LearnerPrefs';
-import {TasksMini,DailyMini,TopicRequestsMini} from '../components/Overview';
-import {StudentMotivation} from '../components/Motivation';
+import {TasksMini,TopicRequestsMini} from '../components/Overview';
+import {StudentDash} from '../components/StudentDash';
 import {subjectOf as langOf} from '../lib/learning';
 import {languageName,pickRelation} from '../lib/languages';
 import {type AnalysisStatus} from '../lib/analysisTypes';
@@ -95,17 +95,13 @@ function StudentHome(){
  const [unlinkMsg,setUnlinkMsg]=useState('');
  async function leave(id:string,name:string){if(!confirm(t("Weet je zeker dat je deze docent wilt ontkoppelen?")+'\n\n'+name+'\n'+t("Er wordt niets verwijderd. Je ziet de lessen van deze docent niet meer en kunt niet meer in dit klaslokaal. Je docent kan je later opnieuw uitnodigen.")))return;
   const {error}=await supabase()!.rpc('student_leave_teacher',{target:id});setUnlinkMsg(error?error.message:t("Koppeling beëindigd."));if(!error)await refresh()}
- return <div className="home compact-home">
-  <div className="page-head"><div><p className="eyebrow-dark">{t("MIJN LEEROMGEVING")}</p><h1>{first?t("Hoi {0} 👋",first):t("Welkom terug 👋")}</h1>
-   {code&&<p className="muted"><Flag code={code} size={16}/> {t("Je leert nu {0}",languageName(code))}{rel?.level?' · '+rel.level:''}</p>}</div></div>
+ return <div className="home compact-home student-home">
   <PendingLinks/>
-  {/* v74: four sections (Vandaag · Mijn doelen · Mijn voortgang · Mijn activiteit); the sidebar follows them (scrollspy) */}
-  <section className="dash-sec" id="vandaag" aria-labelledby="h-vandaag"><h2 id="h-vandaag" className="sec-h">{t("Vandaag")}</h2>
-   <NextLessonPanel mode="student"/>
-   {rel&&<DailyMini key={rel.id} studentId={rel.id} level={rel.level||null} lang={langOf(rel)}/>}
-   <TasksMini role="student" max={4}/>
-   <StudentPayments/></section>
-  {rel&&<StudentMotivation key={rel.id} studentId={rel.id} lang={langOf(rel)} level={rel.level||null}/>}
+  {/* v75: one compact daily start page; Voortgang keeps the extended statistics, the full learning line and all achievements */}
+  {rel?<StudentDash key={rel.id} studentId={rel.id} lang={langOf(rel)} level={rel.level||null} first={first}/>
+   :<div className="page-head"><div><h1>{first?t("Hoi {0} 👋",first):t("Welkom terug 👋")}</h1>{code&&<p className="muted"><Flag code={code} size={16}/> {languageName(code)}</p>}</div></div>}
+  <TasksMini role="student" max={4}/>
+  <StudentPayments/>
   {studentLinks.length===0&&mine.loaded&&<div className="emptystate"><BookOpen size={30}/><strong>{t("Nog geen leerlingprofiel gekoppeld")}</strong><p>{t("Vraag je docent om je toe te voegen met het e-mailadres van dit account. De uitnodiging verschijnt dan hierboven.")}</p></div>}
   {studentLinks.length>0&&<details className="fold-stats"><summary><UsersRound size={16}/> {t("Mijn docenten")} <span className="chip-count">{studentLinks.length}</span></summary>{unlinkMsg&&<p className="muted" role="status">{unlinkMsg}</p>}
    <div className="studentrows">{studentLinks.map(s=>{const rec=cards.flatMap(c=>c.relations).find(x=>x.id===s.id);const lang=rec?langOf(rec):'';return <div className="studentrow" key={s.id}><Avatar userId={rec?.teacher_id} name={s.teacher_name||'D'} size={36}/><Link className="studentrow-main" href={'/mijn-profiel?'+(lang?'taal='+lang+'&':'')+'student='+s.id}><strong>{s.teacher_name||t("Docent")}</strong><small>{lang&&<Flag code={lang} size={16}/>} {lang?languageName(lang):(s.subject||t("Les"))}{rec?.level?' · '+rec.level:''}</small></Link><Link className="button small" href={'/klaslokaal/live?student='+s.id}><Video size={15}/> {t("Naar de les")}</Link>

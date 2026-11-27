@@ -48,7 +48,7 @@ function Frame({children}:{children:React.ReactNode}){
   <aside className={'side'+(open?' open':'')}>
    <div className="side-head"><Link className="brand" href="/" onClick={()=>setOpen(false)}><span className="brandmark"><GraduationCap size={20}/></span><span>{tt("TeachyRooms")}</span></Link></div>
    <div className="navlabel">{mode==='teacher'?tt('Docent'):tt('Mijn leeromgeving')}</div>
-   <nav className="navlinks">{links.map(l=>mode!=='teacher'&&l.href==='/'&&path==='/'&&!collapsed?<div key="home">{item(l)}<SectionLinks/></div>:item(l))}</nav>
+   <nav className="navlinks">{links.map(item)}</nav>
    {mode==='teacher'&&groups.map(g=>{const here=g.items.some(i=>active(i.href));const isOpen=collapsed||here||!!gOpen[g.id];
     return <div className={'navgroup'+(isOpen?' open':'')} key={g.id}><button type="button" className="navgroup-head" aria-expanded={isOpen} onClick={()=>flip(g.id,isOpen)} title={collapsed?g.label:undefined}><span className="nl">{g.label}</span>{g.id==='admin'&&!isOpen&&user&&<TaskBadge/>}<ChevronDown size={14} className="chev" aria-hidden/></button>
      {isOpen&&<nav className="navlinks">{g.items.map(item)}</nav>}</div>})}
@@ -73,18 +73,3 @@ function Frame({children}:{children:React.ReactNode}){
  </div>
 }
 export default function Nav({children}:{children:React.ReactNode}){return <Frame>{children}</Frame>}
-
-/** v74: scrollspy for the student's overview — the four sections under "Overzicht" in the sidebar. The section in view
- *  is marked (IntersectionObserver, no dependency); a click scrolls smoothly (instantly with reduced motion). */
-const SECTIONS:[string,string][]=[['vandaag','Vandaag'],['doelen','Mijn doelen'],['voortgang-kort','Mijn voortgang'],['activiteit','Mijn activiteit']];
-function SectionLinks(){
- const [cur,setCur]=useState('vandaag');
- useEffect(()=>{let io:IntersectionObserver|null=null;let tries=0;const vis=new Map<string,number>();
-  const start=()=>{const els=SECTIONS.map(([id])=>document.getElementById(id)).filter(Boolean) as HTMLElement[];
-   if(els.length<2&&tries++<20){window.setTimeout(start,400);return}
-   io=new IntersectionObserver(es=>{for(const e of es)vis.set(e.target.id,e.isIntersecting?e.intersectionRatio:0);const best=SECTIONS.map(([id])=>id).find(id=>(vis.get(id)||0)>0.15);if(best)setCur(best)},{rootMargin:'-80px 0px -45% 0px',threshold:[0,.15,.4,.7]});
-   els.forEach(el=>io!.observe(el))};
-  start();return()=>io?.disconnect()},[]);
- const go=(id:string)=>{const el=document.getElementById(id);if(!el)return;const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;el.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'});setCur(id)};
- return <div className="navsub" role="list">{SECTIONS.map(([id,l])=><button type="button" role="listitem" key={id} className={cur===id?'on':''} aria-current={cur===id?'location':undefined} onClick={()=>go(id)}>{tt(l)}</button>)}</div>
-}

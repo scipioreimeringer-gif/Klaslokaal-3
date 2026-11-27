@@ -22,7 +22,7 @@ test('XP is derived from stored activities: no double award, capped games, never
   assert.equal(x.homework, 60); assert.equal(x.lessons, 150); assert.equal(x.weeks, 0);
   assert.equal(xpOf({practice: [...practice, ...practice], homeworkDone: 2, lessons: 3, goal: 7, tz: TZ}).total, x.total, 'the same activities twice → same XP');
   const lib = read('lib/motivation.ts');
-  assert.ok(!/update\(|insert\(|level|mastered'\)/.test(lib.replace(/\/\/.*$/gm, '')), 'XP never writes anything, never changes level/status');
+  assert.ok(!/\.update\(|\.insert\(|db\.from\(|cefr|student_goal_progress/i.test(lib.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), 'XP never writes anything, never changes CEFR level or status');
 });
 
 test('one streak definition (any practice, local day); week goal; goal weeks', () => {
@@ -68,6 +68,6 @@ test('teacher figures: per currency, confirmed payments only, planned lessons ne
   assert.ok(!/planned[^\n]*price|price[^\n]*planned/.test(to));
   assert.match(read('lib/billing.ts'), /if \(l\.payment_status === 'paid' && inMonth\(l\.payment_confirmed_at, month\)\) add\(received/);
   const nav = read('components/Nav.tsx');
-  assert.match(nav, /new IntersectionObserver/); assert.match(nav, /prefers-reduced-motion: reduce/);
+  assert.ok(!/SectionLinks|IntersectionObserver/.test(nav), 'v75: the scrollspy sub-menu under Overzicht is removed again');
   for (const x of ['XP', 'Mijlpalen', 'Streak']) assert.ok(!new RegExp(`label:tt\\('${x}'\\)`).test(nav), 'no new main menu items');
 });

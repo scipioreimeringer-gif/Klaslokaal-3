@@ -54,7 +54,7 @@ export const profileHref=(l:Pick<Lesson,'student_id'>,mode:'teacher'|'student')=
 export const lessonHref=(l:Pick<Lesson,'id'>)=>'/agenda?les='+encodeURIComponent(l.id);
 
 /* ---------------- dashboard: next lesson + today + this week ---------------- */
-export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
+export function NextLessonPanel({mode,compact=false}:{mode:'teacher'|'student';compact?:boolean}){
  const {studentLinks}=useAuth();useSyncTimeZone();const now=useNow();const tz=browserTimeZone();
  const range=useMemo(()=>({from:new Date(Date.now()-12*3600e3).toISOString(),to:new Date(Date.now()+60*86400e3).toISOString()}),[]);
  const {lessons,relations,ready,loaded,error}=useLessons(range,mode);
@@ -65,7 +65,7 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
  if(!ready)return <section className="panel next-lesson"><p className="muted">{t('De agenda is nog niet ingesteld: voer supabase/v30.sql uit.')}</p></section>;
  if(!loaded)return <section className="panel next-lesson"><div className="loader small"/></section>;
  const rel=next?relations.get(next.student_id):undefined;const lang=next?langOf(next,rel):'';
- return <section className="panel next-lesson" aria-label={t('Volgende les')}>
+ return <section className={'panel next-lesson'+(compact?' compact':'')} aria-label={t('Volgende les')}>
   {error&&<p className="notice">{error}</p>}
   {!next?<div className="next-empty"><CalendarDays size={28}/><div><strong>{t('Geen lessen gepland')}</strong><p className="muted">{mode==='teacher'?t('Plan een les in de agenda; je leerling ziet hem dan meteen in de eigen tijdzone.'):t('Zodra je docent een les inplant, zie je die hier.')}</p></div>{mode==='teacher'?<Link className="button" href="/agenda?nieuw=1"><CalendarPlus size={16}/> {t('Les inplannen')}</Link>:<Link className="button small" href="/agenda?boeken=1"><CalendarPlus size={15}/> {t('Les boeken')}</Link>}</div>:
   <div className="next-main">
@@ -81,13 +81,13 @@ export function NextLessonPanel({mode}:{mode:'teacher'|'student'}){
     <Link className="button next-open" href={classroomHref(next,mode)}><Video size={16}/> {t('Klaslokaal openen')}</Link>
    </div>
   </div>}
-  {next&&after.length>0&&<div className="next-after"><h4>{t('DAARNA')}</h4><ul className="after-rows">{after.map(l=>{const r=relations.get(l.student_id);const lg=langOf(l,r);return <li key={l.id}>
+  {!compact&&next&&after.length>0&&<div className="next-after"><h4>{t('DAARNA')}</h4><ul className="after-rows">{after.map(l=>{const r=relations.get(l.student_id);const lg=langOf(l,r);return <li key={l.id}>
    <div className="after-row">
     <Link className="ar-who who-link" href={profileHref(l,mode)} title={mode==='teacher'?t('Leerlingprofiel openen'):t('Mijn lessen openen')}><Who l={l} rel={r} mode={mode} teacherName={teacherName} size={26}/></Link>
     <Link className="ar-lesson" href={lessonHref(l)} title={t('Lesdetails openen')}>{lg&&<Flag code={lg} size={16}/>}<span className="ar-when">{fmtDay(dayKey(l.starts_at,tz),{weekday:'short',day:'numeric',month:'short'})} · {clock(l.starts_at,tz)}</span><span className="ar-count">{countdown(l.starts_at,now)}</span></Link>
     <Link className="iconbtn ar-open" href={classroomHref(l,mode)} title={t('Klaslokaal openen')} aria-label={t('Klaslokaal openen')}><Video size={15}/></Link>
    </div></li>})}</ul></div>}
-  {next&&<div className="next-foot"><Link href="/agenda">{t('Naar de agenda')} →</Link></div>}
+  {!compact&&next&&<div className="next-foot"><Link href="/agenda">{t('Naar de agenda')} →</Link></div>}
  </section>
 }
 

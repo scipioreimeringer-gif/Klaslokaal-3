@@ -22,7 +22,7 @@ test('statistics: only measured values, period filter, streaks, words in bank â‰
     {status: 'practicing', last_practiced_at: '2026-11-01', due_at: '2026-11-20T00:00:00Z'}, {status: 'practicing', difficult: true}], 'week', NOW);
   assert.deepEqual(v, {total: 4, added: 1, practised: 2, mastered: 1, review: 2});
   assert.deepEqual(homeworkStats([{id: 'a', published_at: 'x'}, {id: 'b', published_at: 'x'}, {id: 'c', published_at: null}], ['a']), {assigned: 2, done: 1, open: 1});
-  assert.deepEqual(grammarStats([{status: 'covered'}, {status: 'in_progress'}, {status: 'mastered'}, {status: 'not_started'}], [{status: 'review'}, {status: 'learning'}]), {covered: 3, mastered: 1, developing: 1, extra: 1});
+  assert.deepEqual(grammarStats([{status: 'covered'}, {status: 'in_progress'}, {status: 'review'}, {status: 'mastered'}, {status: 'not_started'}]), {covered: 4, mastered: 1, developing: 2, extra: 1}); // v75: the teacher's own "Extra oefenen"
   assert.equal(periodStart('all', NOW), 0);
   assert.ok(correctPerWeek([], 8, NOW).every(p => p.value === 0) && wordGrowth([], 6, new Date(NOW)).length === 6);
   const prog = read('components/Progress.tsx');

@@ -20,6 +20,7 @@ export type Question = {
   prompt: string; sub?: string; hint?: string; options?: string[]; answers: string[]; explain: string; label: string; flip?: string;
   /** v51: why the answer is right (and the others wrong): fixed interface texts + forms, translated in the UI */ notes?: Note[];
   /** v51: grammar the free answer should show (checked by the one AI feedback call) */ topic?: string;
+  /** v75: id of the validated bank question (lib/dailyAi) */ bank?: string;
 };
 export type DailySet = {day: string; questions: Question[]; minutes: number; empty: boolean};
 
@@ -59,7 +60,8 @@ export function gapOf(original: string, corrected: string): {before: string; gap
  *  (write a sentence, answer a question, say a sentence, fill a gap), v = vocabulary in context. */
 export function mixFor(level: string | null | undefined, max: number, have: {grammar: number; mistakes: number; words: number; produce: number}, need: {repeats: number} = {repeats: 0}) {
   const L = lvl(level);
-  const share = L <= 1 ? {g: 0.25, c: 0.15, p: 0.05, v: 0.55} : L === 2 ? {g: 0.40, c: 0.25, p: 0.20, v: 0.15} : {g: 0.35, c: 0.25, p: 0.25, v: 0.15};
+  // v75: grammar first at every level (was 55% vocabulary at A0/A1 — mostly translations)
+  const share = L <= 1 ? {g: 0.40, c: 0.15, p: 0.10, v: 0.35} : L === 2 ? {g: 0.40, c: 0.25, p: 0.15, v: 0.20} : {g: 0.40, c: 0.25, p: 0.20, v: 0.15};
   // many repeated mistakes → more correcting (taken from the bank grammar)
   if (need.repeats >= 6 && have.mistakes >= 3) { share.c += 0.1; share.g -= 0.1; }
   const want = {g: Math.round(max * share.g), c: Math.round(max * share.c), p: Math.round(max * share.p), v: 0};
@@ -83,7 +85,8 @@ export function uniqueMistakes(list: Mistake[]): Mistake[] {
   return [...by.values()];
 }
 
-export function buildDaily(input: {studentId: string; day: string; level?: string | null; lang?: string; words: Word[]; mistakes: Mistake[]; homework: HwItem[]; state: ItemState[]; topics?: string[]; /** v68: grammar keys of learning-line topics in development / extra practice / recent lesson topics */ focusTopics?: string[]; now?: number; max?: number}): DailySet {
+export function buildDaily(input: {studentId: string; day: string; level?: string | null; lang?: string; words: Word[]; mistakes: Mistake[]; homework: HwItem[]; state: ItemState[]; topics?: string[]; /** v68: grammar keys of learning-line topics in development / extra practice / recent lesson topics */ focusTopics?: string[]; now?: number; max?: number;
+  /** v75: validated application questions from the personal bank (learning-line topics, the rules behind own mistakes, a review) */ ai?: {topic: Question[]; error: Question[]; review: Question[]}}): DailySet {
   const now = input.now ?? Date.now(), r = rng(seedOf(input.studentId + '|' + input.day)), L = lvl(input.level), max = input.max ?? 10;
   const st = new Map(input.state.map(s => [s.item_key, s]));
   const words = input.words.filter(w => w.term && w.translation);
@@ -114,16 +117,22 @@ export function buildDaily(input: {studentId: string; day: string; level?: strin
     if (L >= 3 && g.level === L && !known.has(g.topic)) p -= 2.5;
     return {g, p}; }).sort((a, b) => b.p - a.p).map(x => x.g);
 
-  const nH = Math.min(rankH.length, 2);
+  const nH = input.ai ? 0 : Math.min(rankH.length, 2);
   const produce = L >= 2 ? Math.min(3, convo.length + Math.min(words.length, 2) + (mistakes.length ? 1 : 0)) : Math.min(2, words.filter(w => w.example).length);
   const need = {repeats: mistakes.reduce((n, m) => n + m.repeats, 0)};
-  const mix = mixFor(input.level, max - nH, {grammar: rankG.length, mistakes: rankM.length, words: rankW.length, produce}, need);
-  const qs: Question[] = [];
+  // v75: default day = 4 grammar (own learning line) · 3 own words · 2 applications of own mistakes · 1 review; the
+  // personal AI questions come first, the built-in material fills what is missing (never invented mistakes)
+  const ai = input.ai, aiQ = ai ? [...ai.topic.slice(0, 4), ...ai.error.slice(0, 2), ...ai.review.slice(0, 1)] : [];
+  const mix = ai ? (() => { const g = Math.max(0, 4 - Math.min(4, ai.topic.length)) + (ai.review.length ? 0 : 1), c = Math.max(0, 2 - Math.min(2, ai.error.length));
+      const v = Math.min(3, rankW.length), gg = Math.min(g + (3 - v), rankG.length), cc = Math.min(c, rankM.length);
+      return {g: gg + Math.max(0, c - cc), c: cc, p: 0, v: Math.min(rankW.length, max - aiQ.length - gg - cc - Math.max(0, c - cc))}; })()
+    : mixFor(input.level, max - nH, {grammar: rankG.length, mistakes: rankM.length, words: rankW.length, produce}, need);
+  const qs: Question[] = [...aiQ];
 
   // G: grammar from the bank — varied: one verb at most once, no exercise type more than half
-  const usedVerb = new Set<string>(), perKind = new Map<string, number>(), capKind = Math.max(1, Math.ceil(mix.g / 2));
+  const usedVerb = new Set<string>(), perKind = new Map<string, number>(), capKind = Math.max(1, Math.ceil(mix.g / 2)), gStart = qs.length;
   for (const g of rankG) {
-    if (qs.length >= mix.g) break;
+    if (qs.length - gStart >= mix.g) break;
     if (g.verb && usedVerb.has(g.verb)) continue;
     if ((perKind.get(g.kind) || 0) >= capKind) continue;
     if (g.verb) usedVerb.add(g.verb); perKind.set(g.kind, (perKind.get(g.kind) || 0) + 1);
@@ -184,7 +193,7 @@ export function buildDaily(input: {studentId: string; day: string; level?: strin
   });
   // no duplicates: the same item (ref) or the same prompt never twice in one set
   const seen = new Set<string>();
-  const questions = shuffle(qs, r).filter(q => { const k = q.ref + '|' + q.prompt; if (seen.has(q.ref) || seen.has(k)) return false; seen.add(q.ref); seen.add(k); return true; }).slice(0, max);
+  const questions = shuffle(qs, r).filter(q => { const id = q.bank || q.ref, k = id + '|' + q.prompt; if (seen.has(id) || seen.has(k)) return false; seen.add(id); seen.add(k); return true; }).slice(0, max);
   const secs = questions.reduce((n, q) => n + (q.kind === 'write' || q.kind === 'speak' || q.kind === 'answer' ? 75 : q.kind === 'correct' ? 50 : 30), 0);
   return {day: input.day, questions, minutes: Math.max(1, Math.round(secs / 60)), empty: !questions.length};
 }
